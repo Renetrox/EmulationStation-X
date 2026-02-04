@@ -5,7 +5,6 @@
 #include "renderers/Renderer.h"
 
 #include <algorithm> // std::max
-#include <cmath>
 
 #define AUTO_SCROLL_RESET_DELAY 3000 // ms to reset to top after we reach the bottom
 #define AUTO_SCROLL_DELAY       1000 // ms to wait before we start to scroll (legacy default)
@@ -128,17 +127,17 @@ void ScrollableContainer::update(int deltaTime)
 	{
 		const float minimumSpacing = text->getFont()->getHeight(1.2f);
 		const float currentSpacing = text->getFont()->getHeight(lineSpacing);
-		mClipSpacing = std::round((currentSpacing - minimumSpacing) / 2.0f);
+		mClipSpacing = Math::round((currentSpacing - minimumSpacing) / 2.0f);
 	}
 
 	if (!mUpdatedSize)
 	{
 		if (mVerticalSnap)
 		{
-			float numLines = std::floor(mSize.y() / lineHeight);
+			float numLines = Math::floorf(mSize.y() / lineHeight);
 			if (numLines == 0)
 				numLines = 1;
-			mAdjustedHeight = std::ceil(numLines * lineHeight);
+			mAdjustedHeight = Math::ceilf(numLines * lineHeight);
 		}
 		else
 		{
