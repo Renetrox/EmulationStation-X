@@ -80,6 +80,7 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "alignment", STRING },
 		{ "forceUppercase", BOOLEAN },
 		{ "lineSpacing", FLOAT },
+		{ "container", BOOLEAN },
 		{ "value", STRING },
 		{ "visible", BOOLEAN },
 		{ "zIndex", FLOAT },
@@ -975,10 +976,13 @@ std::vector<GuiComponent*> ThemeData::makeExtras(const std::shared_ptr<ThemeData
 		else if (t == "text")
 		{
 			bool wantsScroll = false;
+			bool wantsContainer = false;
 			if (elem.has("autoScroll"))
 				wantsScroll = elem.get<bool>("autoScroll");
+			if (elem.has("container"))
+				wantsContainer = elem.get<bool>("container");
 
-			if (wantsScroll)
+			if (wantsScroll || wantsContainer)
 				comp = new ScrollableTextComponent(window);
 			else
 				comp = new TextComponent(window);
@@ -1001,9 +1005,11 @@ std::vector<GuiComponent*> ThemeData::makeExtras(const std::shared_ptr<ThemeData
 					st->setAutoScrollDelay(delayVal);
 				}
 
-				bool enable = true;
+				bool enable = false;
 				if (elem.has("autoScroll"))
 					enable = elem.get<bool>("autoScroll");
+				else if (elem.has("container"))
+					enable = elem.get<bool>("container");
 
 				st->setAutoScroll(enable);
 			}
