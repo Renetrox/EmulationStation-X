@@ -35,4 +35,15 @@ private:
 	bool mAtEnd = false;
 
 	bool mAutoScroll = false;
+
+	float mAdjustedHeight = 0.0f;
+	float mClipSpacing = 0.0f;
+
+	float mAutoScrollResetDelayConstant = 0.0f;
+	float mAutoScrollDelayConstant = 0.0f;
+	float mAutoScrollSpeedConstant = 0.0f;
+
+	int  mAdjustedAutoScrollSpeed = 0;
+	bool mVerticalSnap = true;
+	bool mUpdatedSize = false;
 };
