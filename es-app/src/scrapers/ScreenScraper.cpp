@@ -7,7 +7,7 @@
 #include "PlatformId.h"
 #include "Settings.h"
 #include "SystemData.h"
-#include "LocaleESHook.h"   // Puedes dejarlo aunque aquí ya no lo usamos directamente
+#include "LocaleESHook.h"   // Provides es_translate used by scraper metadata helpers.
 #include <pugixml.hpp>
 #include <cstring>
 
@@ -84,7 +84,7 @@ const std::map<PlatformId, unsigned short> screenscraper_platformid_map{
 	{ PLAYSTATION, 57 },
 	{ PLAYSTATION_2, 58 },
 	{ PLAYSTATION_3, 59 },
-	// missing Sony Playstation 4 ?
+	// ScreenScraper does not currently list a PlayStation 4 platform ID.
 	{ PLAYSTATION_VITA, 62 },
 	{ PLAYSTATION_PORTABLE, 61 },
 	{ SUPER_NINTENDO, 4 },

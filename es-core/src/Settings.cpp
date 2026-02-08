@@ -1,4 +1,4 @@
-// ========== Settings.cpp (COMPLETO, VERSION ES-X CON EnableBGM) ==========
+// Settings defaults and persistence for ES-X.
 
 #include "Settings.h"
 
@@ -79,7 +79,7 @@ void Settings::setDefaults()
 	mBoolMap["QuickSystemSelect"] = true;
 	mBoolMap["MoveCarousel"] = true;
 
-	// Modo oscuro ES-X
+	// Toggle the ES-X dark menu theme.
 	mBoolMap["MenuDark"] = false;
 
 	mBoolMap["ThreadedLoading"] = false;
@@ -89,7 +89,7 @@ void Settings::setDefaults()
 	mBoolMap["DebugText"] = false;
 	mBoolMap["DebugImage"] = false;
 
-	// 🆕 NUEVO: Música de fondo
+	// Enable background music playback.
 	mBoolMap["EnableBGM"] = true;
 
 	mIntMap["ScreenSaverTime"] = 5 * Settings::ONE_MINUTE_IN_MS;
@@ -187,7 +187,7 @@ void Settings::setDefaults()
 
 	mStringMap["LeadingArticles"] = "a,an,the";
 
-	// idioma por defecto ES-X
+	// Default UI language.
 	mStringMap["Language"] = "en";
 }
 
@@ -356,4 +356,3 @@ SETTINGS_GETSET(bool, mBoolMap, getBool, setBool);
 SETTINGS_GETSET(int, mIntMap, getInt, setInt);
 SETTINGS_GETSET(float, mFloatMap, getFloat, setFloat);
 SETTINGS_GETSET(const std::string&, mStringMap, getString, setString);
-

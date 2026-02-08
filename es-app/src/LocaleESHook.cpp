@@ -1,6 +1,6 @@
 #include "LocaleES.h"
 
-// Ruta relativa: ajusta si tu estructura es distinta
+// Hook to expose es_translate for modules that depend on the core header.
 #include "../es-core/src/LocaleESHook.h"
 
 std::string es_translate(const std::string& key)
