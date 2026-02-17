@@ -13,25 +13,36 @@
 
 ## Example Theme Gallery
 
-<table>
-  <tr>
-    <td><img src="docs/examples/01-alekfull-nx.png" alt="Alekfull NX selector" width="100%" /></td>
-    <td><img src="docs/examples/02-language-menu.png" alt="Language menu" width="100%" /></td>
-  </tr>
-  <tr>
-    <td><img src="docs/examples/03-scraper-result.png" alt="Scraper result" width="100%" /></td>
-    <td><img src="docs/examples/04-theme-options.png" alt="Theme options" width="100%" /></td>
-  </tr>
-  <tr>
-    <td><img src="docs/examples/05-color-scheme.png" alt="Color scheme menu" width="100%" /></td>
-    <td><img src="docs/examples/06-game-list-retrowave.png" alt="Game list retrowave" width="100%" /></td>
-  </tr>
-  <tr>
-    <td colspan="2"><img src="docs/examples/07-spiderman-theme.png" alt="Spiderman inspired theme" width="100%" /></td>
-  </tr>
-</table>
+<p>
+  This gallery is intentionally grouped so readers can quickly identify ES-X capabilities by category.
+</p>
 
-> Place your 7 sample screenshots in `docs/examples/` using the same filenames shown above to render this gallery.
+### 1) Navigation & Menus
+
+<p align="center">
+  <img src="docs/examples/01-alekfull-nx.png" alt="Alekfull NX selector" width="48%" />
+  <img src="docs/examples/02-language-menu.png" alt="Language menu" width="48%" />
+</p>
+<p align="center"><sub>System selection and runtime language management.</sub></p>
+
+### 2) Scraper & Theme Configuration
+
+<p align="center">
+  <img src="docs/examples/03-scraper-result.png" alt="Scraper result" width="48%" />
+  <img src="docs/examples/04-theme-options.png" alt="Theme options" width="48%" />
+</p>
+<p align="center"><sub>Metadata scraping and in-theme customization options.</sub></p>
+
+### 3) Visual Styles & Game Views
+
+<p align="center">
+  <img src="docs/examples/05-color-scheme.png" alt="Color scheme menu" width="32%" />
+  <img src="docs/examples/06-game-list-retrowave.png" alt="Game list retrowave" width="32%" />
+  <img src="docs/examples/07-spiderman-theme.png" alt="Spiderman inspired theme" width="32%" />
+</p>
+<p align="center"><sub>Color presets and complete themed game-list experiences.</sub></p>
+
+> Add your screenshots manually in `docs/examples/` using the same filenames shown above.
 
 ## What is ES-X?
 
