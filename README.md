@@ -14,35 +14,24 @@
 ## Example Theme Gallery
 
 <p>
-  This gallery is intentionally grouped so readers can quickly identify ES-X capabilities by category.
+  Capturas agregadas manualmente y organizadas por tipo para facilitar la lectura visual del proyecto.
 </p>
 
-### 1) Navigation & Menus
+### 1) Selección y navegación
 
 <p align="center">
-  <img src="docs/examples/01-alekfull-nx.png" alt="Alekfull NX selector" width="48%" />
-  <img src="docs/examples/02-language-menu.png" alt="Language menu" width="48%" />
+  <img width="49%" alt="Alekfull NX selector" src="https://github.com/user-attachments/assets/83dedb20-1c32-432b-8495-24d2f6fca3a7" />
+  <img width="49%" alt="Language menu" src="https://github.com/user-attachments/assets/06f4504c-ea88-4088-953c-7b61d3726ca7" />
 </p>
-<p align="center"><sub>System selection and runtime language management.</sub></p>
+<p align="center"><sub>Vista de selección de sistema y menú de idioma en tiempo de ejecución.</sub></p>
 
-### 2) Scraper & Theme Configuration
+### 2) Scraper y configuración del tema
 
 <p align="center">
-  <img src="docs/examples/03-scraper-result.png" alt="Scraper result" width="48%" />
-  <img src="docs/examples/04-theme-options.png" alt="Theme options" width="48%" />
+  <img width="49%" alt="Scraper result" src="https://github.com/user-attachments/assets/6980ece3-29b9-42ac-ac95-dfda9f15c095" />
+  <img width="49%" alt="Theme options" src="https://github.com/user-attachments/assets/1f12408e-4004-4334-be2f-2bb138da43b7" />
 </p>
-<p align="center"><sub>Metadata scraping and in-theme customization options.</sub></p>
-
-### 3) Visual Styles & Game Views
-
-<p align="center">
-  <img src="docs/examples/05-color-scheme.png" alt="Color scheme menu" width="32%" />
-  <img src="docs/examples/06-game-list-retrowave.png" alt="Game list retrowave" width="32%" />
-  <img src="docs/examples/07-spiderman-theme.png" alt="Spiderman inspired theme" width="32%" />
-</p>
-<p align="center"><sub>Color presets and complete themed game-list experiences.</sub></p>
-
-> Add your screenshots manually in `docs/examples/` using the same filenames shown above.
+<p align="center"><sub>Resultados de scraping y opciones visuales para personalización.</sub></p>
 
 ## What is ES-X?
 
