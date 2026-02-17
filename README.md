@@ -10,6 +10,24 @@
 
 [YouTube demo](https://www.youtube.com/watch?v=E0kRlrkbLo0)
 
+
+## Example Theme Gallery
+
+<table>
+  <tr>
+    <td><img src="esx/theme-previews/pistationx.png" alt="Pi-Station-X preview" width="100%" /></td>
+    <td><img src="esx/theme-previews/mini.png" alt="Mini preview" width="100%" /></td>
+  </tr>
+  <tr>
+    <td><img src="esx/theme-previews/ruckage_snes.png" alt="Ruckage SNES Mini preview" width="100%" /></td>
+    <td><img src="esx/theme-previews/artbook.png" alt="ArtBook Next preview" width="100%" /></td>
+  </tr>
+  <tr>
+    <td><img src="esx/theme-previews/alekfull.png" alt="Alekfull NX preview" width="100%" /></td>
+    <td><img src="resources/splash.png" alt="ES-X splash" width="100%" /></td>
+  </tr>
+</table>
+
 ## What is ES-X?
 
 EmulationStation-X (ES-X) is a stable, creator-focused evolution of the original EmulationStation engine, built specifically for RetroPie systems.
