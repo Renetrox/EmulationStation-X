@@ -1,5 +1,6 @@
 #include "guis/GuiMenu.h"
-
+#include <map>
+#include <string>
 #include "components/OptionListComponent.h"
 #include "components/SliderComponent.h"
 #include "components/SwitchComponent.h"
@@ -51,7 +52,10 @@ namespace
 	{
 		return LocaleES::getInstance().translate(key);
 	}
-
+inline std::string menuLabel(const std::string& icon, const std::string& key)
+{
+	return icon + "  " + _(key);
+}
 	inline unsigned int getMenuTextColor()
 	{
 		return Settings::getInstance()->getBool("MenuDark") ? 0xFFFFFFFF : 0x777777FF;
@@ -127,31 +131,30 @@ GuiMenu::GuiMenu(Window* window)
 
 	bool isFullUI = UIModeController::getInstance()->isUIModeFull();
 	unsigned int menuColor = getMenuTextColor();
+if (isFullUI)
+{
+	// ES-X: primero lo visual/interfaz, porque es la identidad del frontend.
+	addEntry(menuLabel("◆", "UI SETTINGS"), menuColor, true, [this] { openUISettings(); });
 
-	if (isFullUI)
-	{
-		// ES-X: primero lo visual/interfaz, porque es la identidad del frontend.
-		addEntry(_("UI SETTINGS").c_str(), menuColor, true, [this] { openUISettings(); });
+	// Luego sonido.
+	addEntry(menuLabel("◇", "SOUND SETTINGS"), menuColor, true, [this] { openSoundSettings(); });
 
-		// Luego sonido.
-		addEntry(_("SOUND SETTINGS").c_str(), menuColor, true, [this] { openSoundSettings(); });
+	// Scrapers juntos.
+	addEntry(menuLabel("■", "SCRAPER"), menuColor, true, [this] { openScraperSettings(); });
+	addEntry(menuLabel("□", "SKYSCRAPER"), menuColor, true, [this] { openSkyscraperMenu(); });
 
-		// Scrapers juntos.
-		addEntry(_("SCRAPER").c_str(), menuColor, true, [this] { openScraperSettings(); });
-		addEntry(_("SKYSCRAPER").c_str(), menuColor, true, [this] { openSkyscraperMenu(); });
+	// Organización y sistema.
+	addEntry(menuLabel("★", "GAME COLLECTION SETTINGS"), menuColor, true, [this] { openCollectionSystemSettings(); });
+	addEntry(menuLabel("●", "OTHER SETTINGS"), menuColor, true, [this] { openOtherSettings(); });
+	addEntry(menuLabel("▶", "CONFIGURE INPUT"), menuColor, true, [this] { openConfigInput(); });
+}
+else
+{
+	// Modo restringido: mantener solo lo básico.
+	addEntry(menuLabel("◇", "SOUND SETTINGS"), menuColor, true, [this] { openSoundSettings(); });
+}
 
-		// Organización y sistema.
-		addEntry(_("GAME COLLECTION SETTINGS").c_str(), menuColor, true, [this] { openCollectionSystemSettings(); });
-		addEntry(_("OTHER SETTINGS").c_str(), menuColor, true, [this] { openOtherSettings(); });
-		addEntry(_("CONFIGURE INPUT").c_str(), menuColor, true, [this] { openConfigInput(); });
-	}
-	else
-	{
-		// Modo restringido: mantener solo lo básico.
-		addEntry(_("SOUND SETTINGS").c_str(), menuColor, true, [this] { openSoundSettings(); });
-	}
-
-	addEntry(_("QUIT").c_str(), menuColor, true, [this] { openQuitMenu(); });
+addEntry(menuLabel("▼", "QUIT"), menuColor, true, [this] { openQuitMenu(); });
 
 	addChild(&mMenu);
 
@@ -1161,9 +1164,9 @@ void GuiMenu::onSizeChanged()
 {
 	mVersion.setSize(mSize.x(), 0);
 	mVersion.setPosition(0, mSize.y() - mVersion.getSize().y());
-}
+	}
 
-void GuiMenu::addEntry(const char* name, unsigned int color, bool add_arrow, const std::function<void()>& func)
+	void GuiMenu::addEntry(const std::string& name, unsigned int color, bool add_arrow, const std::function<void()>& func)
 {
 	std::shared_ptr<Font> font = Font::get(FONT_SIZE_MEDIUM);
 
@@ -1179,6 +1182,7 @@ void GuiMenu::addEntry(const char* name, unsigned int color, bool add_arrow, con
 	row.makeAcceptInputHandler(func);
 	mMenu.addRow(row);
 }
+
 
 bool GuiMenu::input(InputConfig* config, Input input)
 {

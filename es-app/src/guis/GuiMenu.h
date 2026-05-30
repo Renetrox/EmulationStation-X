@@ -8,6 +8,10 @@
 #include "HelpStyle.h"
 #include "HelpPrompt.h"
 
+#include <functional>
+#include <string>
+#include <vector>
+
 class GuiMenu : public GuiComponent
 {
 public:
@@ -38,7 +42,7 @@ private:
 	void openThemeOptions();
 
 	// Helpers internos
-	void addEntry(const char* name, unsigned int color, bool add_arrow, const std::function<void()>& func);
+	void addEntry(const std::string& name, unsigned int color, bool add_arrow, const std::function<void()>& func);
 	void addVersionInfo();
 
 	void onSizeChanged() override;
