@@ -137,7 +137,7 @@ if (isFullUI)
 	addEntry(menuLabel("◆", "UI SETTINGS"), menuColor, true, [this] { openUISettings(); });
 
 	// Luego sonido.
-	addEntry(menuLabel("◇", "SOUND SETTINGS"), menuColor, true, [this] { openSoundSettings(); });
+	addEntry(menuLabel("☊", "SOUND SETTINGS"), menuColor, true, [this] { openSoundSettings(); });
 
 	// Scrapers juntos.
 	addEntry(menuLabel("■", "SCRAPER"), menuColor, true, [this] { openScraperSettings(); });
