@@ -415,6 +415,9 @@ void Settings::processBackwardCompatibility()
 	if (mBoolMap.find("ShowNetworkIcon") == mBoolMap.end())
 		mBoolMap["ShowNetworkIcon"] = true;
 
+	if (mBoolMap.find("ShowBluetoothIcon") == mBoolMap.end())
+		mBoolMap["ShowBluetoothIcon"] = true;
+
 	if (mBoolMap.find("BackgroundMusic") == mBoolMap.end())
 		mBoolMap["BackgroundMusic"] = true;
 }

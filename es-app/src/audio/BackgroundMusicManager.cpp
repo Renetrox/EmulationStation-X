@@ -361,10 +361,11 @@ void BackgroundMusicManager::setVolume(int percent)
 // =============================
 int BackgroundMusicManager::computeBaseMusicVolume() const
 {
-	const std::string raw = Settings::getInstance()->getString("BackgroundMusicVolume");
-	const int pct = raw.empty()
-		? 75
-		: clampInt(Settings::getInstance()->getInt("BackgroundMusicVolume"), 0, 100);
+	// BackgroundMusicVolume es un setting INT, no string.
+	// Leerlo como string hace que siempre vuelva al fallback 75.
+	int pct = Settings::getInstance()->getInt("BackgroundMusicVolume");
+
+	pct = clampInt(pct, 0, 100);
 
 	return clampInt((pct * 128) / 100, 0, 128);
 }

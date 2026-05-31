@@ -68,93 +68,99 @@ static bool hasActiveNetworkConnection()
 #endif
 
 #ifndef WIN32
+static bool readSysfsBoolFile(const std::string& path)
+{
+	std::ifstream file(path.c_str());
+	if (!file.is_open())
+		return false;
+
+	std::string value;
+	std::getline(file, value);
+
+	return value == "1";
+}
+
 static bool hasActiveBluetoothConnection()
 {
 	// ES-X:
-	// Detector liviano y seguro para overlay Bluetooth.
-	// No ejecuta comandos externos, no usa bluetoothctl y no depende
-	// directamente de BlueZ. Solo revisa sysfs:
+	// Detector estricto para overlay Bluetooth.
 	//
-	// - /sys/class/bluetooth/hci*
-	// - /sys/class/rfkill/rfkill*/type == bluetooth
-	// - /sys/class/rfkill/rfkill*/state == 1
+	// No muestra el icono solamente porque exista hci0.
+	// Solo muestra Bluetooth si hay un dispositivo BT conectado.
 	//
-	// Si existe hci* y no hay rfkill bluetooth, se asume activo.
-	// Si existe rfkill bluetooth, solo se muestra si state == 1.
-
-	bool hasHci = false;
+	// Busca archivos "connected" creados por el stack Bluetooth en sysfs:
+	// /sys/class/bluetooth/hci*/dev_*/connected
+	// /sys/class/bluetooth/hci*:*/connected
+	//
+	// Si no encuentra un dispositivo conectado, devuelve false.
 
 	DIR* btDir = opendir("/sys/class/bluetooth");
-	if (btDir)
-	{
-		struct dirent* entry = nullptr;
-
-		while ((entry = readdir(btDir)) != nullptr)
-		{
-			if (std::strncmp(entry->d_name, "hci", 3) == 0)
-			{
-				hasHci = true;
-				break;
-			}
-		}
-
-		closedir(btDir);
-	}
-
-	if (!hasHci)
+	if (!btDir)
 		return false;
 
-	bool foundBluetoothRfkill = false;
-	bool bluetoothUnblocked = false;
+	bool connected = false;
+	struct dirent* entry = nullptr;
 
-	DIR* rfkillDir = opendir("/sys/class/rfkill");
-	if (rfkillDir)
+	while ((entry = readdir(btDir)) != nullptr)
 	{
-		struct dirent* entry = nullptr;
+		const std::string name = entry->d_name;
 
-		while ((entry = readdir(rfkillDir)) != nullptr)
+		if (name == "." || name == "..")
+			continue;
+
+		const std::string base = std::string("/sys/class/bluetooth/") + name;
+
+		// Caso 1:
+		// Algunos sistemas exponen dispositivos como:
+		// /sys/class/bluetooth/hci0:XX:XX:XX:XX:XX:XX/connected
+		if (name.find("hci") == 0 && name.find(":") != std::string::npos)
 		{
-			if (std::strncmp(entry->d_name, "rfkill", 6) != 0)
-				continue;
-
-			const std::string base = std::string("/sys/class/rfkill/") + entry->d_name;
-
-			std::ifstream typeFile(base + "/type");
-			std::string type;
-
-			if (!typeFile.good())
-				continue;
-
-			std::getline(typeFile, type);
-
-			if (type != "bluetooth")
-				continue;
-
-			foundBluetoothRfkill = true;
-
-			std::ifstream stateFile(base + "/state");
-			std::string state;
-
-			if (!stateFile.good())
-				continue;
-
-			std::getline(stateFile, state);
-
-			// state 1 = unblocked / active
-			if (state == "1")
+			if (readSysfsBoolFile(base + "/connected"))
 			{
-				bluetoothUnblocked = true;
+				connected = true;
 				break;
 			}
 		}
 
-		closedir(rfkillDir);
+		// Caso 2:
+		// Otros sistemas pueden exponer:
+		// /sys/class/bluetooth/hci0/dev_XX_XX_XX_XX_XX_XX/connected
+		if (name.find("hci") == 0 && name.find(":") == std::string::npos)
+		{
+			DIR* hciDir = opendir(base.c_str());
+			if (!hciDir)
+				continue;
+
+			struct dirent* child = nullptr;
+
+			while ((child = readdir(hciDir)) != nullptr)
+			{
+				const std::string childName = child->d_name;
+
+				if (childName == "." || childName == "..")
+					continue;
+
+				if (childName.find("dev_") != 0)
+					continue;
+
+				const std::string childBase = base + "/" + childName;
+
+				if (readSysfsBoolFile(childBase + "/connected"))
+				{
+					connected = true;
+					break;
+				}
+			}
+
+			closedir(hciDir);
+
+			if (connected)
+				break;
+		}
 	}
 
-	if (foundBluetoothRfkill)
-		return bluetoothUnblocked;
-
-	return true;
+	closedir(btDir);
+	return connected;
 }
 #else
 static bool hasActiveBluetoothConnection()
@@ -808,8 +814,9 @@ void Window::render()
 		mNetworkIcon->render(transform);
 	}
 
-		// Render bluetooth icon
-	if (!hasOverlayGui &&
+	// Render bluetooth icon
+	if (Settings::getInstance()->getBool("ShowBluetoothIcon") &&
+		!hasOverlayGui &&
 		mBluetoothConnected &&
 		!mRenderScreenSaver &&
 		mBluetoothIcon)

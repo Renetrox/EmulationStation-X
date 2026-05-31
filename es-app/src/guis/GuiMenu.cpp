@@ -298,8 +298,8 @@ void GuiMenu::openSoundSettings()
 		{
 			int currentBgmVol = Settings::getInstance()->getInt("BackgroundMusicVolume");
 
-			if (currentBgmVol <= 0)
-				currentBgmVol = 75;
+if (currentBgmVol < 0)
+	currentBgmVol = 75;
 
 			auto bgm_volume = std::make_shared<SliderComponent>(mWindow, 0.f, 100.f, 1.f, "%");
 			bgm_volume->setValue((float)currentBgmVol);
@@ -791,6 +791,15 @@ void GuiMenu::openUISettings()
 		s->addWithLabel(_("NETWORK ICON").c_str(), show_network);
 		s->addSaveFunc([show_network] {
 			Settings::getInstance()->setBool("ShowNetworkIcon", show_network->getState());
+		});
+	}
+
+	{
+		auto show_bluetooth = std::make_shared<SwitchComponent>(mWindow);
+		show_bluetooth->setState(Settings::getInstance()->getBool("ShowBluetoothIcon"));
+		s->addWithLabel(_("BLUETOOTH ICON").c_str(), show_bluetooth);
+		s->addSaveFunc([show_bluetooth] {
+			Settings::getInstance()->setBool("ShowBluetoothIcon", show_bluetooth->getState());
 		});
 	}
 
