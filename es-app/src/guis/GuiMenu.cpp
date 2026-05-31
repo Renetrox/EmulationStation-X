@@ -134,27 +134,27 @@ GuiMenu::GuiMenu(Window* window)
 if (isFullUI)
 {
 	// ES-X: primero lo visual/interfaz, porque es la identidad del frontend.
-	addEntry(menuLabel("◆", "UI SETTINGS"), menuColor, true, [this] { openUISettings(); });
+	addEntry(menuLabel("♔", "UI SETTINGS"), menuColor, true, [this] { openUISettings(); });
 
 	// Luego sonido.
-	addEntry(menuLabel("♪", "SOUND SETTINGS"), menuColor, true, [this] { openSoundSettings(); });
+	addEntry(menuLabel("♫", "SOUND SETTINGS"), menuColor, true, [this] { openSoundSettings(); });
 
 	// Scrapers juntos.
-	addEntry(menuLabel("■", "SCRAPER"), menuColor, true, [this] { openScraperSettings(); });
-	addEntry(menuLabel("□", "SKYSCRAPER"), menuColor, true, [this] { openSkyscraperMenu(); });
+	addEntry(menuLabel("♘", "SCRAPER"), menuColor, true, [this] { openScraperSettings(); });
+	addEntry(menuLabel("♞", "SKYSCRAPER"), menuColor, true, [this] { openSkyscraperMenu(); });
 
 	// Organización y sistema.
 	addEntry(menuLabel("★", "GAME COLLECTION SETTINGS"), menuColor, true, [this] { openCollectionSystemSettings(); });
-	addEntry(menuLabel("●", "OTHER SETTINGS"), menuColor, true, [this] { openOtherSettings(); });
+	addEntry(menuLabel("⚙", "OTHER SETTINGS"), menuColor, true, [this] { openOtherSettings(); });
 	addEntry(menuLabel("▶", "CONFIGURE INPUT"), menuColor, true, [this] { openConfigInput(); });
 }
 else
 {
 	// Modo restringido: mantener solo lo básico.
-	addEntry(menuLabel("◇", "SOUND SETTINGS"), menuColor, true, [this] { openSoundSettings(); });
+	addEntry(menuLabel("♫", "SOUND SETTINGS"), menuColor, true, [this] { openSoundSettings(); });
 }
 
-addEntry(menuLabel("▼", "QUIT"), menuColor, true, [this] { openQuitMenu(); });
+addEntry(menuLabel("⚑", "QUIT"), menuColor, true, [this] { openQuitMenu(); });
 
 	addChild(&mMenu);
 

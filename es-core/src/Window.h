@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 class SystemData;
 class FileData;
@@ -79,7 +80,7 @@ public:
 	bool cancelScreenSaver();
 	void renderScreenSaver();
 
-	// Clock + network theme integration
+	// Clock + network + bluetooth theme integration
 	void applyClockTheme(const std::shared_ptr<class ThemeData>& theme);
 
 private:
@@ -146,6 +147,21 @@ private:
 
 	std::string mNetworkPath = ":/icons/network.png";
 	std::unique_ptr<ImageComponent> mNetworkIcon;
+
+	// =========================
+	// Bluetooth overlay
+	// =========================
+
+	bool mBluetoothDefined = false;
+	bool mBluetoothConnected = false;
+	int mBluetoothPollAccum = 0;
+
+	Vector2f mBluetoothPos = { 0.86f, 0.05f };
+	Vector2f mBluetoothOrigin = { 1.0f, 0.0f };
+	Vector2f mBluetoothSize = { 0.03f, 0.03f };
+
+	std::string mBluetoothPath = ":/icons/bluetooth.png";
+	std::unique_ptr<ImageComponent> mBluetoothIcon;
 };
 
 #endif

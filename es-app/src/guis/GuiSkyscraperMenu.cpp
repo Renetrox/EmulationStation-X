@@ -2,6 +2,7 @@
 
 #include "components/TextComponent.h"
 #include "components/SwitchComponent.h"
+#include "components/ImageComponent.h"
 #include "guis/GuiInfoPopup.h"
 #include "guis/GuiMsgBox.h"
 #include "views/ViewController.h"
@@ -256,6 +257,7 @@ namespace
 			, mLine1(window, "", Font::get(FONT_SIZE_SMALL), getMenuTextColor())
 			, mLine2(window, "", Font::get(FONT_SIZE_SMALL), getMenuTextColor())
 			, mLine3(window, "", Font::get(FONT_SIZE_SMALL), getMenuTextColor())
+			, mIcon(window)
 			, mFakeCurrent(0)
 			, mFakeTotal(total > 0 ? total : 0)
 			, mDots(0)
@@ -275,9 +277,15 @@ namespace
 			mLine2.setPosition(18, 34);
 			mLine3.setPosition(18, 60);
 
+			const float iconSize = Renderer::getScreenHeight() * 0.052f;
+			mIcon.setImage(":/icons/scraper.png");
+			mIcon.setResize(iconSize, iconSize);
+			mIcon.setPosition(mSize.x() - iconSize - 12.0f, 10.0f);
+
 			addChild(&mLine1);
 			addChild(&mLine2);
 			addChild(&mLine3);
+			addChild(&mIcon);
 
 			refreshText("starting");
 		}
@@ -497,6 +505,7 @@ namespace
 		TextComponent mLine1;
 		TextComponent mLine2;
 		TextComponent mLine3;
+		ImageComponent mIcon;
 
 		int mFakeCurrent;
 		int mFakeTotal;
