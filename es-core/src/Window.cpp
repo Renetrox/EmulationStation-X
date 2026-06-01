@@ -68,99 +68,97 @@ static bool hasActiveNetworkConnection()
 #endif
 
 #ifndef WIN32
-static bool readSysfsBoolFile(const std::string& path)
-{
-	std::ifstream file(path.c_str());
-	if (!file.is_open())
-		return false;
-
-	std::string value;
-	std::getline(file, value);
-
-	return value == "1";
-}
-
 static bool hasActiveBluetoothConnection()
 {
 	// ES-X:
-	// Detector estricto para overlay Bluetooth.
+	// Detector liviano y compatible para overlay Bluetooth.
 	//
-	// No muestra el icono solamente porque exista hci0.
-	// Solo muestra Bluetooth si hay un dispositivo BT conectado.
+	// Este icono representa Bluetooth disponible/activo,
+	// no cantidad de mandos ni dispositivos conectados.
 	//
-	// Busca archivos "connected" creados por el stack Bluetooth en sysfs:
-	// /sys/class/bluetooth/hci*/dev_*/connected
-	// /sys/class/bluetooth/hci*:*/connected
+	// No ejecuta comandos externos, no usa bluetoothctl y no depende
+	// directamente de BlueZ. Solo revisa sysfs:
 	//
-	// Si no encuentra un dispositivo conectado, devuelve false.
+	// - /sys/class/bluetooth/hci*
+	// - /sys/class/rfkill/rfkill*/type == bluetooth
+	// - /sys/class/rfkill/rfkill*/state == 1
+	//
+	// Si existe hci* y no hay rfkill bluetooth, se asume activo.
+	// Si existe rfkill bluetooth, solo se muestra si state == 1.
+
+	bool hasHci = false;
 
 	DIR* btDir = opendir("/sys/class/bluetooth");
-	if (!btDir)
-		return false;
-
-	bool connected = false;
-	struct dirent* entry = nullptr;
-
-	while ((entry = readdir(btDir)) != nullptr)
+	if (btDir)
 	{
-		const std::string name = entry->d_name;
+		struct dirent* entry = nullptr;
 
-		if (name == "." || name == "..")
-			continue;
-
-		const std::string base = std::string("/sys/class/bluetooth/") + name;
-
-		// Caso 1:
-		// Algunos sistemas exponen dispositivos como:
-		// /sys/class/bluetooth/hci0:XX:XX:XX:XX:XX:XX/connected
-		if (name.find("hci") == 0 && name.find(":") != std::string::npos)
+		while ((entry = readdir(btDir)) != nullptr)
 		{
-			if (readSysfsBoolFile(base + "/connected"))
+			if (std::strncmp(entry->d_name, "hci", 3) == 0)
 			{
-				connected = true;
+				hasHci = true;
 				break;
 			}
 		}
 
-		// Caso 2:
-		// Otros sistemas pueden exponer:
-		// /sys/class/bluetooth/hci0/dev_XX_XX_XX_XX_XX_XX/connected
-		if (name.find("hci") == 0 && name.find(":") == std::string::npos)
-		{
-			DIR* hciDir = opendir(base.c_str());
-			if (!hciDir)
-				continue;
-
-			struct dirent* child = nullptr;
-
-			while ((child = readdir(hciDir)) != nullptr)
-			{
-				const std::string childName = child->d_name;
-
-				if (childName == "." || childName == "..")
-					continue;
-
-				if (childName.find("dev_") != 0)
-					continue;
-
-				const std::string childBase = base + "/" + childName;
-
-				if (readSysfsBoolFile(childBase + "/connected"))
-				{
-					connected = true;
-					break;
-				}
-			}
-
-			closedir(hciDir);
-
-			if (connected)
-				break;
-		}
+		closedir(btDir);
 	}
 
-	closedir(btDir);
-	return connected;
+	if (!hasHci)
+		return false;
+
+	bool foundBluetoothRfkill = false;
+	bool bluetoothUnblocked = false;
+
+	DIR* rfkillDir = opendir("/sys/class/rfkill");
+	if (rfkillDir)
+	{
+		struct dirent* entry = nullptr;
+
+		while ((entry = readdir(rfkillDir)) != nullptr)
+		{
+			if (std::strncmp(entry->d_name, "rfkill", 6) != 0)
+				continue;
+
+			const std::string base = std::string("/sys/class/rfkill/") + entry->d_name;
+
+			std::ifstream typeFile(base + "/type");
+			std::string type;
+
+			if (!typeFile.good())
+				continue;
+
+			std::getline(typeFile, type);
+
+			if (type != "bluetooth")
+				continue;
+
+			foundBluetoothRfkill = true;
+
+			std::ifstream stateFile(base + "/state");
+			std::string state;
+
+			if (!stateFile.good())
+				continue;
+
+			std::getline(stateFile, state);
+
+			// state 1 = unblocked / active
+			if (state == "1")
+			{
+				bluetoothUnblocked = true;
+				break;
+			}
+		}
+
+		closedir(rfkillDir);
+	}
+
+	if (foundBluetoothRfkill)
+		return bluetoothUnblocked;
+
+	return true;
 }
 #else
 static bool hasActiveBluetoothConnection()
