@@ -60,6 +60,36 @@ bool ComponentList::input(InputConfig* config, Input input)
     if (size() == 0)
         return false;
 
+    const bool navUp    = config->isMappedLike("up", input);
+    const bool navDown  = config->isMappedLike("down", input);
+    const bool pageUp   = config->isMappedLike("leftshoulder", input);
+    const bool pageDown = config->isMappedLike("rightshoulder", input);
+
+    // ES-X:
+    // Inspirado en ES-DE.
+    //
+    // En ES clásico, el input se entrega primero al componente de la fila actual
+    // y recién después ComponentList intenta manejar el scroll.
+    //
+    // Con algunos mandos BT/wireless, al caer sobre un SliderComponent u otro
+    // componente interactivo, el release de arriba/abajo puede no llegar limpio
+    // a ComponentList. Entonces listInput(0) no se ejecuta y la repetición queda
+    // viva, haciendo que el menú se vaya hasta arriba o hasta abajo.
+    //
+    // Por eso, si el evento es un release de navegación vertical/paginación,
+    // cortamos la repetición ANTES de pasarlo al hijo.
+    if (input.value == 0 && (navUp || navDown || pageUp || pageDown))
+{
+    stopScrolling();
+    return true;
+}
+
+    // ES-DE corta el scroll pendiente al entrar en acciones.
+    // En esta base no usamos stopScrolling(), así que el equivalente seguro
+    // es mandar listInput(0) antes de procesar A.
+    if (input.value != 0 && config->isMappedTo("a", input))
+    stopScrolling();
+
     // give it to the current row's input handler
     if (mEntries.at(mCursor).data.input_handler)
     {
@@ -78,19 +108,19 @@ bool ComponentList::input(InputConfig* config, Input input)
     }
 
     // input handler didn't consume input - try to scroll
-    if (config->isMappedLike("up", input))
+    if (navUp)
     {
         return listInput(input.value != 0 ? -1 : 0);
     }
-    else if (config->isMappedLike("down", input))
+    else if (navDown)
     {
         return listInput(input.value != 0 ? 1 : 0);
     }
-    else if (config->isMappedLike("leftshoulder", input))
+    else if (pageUp)
     {
         return listInput(input.value != 0 ? -6 : 0);
     }
-    else if (config->isMappedLike("rightshoulder", input))
+    else if (pageDown)
     {
         return listInput(input.value != 0 ? 6 : 0);
     }

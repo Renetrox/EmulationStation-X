@@ -6,14 +6,17 @@
 #include "Log.h"
 #include "Window.h"
 
-//Used to display a list of options.
-//Can select one or multiple options.
+// Used to display a list of options.
+// Can select one or multiple options.
 
 // if !multiSelect
 // * <- curEntry ->
 
 // always
 // * press a -> open full list
+
+#define OPTIONLIST_REPEAT_START_DELAY 650
+#define OPTIONLIST_REPEAT_SPEED 250 // Lower is faster.
 
 #define CHECKED_PATH ":/checkbox_checked.svg"
 #define UNCHECKED_PATH ":/checkbox_unchecked.svg"
@@ -36,8 +39,10 @@ private:
 		OptionListComponent<T>* mParent;
 
 	public:
-		OptionListPopup(Window* window, OptionListComponent<T>* parent, const std::string& title) : GuiComponent(window),
-			mMenu(window, title.c_str()), mParent(parent)
+		OptionListPopup(Window* window, OptionListComponent<T>* parent, const std::string& title)
+			: GuiComponent(window)
+			, mMenu(window, title.c_str())
+			, mParent(parent)
 		{
 			auto font = Font::get(FONT_SIZE_MEDIUM);
 			ComponentListRow row;
@@ -71,11 +76,19 @@ private:
 
 					// for select all/none
 					checkboxes.push_back(checkbox.get());
-				}else{
+				}
+				else
+				{
 					// input handler for non-multiselect
 					// update selected value and close
 					row.makeAcceptInputHandler([this, &e]
 					{
+						if(mParent->mEntries.empty())
+						{
+							delete this;
+							return;
+						}
+
 						mParent->mEntries.at(mParent->getSelectedId()).selected = false;
 						e.selected = true;
 						mParent->onSelectedChanged();
@@ -134,8 +147,18 @@ private:
 	};
 
 public:
-	OptionListComponent(Window* window, const std::string& name, bool multiSelect = false) : GuiComponent(window), mMultiSelect(multiSelect), mName(name),
-		 mText(window), mLeftArrow(window), mRightArrow(window)
+	OptionListComponent(Window* window, const std::string& name, bool multiSelect = false)
+		: GuiComponent(window)
+		, mMultiSelect(multiSelect)
+		, mKeyRepeat(false)
+		, mKeyRepeatDir(0)
+		, mKeyRepeatTimer(0)
+		, mKeyRepeatStartDelay(OPTIONLIST_REPEAT_START_DELAY)
+		, mKeyRepeatSpeed(OPTIONLIST_REPEAT_SPEED)
+		, mName(name)
+		, mText(window)
+		, mLeftArrow(window)
+		, mRightArrow(window)
 	{
 		auto font = Font::get(FONT_SIZE_MEDIUM, FONT_PATH_LIGHT);
 		mText.setFont(font);
@@ -150,7 +173,9 @@ public:
 		{
 			mRightArrow.setImage(":/arrow.svg");
 			addChild(&mRightArrow);
-		}else{
+		}
+		else
+		{
 			mLeftArrow.setImage(":/option_arrow.svg");
 			mLeftArrow.setFlipX(true);
 			addChild(&mLeftArrow);
@@ -181,42 +206,85 @@ public:
 
 	bool input(InputConfig* config, Input input) override
 	{
-		if(input.value != 0)
+		// ES-X / inspirado en ES-DE:
+		// No ejecutar acciones en release. Los releases solo cortan repetición.
+		if(input.value == 0)
 		{
-			if(config->isMappedTo("a", input))
+			if(config->isMappedLike("left", input) || config->isMappedLike("right", input))
+				mKeyRepeatDir = 0;
+
+			return GuiComponent::input(config, input);
+		}
+
+		if(config->isMappedTo("a", input))
+		{
+			mKeyRepeatDir = 0;
+			open();
+			return true;
+		}
+
+		if(!mMultiSelect)
+		{
+			if(mEntries.empty())
+				return GuiComponent::input(config, input);
+
+			if(config->isMappedLike("left", input))
 			{
-				open();
+				if(mKeyRepeat)
+				{
+					mKeyRepeatDir = -1;
+					mKeyRepeatTimer = -(mKeyRepeatStartDelay - mKeyRepeatSpeed);
+				}
+
+				moveSelection(-1);
 				return true;
 			}
-			if(!mMultiSelect)
+			else if(config->isMappedLike("right", input))
 			{
-				if(config->isMappedLike("left", input))
+				if(mKeyRepeat)
 				{
-					// move selection to previous
-					unsigned int i = getSelectedId();
-					int next = (int)i - 1;
-					if(next < 0)
-						next += (int)mEntries.size();
-
-					mEntries.at(i).selected = false;
-					mEntries.at(next).selected = true;
-					onSelectedChanged();
-					return true;
-
-				}else if(config->isMappedLike("right", input))
-				{
-					// move selection to next
-					unsigned int i = getSelectedId();
-					int next = (i + 1) % mEntries.size();
-					mEntries.at(i).selected = false;
-					mEntries.at(next).selected = true;
-					onSelectedChanged();
-					return true;
-
+					mKeyRepeatDir = 1;
+					mKeyRepeatTimer = -(mKeyRepeatStartDelay - mKeyRepeatSpeed);
 				}
+
+				moveSelection(1);
+				return true;
+			}
+			else
+			{
+				mKeyRepeatDir = 0;
 			}
 		}
+
 		return GuiComponent::input(config, input);
+	}
+
+	void update(int deltaTime) override
+	{
+		if(mKeyRepeat && mKeyRepeatDir != 0 && !mMultiSelect && !mEntries.empty())
+		{
+			mKeyRepeatTimer += deltaTime;
+
+			while(mKeyRepeatTimer >= mKeyRepeatSpeed)
+			{
+				moveSelection(mKeyRepeatDir);
+				mKeyRepeatTimer -= mKeyRepeatSpeed;
+			}
+		}
+
+		GuiComponent::update(deltaTime);
+	}
+
+	void setKeyRepeat(bool state, int delay = OPTIONLIST_REPEAT_START_DELAY, int speed = OPTIONLIST_REPEAT_SPEED)
+	{
+		mKeyRepeat = state;
+		mKeyRepeatStartDelay = delay;
+		mKeyRepeatSpeed = speed;
+	}
+
+	int getNumEntries() const
+	{
+		return (int)mEntries.size();
 	}
 
 	std::vector<T> getSelectedObjects()
@@ -282,6 +350,24 @@ private:
 		return 0;
 	}
 
+	void moveSelection(int direction)
+	{
+		if(mMultiSelect || mEntries.empty())
+			return;
+
+		unsigned int i = getSelectedId();
+		int next = (int)i + direction;
+
+		if(next < 0)
+			next += (int)mEntries.size();
+		else if(next >= (int)mEntries.size())
+			next = 0;
+
+		mEntries.at(i).selected = false;
+		mEntries.at(next).selected = true;
+		onSelectedChanged();
+	}
+
 	void open()
 	{
 		mWindow->pushGui(new OptionListPopup(mWindow, this, mName));
@@ -299,7 +385,9 @@ private:
 			setSize(mText.getSize().x() + mRightArrow.getSize().x() + 24, mText.getSize().y());
 			if(mParent) // hack since theres no "on child size changed" callback atm...
 				mParent->onSizeChanged();
-		}else{
+		}
+		else
+		{
 			// display currently selected + l/r cursors
 			for(auto it = mEntries.cbegin(); it != mEntries.cend(); it++)
 			{
@@ -327,6 +415,12 @@ private:
 	}
 
 	bool mMultiSelect;
+
+	bool mKeyRepeat;
+	int mKeyRepeatDir;
+	int mKeyRepeatTimer;
+	int mKeyRepeatStartDelay;
+	int mKeyRepeatSpeed;
 
 	std::string mName;
 	TextComponent mText;

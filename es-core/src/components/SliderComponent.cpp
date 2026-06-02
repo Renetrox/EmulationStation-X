@@ -5,8 +5,15 @@
 #define MOVE_REPEAT_DELAY 500
 #define MOVE_REPEAT_RATE 40
 
-SliderComponent::SliderComponent(Window* window, float min, float max, float increment, const std::string& suffix) : GuiComponent(window),
-	mMin(min), mMax(max), mSingleIncrement(increment), mMoveRate(0), mMoveAccumulator(0), mKnob(window), mSuffix(suffix)
+SliderComponent::SliderComponent(Window* window, float min, float max, float increment, const std::string& suffix)
+	: GuiComponent(window)
+	, mMin(min)
+	, mMax(max)
+	, mSingleIncrement(increment)
+	, mMoveRate(0)
+	, mMoveAccumulator(0)
+	, mKnob(window)
+	, mSuffix(suffix)
 {
 	assert((min - max) != 0);
 
@@ -21,23 +28,33 @@ SliderComponent::SliderComponent(Window* window, float min, float max, float inc
 
 bool SliderComponent::input(InputConfig* config, Input input)
 {
-	if(config->isMappedLike("left", input))
+	// ES-X / inspirado en ES-DE:
+	// El slider solo procesa izquierda/derecha cuando input.value != 0.
+	// En release, corta repetición y deja que up/down siga hacia ComponentList.
+	if(input.value != 0)
 	{
-		if(input.value)
+		if(config->isMappedLike("left", input))
+		{
 			setValue(mValue - mSingleIncrement);
 
-		mMoveRate = input.value ? -mSingleIncrement : 0;
-		mMoveAccumulator = -MOVE_REPEAT_DELAY;
-		return true;
-	}
-	if(config->isMappedLike("right", input))
-	{
-		if(input.value)
+			mMoveRate = -mSingleIncrement;
+			mMoveAccumulator = -MOVE_REPEAT_DELAY;
+			return true;
+		}
+
+		if(config->isMappedLike("right", input))
+		{
 			setValue(mValue + mSingleIncrement);
 
-		mMoveRate = input.value ? mSingleIncrement : 0;
-		mMoveAccumulator = -MOVE_REPEAT_DELAY;
-		return true;
+			mMoveRate = mSingleIncrement;
+			mMoveAccumulator = -MOVE_REPEAT_DELAY;
+			return true;
+		}
+	}
+	else
+	{
+		mMoveRate = 0;
+		mMoveAccumulator = 0;
 	}
 
 	return GuiComponent::input(config, input);
@@ -69,11 +86,11 @@ void SliderComponent::render(const Transform4x4f& parentTrans)
 
 	float width = mSize.x() - mKnob.getSize().x() - (mValueCache ? mValueCache->metrics.size.x() + 4 : 0);
 
-	//render line
+	// render line
 	const float lineWidth = 2;
 	Renderer::drawRect(mKnob.getSize().x() / 2, mSize.y() / 2 - lineWidth / 2, width, lineWidth, 0x777777FF, 0x777777FF);
 
-	//render knob
+	// render knob
 	mKnob.render(trans);
 
 	GuiComponent::renderChildren(trans);
@@ -130,8 +147,24 @@ void SliderComponent::onValueChanged()
 
 	// update knob position/size
 	mKnob.setResize(0, mSize.y() * 0.7f);
+
 	float lineLength = mSize.x() - mKnob.getSize().x() - (mValueCache ? mValueCache->metrics.size.x() + 4 : 0);
-	mKnob.setPosition(((mValue + mMin) / mMax) * lineLength + mKnob.getSize().x()/2, mSize.y() / 2);
+
+	// ES-X:
+	// Fórmula corregida siguiendo la lógica de ES-DE:
+	// posición normalizada entre mMin y mMax.
+	float range = mMax - mMin;
+	float normalized = 0.0f;
+
+	if(range != 0.0f)
+		normalized = (mValue - mMin) / range;
+
+	if(normalized < 0.0f)
+		normalized = 0.0f;
+	else if(normalized > 1.0f)
+		normalized = 1.0f;
+
+	mKnob.setPosition((normalized * lineLength) + mKnob.getSize().x() / 2, mSize.y() / 2);
 }
 
 std::vector<HelpPrompt> SliderComponent::getHelpPrompts()
