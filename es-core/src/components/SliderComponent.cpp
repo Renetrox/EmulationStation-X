@@ -28,34 +28,42 @@ SliderComponent::SliderComponent(Window* window, float min, float max, float inc
 
 bool SliderComponent::input(InputConfig* config, Input input)
 {
-	// ES-X / inspirado en ES-DE:
-	// El slider solo procesa izquierda/derecha cuando input.value != 0.
-	// En release, corta repetición y deja que up/down siga hacia ComponentList.
-	if(input.value != 0)
-	{
-		if(config->isMappedLike("left", input))
-		{
-			setValue(mValue - mSingleIncrement);
-
-			mMoveRate = -mSingleIncrement;
-			mMoveAccumulator = -MOVE_REPEAT_DELAY;
-			return true;
-		}
-
-		if(config->isMappedLike("right", input))
-		{
-			setValue(mValue + mSingleIncrement);
-
-			mMoveRate = mSingleIncrement;
-			mMoveAccumulator = -MOVE_REPEAT_DELAY;
-			return true;
-		}
-	}
-	else
+	// ES-X:
+	// Para mandos BT/wireless, evitamos autorepeat en sliders.
+	// Algunos controles no envían un release limpio de left/right y el volumen
+	// queda como si siguiera presionado.
+	//
+	// Cada pulsación cambia un paso. Al soltar, o ante cualquier release,
+	// se corta cualquier repetición pendiente.
+	if(input.value == 0)
 	{
 		mMoveRate = 0;
 		mMoveAccumulator = 0;
+		return GuiComponent::input(config, input);
 	}
+
+	if(config->isMappedLike("left", input))
+	{
+		setValue(mValue - mSingleIncrement);
+
+		mMoveRate = 0;
+		mMoveAccumulator = 0;
+		return true;
+	}
+
+	if(config->isMappedLike("right", input))
+	{
+		setValue(mValue + mSingleIncrement);
+
+		mMoveRate = 0;
+		mMoveAccumulator = 0;
+		return true;
+	}
+
+	// Si entra cualquier otro input mientras el slider tiene foco,
+	// nos aseguramos de no dejar repetición pendiente.
+	mMoveRate = 0;
+	mMoveAccumulator = 0;
 
 	return GuiComponent::input(config, input);
 }
