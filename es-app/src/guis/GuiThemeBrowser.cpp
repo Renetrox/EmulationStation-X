@@ -770,9 +770,13 @@ void GuiThemeBrowser::finishJobIfDone()
 
 bool GuiThemeBrowser::input(InputConfig* config, Input input)
 {
+	// ES-X / inspirado en ES-DE:
+	// No ejecutar acciones en release.
+	// Los eventos con value == 0 solo deben cortar/terminar acciones, no mover el menú.
 	if (input.value == 0)
-		return false;
+		return GuiComponent::input(config, input);
 
+	// Mientras hay un trabajo en segundo plano, bloqueamos acciones.
 	if (mJobRunning)
 		return true;
 
@@ -785,18 +789,33 @@ bool GuiThemeBrowser::input(InputConfig* config, Input input)
 	if (mThemes.empty())
 		return GuiComponent::input(config, input);
 
-	if (config->isMappedTo("up", input))
+	// ------------------------------------------------------------
+	// Navegación manual.
+	//
+	// No usar mList.input() acá porque en algunos mandos BT/wireless
+	// vuelve a interpretar ejes/hats y genera desplazamiento raro.
+	//
+	// Usamos isMappedLike() para up/down porque algunos mandos wireless
+	// no responden bien con isMappedTo() en esta pantalla.
+	// ------------------------------------------------------------
+	if (config->isMappedLike("up", input))
 	{
 		mLastSelectedIndex--;
-		if (mLastSelectedIndex < 0) mLastSelectedIndex = (int)mThemes.size() - 1;
+
+		if (mLastSelectedIndex < 0)
+			mLastSelectedIndex = (int)mThemes.size() - 1;
+
 		rebuildList();
 		return true;
 	}
 
-	if (config->isMappedTo("down", input))
+	if (config->isMappedLike("down", input))
 	{
 		mLastSelectedIndex++;
-		if (mLastSelectedIndex >= (int)mThemes.size()) mLastSelectedIndex = 0;
+
+		if (mLastSelectedIndex >= (int)mThemes.size())
+			mLastSelectedIndex = 0;
+
 		rebuildList();
 		return true;
 	}
@@ -834,9 +853,9 @@ bool GuiThemeBrowser::input(InputConfig* config, Input input)
 		return true;
 	}
 
-	if (mList.input(config, input))
-		return true;
-
+	// Importante:
+	// No llamar mList.input(config, input).
+	// El listado se renderiza y actualiza, pero la navegación la controla este GUI.
 	return GuiComponent::input(config, input);
 }
 

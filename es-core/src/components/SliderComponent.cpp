@@ -6,7 +6,7 @@
 #define MOVE_REPEAT_RATE 40
 
 SliderComponent::SliderComponent(Window* window, float min, float max, float increment, const std::string& suffix) : GuiComponent(window),
-	mMin(min), mMax(max), mSingleIncrement(increment), mMoveRate(0), mKnob(window), mSuffix(suffix)
+	mMin(min), mMax(max), mSingleIncrement(increment), mMoveRate(0), mMoveAccumulator(0), mKnob(window), mSuffix(suffix)
 {
 	assert((min - max) != 0);
 
