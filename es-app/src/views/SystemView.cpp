@@ -633,6 +633,25 @@ void SystemView::update(int deltaTime)
 {
 	listUpdate(deltaTime);
 	GuiComponent::update(deltaTime);
+
+	// ES-X: actualizar los extras del sistema actualmente visible.
+	// Esto permite que ImageComponent::update() ejecute animaciones
+	// como pulseOpacity en imágenes extra="true".
+	if (!mEntries.empty())
+	{
+		int index = mCursor;
+
+		if (index >= 0 && index < static_cast<int>(mEntries.size()))
+		{
+			SystemViewData& data = mEntries.at(index).data;
+
+			for (GuiComponent* extra : data.backgroundExtras)
+			{
+				if (extra)
+					extra->update(deltaTime);
+			}
+		}
+	}
 }
 
 void SystemView::onCursorChanged(const CursorState& /*state*/)

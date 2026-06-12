@@ -16,18 +16,25 @@ public:
 
 	void setDefaultImage(std::string path);
 
-	//Loads the image at the given filepath. Will tile if tile is true (retrieves texture as tiling, creates vertices accordingly).
+	// Loads the image at the given filepath.
+	// Will tile if tile is true.
 	void setImage(std::string path, bool tile = false);
-	//Loads an image from memory.
+
+	// Loads an image from memory.
 	void setImage(const char* image, size_t length, bool tile = false);
-	//Use an already existing texture.
+
+	// Uses an already existing texture.
 	void setImage(const std::shared_ptr<TextureResource>& texture);
 
 	void onSizeChanged() override;
 	void setOpacity(unsigned char opacity) override;
 
-	// Resize the image to fit this size. If one axis is zero, scale that axis to maintain aspect ratio.
-	// If both are non-zero, potentially break the aspect ratio.  If both are zero, no resizing.
+	// ES-X: actualización necesaria para el pulso suave de opacidad.
+	void update(int deltaTime) override;
+
+	// Resize the image to fit this size. If one axis is zero, scale that axis
+	// to maintain aspect ratio. If both are non-zero, potentially break the
+	// aspect ratio. If both are zero, no resizing.
 	// Can be set before or after an image is loaded.
 	// setMaxSize() and setResize() are mutually exclusive.
 	void setResize(float width, float height);
@@ -35,7 +42,8 @@ public:
 
 	// Resize the image to be as large as possible but fit within a box of this size.
 	// Can be set before or after an image is loaded.
-	// Never breaks the aspect ratio. setMaxSize() and setResize() are mutually exclusive.
+	// Never breaks the aspect ratio.
+	// setMaxSize() and setResize() are mutually exclusive.
 	void setMaxSize(float width, float height);
 	inline void setMaxSize(const Vector2f& size) { setMaxSize(size.x(), size.y()); }
 
@@ -44,7 +52,7 @@ public:
 
 	Vector2f getRotationSize() const override;
 
-	// Applied AFTER image positioning and sizing
+	// Applied AFTER image positioning and sizing.
 	// cropTop(0.2) will crop 20% of the top of the image.
 	void cropLeft(float percent);
 	void cropTop(float percent);
@@ -61,9 +69,11 @@ public:
 	void setFlipX(bool flip); // Mirror on the X axis.
 	void setFlipY(bool flip); // Mirror on the Y axis.
 
-	void setRotateByTargetSize(bool rotate);  // Flag indicating if rotation should be based on target size vs. actual size.
+	// Flag indicating if rotation should be based on target size vs. actual size.
+	void setRotateByTargetSize(bool rotate);
 
-	// Returns the size of the current texture, or (0, 0) if none is loaded.  May be different than drawn size (use getSize() for that).
+	// Returns the size of the current texture, or (0, 0) if none is loaded.
+	// May be different than drawn size (use getSize() for that).
 	Vector2i getTextureSize() const;
 
 	Vector2f getSize() const override;
@@ -72,18 +82,25 @@ public:
 
 	void render(const Transform4x4f& parentTrans) override;
 
-	virtual void applyTheme(const std::shared_ptr<ThemeData>& theme, const std::string& view, const std::string& element, unsigned int properties) override;
+	virtual void applyTheme(
+		const std::shared_ptr<ThemeData>& theme,
+		const std::string& view,
+		const std::string& element,
+		unsigned int properties) override;
 
 	virtual std::vector<HelpPrompt> getHelpPrompts() override;
 
-	std::shared_ptr<TextureResource> getTexture() { return mTexture; };
+	std::shared_ptr<TextureResource> getTexture() { return mTexture; }
+
 private:
 	Vector2f mTargetSize;
 
-	bool mFlipX, mFlipY, mTargetIsMax, mTargetIsMin;
+	bool mFlipX;
+	bool mFlipY;
+	bool mTargetIsMax;
+	bool mTargetIsMin;
 
-	// Calculates the correct mSize from our resizing information (set by setResize/setMaxSize).
-	// Used internally whenever the resizing parameters or texture change.
+	// Calculates the correct mSize from our resizing information.
 	void resize();
 
 	Renderer::Vertex mVertices[4];
@@ -99,14 +116,24 @@ private:
 	std::string mDefaultPath;
 
 	std::shared_ptr<TextureResource> mTexture;
-	unsigned char			mFadeOpacity;
-	bool					mFading;
-	bool					mForceLoad;
-	bool					mDynamic;
-	bool					mRotateByTargetSize;
+
+	unsigned char mFadeOpacity;
+	bool mFading;
+	bool mForceLoad;
+	bool mDynamic;
+	bool mRotateByTargetSize;
 
 	Vector2f mTopLeftCrop;
 	Vector2f mBottomRightCrop;
+
+	// ES-X: animación liviana de opacidad para imágenes.
+	// Se usa para marcos, brillos, cursores y overlays del tema.
+	bool mPulseEnabled;
+	float mPulseOpacityMin;
+	float mPulseOpacityMax;
+	float mPulseDuration;
+	float mPulseElapsed;
+	float mPulseFactor;
 };
 
 #endif // ES_CORE_COMPONENTS_IMAGE_COMPONENT_H

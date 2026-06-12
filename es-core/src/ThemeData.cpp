@@ -39,6 +39,13 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "gradientType", STRING },
 		{ "visible", BOOLEAN },
 		{ "hideWhenSingleGame", BOOLEAN },
+
+		// ES-X: pulso suave de opacidad para imágenes.
+		{ "pulse", BOOLEAN },
+		{ "pulseOpacityMin", FLOAT },
+		{ "pulseOpacityMax", FLOAT },
+		{ "pulseDuration", FLOAT },
+
 		{ "zIndex", FLOAT } } },
 
 	{ "imagegrid", {
