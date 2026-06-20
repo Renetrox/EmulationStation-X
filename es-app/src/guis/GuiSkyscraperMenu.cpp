@@ -19,6 +19,8 @@
 #include <string>
 #include <sys/stat.h>
 #include <cctype>
+#include <cstdio>
+#include <functional>
 
 #define SKY_SCRIPT "$HOME/.emulationstation/scripts/skyscraper-esx.sh"
 #define SKY_STATUS_FILE "/tmp/esx-skyscraper/status"
@@ -246,6 +248,224 @@ namespace
 		return startsWith(status, "starting:") ||
 			   startsWith(status, "running:");
 	}
+
+	inline std::string runCommandCapture(const std::string& cmd)
+	{
+		std::string result;
+		FILE* pipe = popen(cmd.c_str(), "r");
+
+		if (!pipe)
+			return result;
+
+		char buffer[256];
+		while (fgets(buffer, sizeof(buffer), pipe) != nullptr)
+			result += buffer;
+
+		pclose(pipe);
+		return result;
+	}
+
+	inline int runSkyscraperScriptSimple(const std::string& action, const std::string& system)
+	{
+		const std::string cmd =
+			std::string(SKY_SCRIPT) +
+			" " + quote(action) +
+			" " + quote(system);
+
+		LOG(LogInfo) << "Launching Skyscraper maintenance: " << cmd;
+		return std::system(cmd.c_str());
+	}
+
+	inline std::string runSkyscraperScriptSimpleCapture(const std::string& action, const std::string& system)
+	{
+		const std::string cmd =
+			std::string(SKY_SCRIPT) +
+			" " + quote(action) +
+			" " + quote(system);
+
+		LOG(LogInfo) << "Launching Skyscraper maintenance: " << cmd;
+		return runCommandCapture(cmd);
+	}
+
+	class GuiSkyscraperMaintenanceMenu : public GuiComponent
+	{
+	public:
+		GuiSkyscraperMaintenanceMenu(Window* window, const std::string& system)
+			: GuiComponent(window)
+			, mMenu(window, tr("SKYSCRAPER MAINTENANCE").c_str())
+			, mSystem(system)
+		{
+			std::shared_ptr<Font> font = Font::get(FONT_SIZE_MEDIUM);
+			const unsigned int textColor = getMenuTextColor();
+
+			addMenuRow(tr("CACHE SIZE"), [this] { showCacheSize(); });
+			addMenuRow(tr("VACUUM CURRENT SYSTEM"), [this]
+			{
+				confirmAndRun(
+					"maintenance-vacuum",
+					tr("VACUUM CACHE FOR THIS SYSTEM?"),
+					tr("VACUUM FINISHED: "),
+					tr("VACUUM FAILED: ")
+				);
+			});
+			addMenuRow(tr("CLEAN SKIPPED FILES"), [this]
+			{
+				confirmAndRun(
+					"maintenance-clean-skipped",
+					tr("DELETE SKIPPED FILES FOR THIS SYSTEM?"),
+					tr("SKIPPED FILES CLEANED: "),
+					tr("SKIPPED FILES CLEAN FAILED: ")
+				);
+			});
+			addMenuRow(tr("CLEAN TEMP FILES"), [this]
+			{
+				confirmAndRun(
+					"maintenance-clean-temp",
+					tr("DELETE OLD TEMP FILES?"),
+					tr("TEMP FILES CLEANED"),
+					tr("TEMP FILES CLEAN FAILED")
+				);
+			});
+			addMenuRow(tr("PURGE CURRENT SYSTEM CACHE"), [this]
+			{
+				confirmAndRun(
+					"maintenance-purge",
+					tr("DELETE ALL CACHE FOR THIS SYSTEM?"),
+					tr("CACHE PURGED: "),
+					tr("CACHE PURGE FAILED: ")
+				);
+			});
+
+			addChild(&mMenu);
+
+			setSize(mMenu.getSize());
+			setPosition(
+				(Renderer::getScreenWidth() - mSize.x()) / 2,
+				(Renderer::getScreenHeight() - mSize.y()) / 2
+			);
+		}
+
+		bool input(InputConfig* config, Input input) override
+		{
+			if (GuiComponent::input(config, input))
+				return true;
+
+			if (config->isMappedTo("b", input) && input.value)
+			{
+				delete this;
+				return true;
+			}
+
+			return false;
+		}
+
+		std::vector<HelpPrompt> getHelpPrompts() override
+		{
+			return {
+				{ "up/down", tr("CHOOSE") },
+				{ "a", tr("SELECT") },
+				{ "b", tr("BACK") }
+			};
+		}
+
+	private:
+		void addMenuRow(const std::string& label, const std::function<void()>& action)
+		{
+			std::shared_ptr<Font> font = Font::get(FONT_SIZE_MEDIUM);
+			const unsigned int textColor = getMenuTextColor();
+
+			ComponentListRow row;
+			row.addElement(std::make_shared<TextComponent>(mWindow, label, font, textColor), true);
+			row.makeAcceptInputHandler(action);
+			mMenu.addRow(row);
+		}
+
+		bool ensureReady(const std::string& failPrefix)
+		{
+			if (mSystem.empty())
+			{
+				mWindow->setInfoPopup(new GuiInfoPopup(
+					mWindow,
+					failPrefix + tr("CURRENT SYSTEM NOT FOUND"),
+					5000
+				));
+				return false;
+			}
+
+			const std::string status = getSkyscraperStatus();
+			if (isSkyscraperJobActive(status))
+			{
+				mWindow->setInfoPopup(new GuiInfoPopup(
+					mWindow,
+					tr("SKYSCRAPER IS ALREADY RUNNING"),
+					4000
+				));
+				return false;
+			}
+
+			return true;
+		}
+
+		void showCacheSize()
+		{
+			if (!ensureReady(tr("SKYSCRAPER MAINTENANCE FAILED: ")))
+				return;
+
+			std::string output = runSkyscraperScriptSimpleCapture("maintenance-size", mSystem);
+
+			if (output.empty())
+				output = tr("NO CACHE SIZE INFORMATION AVAILABLE");
+
+			mWindow->pushGui(new GuiMsgBox(
+				mWindow,
+				output,
+				tr("OK"),
+				nullptr
+			));
+		}
+
+		void confirmAndRun(const std::string& action,
+			const std::string& question,
+			const std::string& successPrefix,
+			const std::string& failPrefix)
+		{
+			if (!ensureReady(failPrefix))
+				return;
+
+			mWindow->pushGui(new GuiMsgBox(
+				mWindow,
+				question,
+				tr("YES"),
+				[this, action, successPrefix, failPrefix]
+				{
+					const int ret = runSkyscraperScriptSimple(action, mSystem);
+
+					if (ret == 0)
+					{
+						mWindow->setInfoPopup(new GuiInfoPopup(
+							mWindow,
+							successPrefix + mSystem,
+							5000
+						));
+					}
+					else
+					{
+						mWindow->setInfoPopup(new GuiInfoPopup(
+							mWindow,
+							failPrefix + mSystem,
+							5000
+						));
+					}
+				},
+				tr("NO"),
+				nullptr
+			));
+		}
+
+	private:
+		MenuComponent mMenu;
+		std::string mSystem;
+	};
 
 	class GuiSkyscraperProgress : public GuiComponent
 	{
@@ -575,6 +795,14 @@ GuiSkyscraperMenu::GuiSkyscraperMenu(Window* window)
 
 	{
 		ComponentListRow row;
+		auto txt = std::make_shared<TextComponent>(window, tr("MAINTENANCE"), font, textColor);
+		row.addElement(txt, true);
+		row.makeAcceptInputHandler([this] { openMaintenance(); });
+		mMenu.addRow(row);
+	}
+
+	{
+		ComponentListRow row;
 		auto txt = std::make_shared<TextComponent>(window, tr("OPEN LOG"), font, textColor);
 		row.addElement(txt, true);
 		row.makeAcceptInputHandler([this] { openLog(); });
@@ -749,6 +977,23 @@ void GuiSkyscraperMenu::runGenerate()
 			5000
 		));
 	}
+}
+
+void GuiSkyscraperMenu::openMaintenance()
+{
+	const std::string system = getCurrentSystem();
+
+	if (system.empty())
+	{
+		mWindow->setInfoPopup(new GuiInfoPopup(
+			mWindow,
+			tr("SKYSCRAPER MAINTENANCE FAILED: CURRENT SYSTEM NOT FOUND"),
+			5000
+		));
+		return;
+	}
+
+	mWindow->pushGui(new GuiSkyscraperMaintenanceMenu(mWindow, system));
 }
 
 void GuiSkyscraperMenu::openLog()

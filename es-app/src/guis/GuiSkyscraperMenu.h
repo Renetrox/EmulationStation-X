@@ -25,6 +25,7 @@ private:
 
 	void runGather();
 	void runGenerate();
+	void openMaintenance();
 	void openLog();
 
 	std::string getCurrentSystem();
