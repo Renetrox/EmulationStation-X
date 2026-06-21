@@ -1,8 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <artwork>
-  <output type="cover"/>
+
   <output type="screenshot"/>
   <output type="wheel"/>
-  <output type="texture"/>
   <output type="fanart"/>
+  <output type="texture"/>
+
+  <!-- Cover generado 500x450: imagen de fondo + título abajo -->
+  <output type="cover" width="500" height="450">
+
+    <!-- Fondo usando screenshot, más compatible que fanart -->
+    <layer resource="cover"
+           width="500"
+           height="450"
+           align="center"
+           valign="middle">
+      <brightness value="-20"/>
+    </layer>
+
+   
+  </output>
+
 </artwork>
