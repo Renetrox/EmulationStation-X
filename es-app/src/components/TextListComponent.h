@@ -646,8 +646,21 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			itemAnchorY += mCarouselSelectedLogoOffsetY * influence;
 		}
 
-		const float scaledW = itemWidth * scale;
-		const float scaledH = itemHeight * scale;
+		// ES-X:
+		// Modelo tipo carrusel real: la caja base ya es el tamaño máximo
+		// seleccionado y los laterales se achican con una escala normalizada.
+		// Así el centro no "nace chico para luego agrandarse"; nace en su
+		// tamaño correcto, como hace CarouselComponent.
+		const float selectedScale = Math::max(1.0f, mCarouselLogoScale);
+		const float outerW = itemWidth * selectedScale;
+		const float outerH = itemHeight * selectedScale;
+		float itemRenderScale = scale / selectedScale;
+
+		if (itemRenderScale < 0.1f)
+			itemRenderScale = 0.1f;
+
+		const float scaledW = outerW * itemRenderScale;
+		const float scaledH = outerH * itemRenderScale;
 
 		// ES-X:
 		// drawX/drawY se usan para imagen/texto escalados.
@@ -764,7 +777,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 					drawY + (scaledH * 0.5f),
 					0.0f));
 
-				drawTrans.scale(Vector3f(scale, scale, 1.0f));
+				drawTrans.scale(Vector3f(itemRenderScale, itemRenderScale, 1.0f));
 				drawTrans.translate(Vector3f(textX, y, 0.0f));
 
 				Renderer::setMatrix(drawTrans);
@@ -807,8 +820,12 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				entry.data.carouselImage->setImage(imagePath);
 			}
 
-			const float baseCardW = itemWidth;
-			const float baseCardH = itemHeight;
+			// ES-X:
+			// La caja real del ítem es la caja seleccionada (outerW/outerH).
+			// Los laterales se achican usando itemRenderScale. El padding solo
+			// define el área interna de imagen, no evita que el centro reviente.
+			const float baseCardW = outerW;
+			const float baseCardH = outerH;
 
 			float basePadX = baseCardW * mCarouselImagePadding.x();
 			float basePadY = baseCardH * mCarouselImagePadding.y();
@@ -825,14 +842,8 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				basePadY = 0.0f;
 			}
 
-			// La imagen conserva el efecto de escala del centro.
-			float visualImageScale = 1.0f + ((scale - 1.0f) * 0.90f);
-
-			if (visualImageScale < 0.1f)
-				visualImageScale = 1.0f;
-
-			float visualImageW = Math::max(1.0f, baseImageW * visualImageScale);
-			float visualImageH = Math::max(1.0f, baseImageH * visualImageScale);
+			float visualImageW = Math::max(1.0f, baseImageW * itemRenderScale);
+			float visualImageH = Math::max(1.0f, baseImageH * itemRenderScale);
 
 			entry.data.carouselImage->uncrop();
 
@@ -900,32 +911,12 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				if (borderScale <= 0.0f)
 					borderScale = 1.0f;
 
-				float fixedBorderW = baseImageW;
-				float fixedBorderH = baseImageH;
-
-				if (mCarouselImageLockSize &&
-					mCarouselImageBoxSize.x() > 1.0f &&
-					mCarouselImageBoxSize.y() > 1.0f)
-				{
-					fixedBorderW = mCarouselImageBoxSize.x();
-					fixedBorderH = mCarouselImageBoxSize.y();
-				}
-
-				float selectedBorderScale = 1.0f;
-
-// ES-X:
-// El borde central acompaña exactamente la escala visual de la imagen.
-// Los laterales quedan fijos para evitar el efecto de achicamiento.
-if (visuallyCentered)
-{
-	selectedBorderScale = visualImageScale;
-
-	if (selectedBorderScale < 0.1f)
-		selectedBorderScale = 1.0f;
-}
-
-fixedBorderW = Math::max(1.0f, fixedBorderW * selectedBorderScale * borderScale);
-fixedBorderH = Math::max(1.0f, fixedBorderH * selectedBorderScale * borderScale);
+				// ES-X:
+				// El borde representa el marco externo del ítem, no la imagen interna.
+				// Por eso usa baseCardW/baseCardH y se achica/agranda con la misma
+				// escala normalizada del ítem.
+				float fixedBorderW = Math::max(1.0f, baseCardW * itemRenderScale * borderScale);
+				float fixedBorderH = Math::max(1.0f, baseCardH * itemRenderScale * borderScale);
 				border->setOrigin(0.5f, 0.5f);
 				border->setPosition(imagePosX, imagePosY, 0.0f);
 
