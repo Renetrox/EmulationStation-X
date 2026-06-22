@@ -6,13 +6,13 @@
   <output type="fanart"/>
   <output type="texture"/>
 
-  <!-- Cover generado 500x450: imagen de fondo + título abajo -->
-  <output type="cover" width="500" height="450">
+  
+  <output type="cover" width="640" height="640">
 
     <!-- Fondo usando screenshot, más compatible que fanart -->
     <layer resource="cover"
-           width="500"
-           height="450"
+           width="640"
+           height="640"
            align="center"
            valign="middle">
       <brightness value="-20"/>
