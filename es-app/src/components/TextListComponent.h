@@ -821,29 +821,29 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			}
 
 			// ES-X:
-			// La caja real del ítem es la caja seleccionada (outerW/outerH).
-			// Los laterales se achican usando itemRenderScale. El padding solo
-			// define el área interna de imagen, no evita que el centro reviente.
-			const float baseCardW = outerW;
-			const float baseCardH = outerH;
+			// Modelo tipo GridTile/md_thumbnail: primero se calcula la caja
+			// visual actual del ítem y luego la imagen entra dentro de esa caja.
+			// El padding es solo margen interno; no participa como "seguro"
+			// contra el escalado del centro.
+			const float currentCardW = Math::max(1.0f, scaledW);
+			const float currentCardH = Math::max(1.0f, scaledH);
 
-			float basePadX = baseCardW * mCarouselImagePadding.x();
-			float basePadY = baseCardH * mCarouselImagePadding.y();
+			float imagePadX = currentCardW * mCarouselImagePadding.x();
+			float imagePadY = currentCardH * mCarouselImagePadding.y();
 
-			float baseImageW = Math::max(1.0f, baseCardW - (basePadX * 2.0f));
-			float baseImageH = Math::max(1.0f, baseCardH - (basePadY * 2.0f));
+			float visualImageW = Math::max(1.0f, currentCardW - (imagePadX * 2.0f));
+			float visualImageH = Math::max(1.0f, currentCardH - (imagePadY * 2.0f));
 
 			if (mCarouselImageLockSize && mCarouselImageBoxSize.x() > 1.0f && mCarouselImageBoxSize.y() > 1.0f)
 			{
-				baseImageW = Math::max(1.0f, mCarouselImageBoxSize.x());
-				baseImageH = Math::max(1.0f, mCarouselImageBoxSize.y());
+				// El tamaño fijo se considera como caja seleccionada y los laterales
+				// se reducen con la misma escala visual del ítem.
+				visualImageW = Math::max(1.0f, mCarouselImageBoxSize.x() * itemRenderScale);
+				visualImageH = Math::max(1.0f, mCarouselImageBoxSize.y() * itemRenderScale);
 
-				basePadX = 0.0f;
-				basePadY = 0.0f;
+				imagePadX = 0.0f;
+				imagePadY = 0.0f;
 			}
-
-			float visualImageW = Math::max(1.0f, baseImageW * itemRenderScale);
-			float visualImageH = Math::max(1.0f, baseImageH * itemRenderScale);
 
 			entry.data.carouselImage->uncrop();
 
@@ -874,23 +874,12 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 			Transform4x4f imageTrans = trans;
 
-			Vector3f clipPos(
-				imagePosX - (visualImageW * 0.5f),
-				imagePosY - (visualImageH * 0.5f),
-				0.0f);
-
-			Vector3f clipSize(visualImageW, visualImageH, 0.0f);
-
-			clipPos = trans * clipPos;
-			clipSize = trans * clipSize - trans.translation();
-
-			Renderer::pushClipRect(
-				Vector2i((int)std::round(clipPos.x()), (int)std::round(clipPos.y())),
-				Vector2i((int)std::round(clipSize.x()), (int)std::round(clipSize.y())));
-
+			// ES-X:
+			// No agregamos un clipRect extra. ImageComponent ya resuelve cover
+			// mediante setMinSize()+crop interno; el clip adicional podía
+			// comportarse distinto en GLES/Panfrost. Esto imita mejor a un
+			// <image> normal del theme, como md_thumbnail.
 			entry.data.carouselImage->render(imageTrans);
-
-			Renderer::popClipRect();
 
 			// ES-X:
 			// Borde/overlay opcional para imagen de tarjeta en modo carrusel.
@@ -912,11 +901,11 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 					borderScale = 1.0f;
 
 				// ES-X:
-				// El borde representa el marco externo del ítem, no la imagen interna.
-				// Por eso usa baseCardW/baseCardH y se achica/agranda con la misma
-				// escala normalizada del ítem.
-				float fixedBorderW = Math::max(1.0f, baseCardW * itemRenderScale * borderScale);
-				float fixedBorderH = Math::max(1.0f, baseCardH * itemRenderScale * borderScale);
+				// El borde representa el marco externo del ítem actual,
+				// igual que un tile/frame normal. No se calcula desde la
+				// imagen interna ni desde un clip.
+				float fixedBorderW = Math::max(1.0f, currentCardW * borderScale);
+				float fixedBorderH = Math::max(1.0f, currentCardH * borderScale);
 				border->setOrigin(0.5f, 0.5f);
 				border->setPosition(imagePosX, imagePosY, 0.0f);
 
