@@ -224,6 +224,11 @@ private:
 	Vector2f mCarouselLogoSize;
 	CarouselLogoAlignment mCarouselLogoAlignment;
 
+	// ES-X: posición absoluta opcional del carrusel dentro del textlist.
+	// Si está activa, logoOffset sigue funcionando como ajuste fino.
+	bool mCarouselLogoPosSet;
+	Vector2f mCarouselLogoPos;
+
 	float mCarouselLogoOffsetX;
 	float mCarouselLogoOffsetY;
 	float mCarouselSelectedLogoOffsetX;
@@ -315,6 +320,9 @@ TextListComponent<T>::TextListComponent(Window* window) :
 	mCarouselLogoSize = Vector2f::Zero();
 	mCarouselLogoAlignment = CAROUSEL_ALIGN_CENTER;
 
+	mCarouselLogoPosSet = false;
+	mCarouselLogoPos = Vector2f::Zero();
+
 	mCarouselLogoOffsetX = 0.0f;
 	mCarouselLogoOffsetY = 0.0f;
 	mCarouselSelectedLogoOffsetX = 0.0f;
@@ -400,13 +408,30 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 	float spacing = verticalCarousel ? mCarouselLogoSpacingY : mCarouselLogoSpacingX;
 
+	// ES-X:
+	// Si el tema no define logoSpacingX/Y, calculamos el espaciado
+	// según el área disponible y maxLogoCount, como hace CarouselComponent.
+	// Esto hace que maxLogoCount afecte realmente la distribución visual.
 	if (spacing <= 1.0f)
-		spacing = verticalCarousel ? itemHeight : (itemWidth + mHorizontalMargin);
+	{
+		const float axisSize = verticalCarousel ? mSize.y() : mSize.x();
+		const float itemAxisSize = verticalCarousel ? itemHeight : itemWidth;
+
+		if (visibleCount > 0)
+		{
+			spacing =
+				((axisSize - (itemAxisSize * (float)visibleCount)) / (float)visibleCount) +
+				itemAxisSize;
+		}
+	}
 
 	if (spacing <= 1.0f)
 		spacing = verticalCarousel ? itemHeight : itemWidth;
 
-	const float centerX = (mSize.x() * 0.5f) + mCarouselLogoOffsetX;
+	if (spacing <= 1.0f)
+		spacing = 1.0f;
+
+	float centerX = (mSize.x() * 0.5f) + mCarouselLogoOffsetX;
 	float anchorY = (mSize.y() * 0.5f) + mSelectorOffsetY + mCarouselLogoOffsetY;
 
 	if (!verticalCarousel)
@@ -415,6 +440,16 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			anchorY = mSelectorOffsetY + mCarouselLogoOffsetY;
 		else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_BOTTOM)
 			anchorY = mSize.y() + mSelectorOffsetY + mCarouselLogoOffsetY;
+	}
+
+	// ES-X:
+	// logoPos/carouselLogoPos permite ubicar el centro/ancla del carrusel
+	// de forma absoluta dentro del área del textlist.
+	// logoOffsetX/Y sigue funcionando como ajuste fino.
+	if (mCarouselLogoPosSet)
+	{
+		centerX = mCarouselLogoPos.x() + mCarouselLogoOffsetX;
+		anchorY = mCarouselLogoPos.y() + mCarouselLogoOffsetY;
 	}
 
 	Vector3f dim(mSize.x(), mSize.y(), 0);
@@ -613,13 +648,18 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		else
 			itemAnchorX = centerX + (distance * spacing);
 
+		const float selectedScale = Math::max(1.0f, mCarouselLogoScale);
+
 		if (mCarouselScaledLogoSpacing != 0.0f && absDistance > 0.001f)
 		{
-			float pushInfluence = Math::min(absDistance, 1.0f);
-			float scaleBonus = Math::max(0.0f, mCarouselLogoScale - 1.0f);
+			const float pushInfluence = Math::min(absDistance, 1.0f);
 
-			float logoDiff = spacing *
-				scaleBonus *
+			// ES-X:
+			// Misma idea que CarouselComponent:
+			// calcula cuánto espacio extra ocupa el ítem seleccionado
+			// y empuja los laterales proporcionalmente.
+			const float logoDiff =
+				((spacing * selectedScale) - spacing) *
 				0.5f *
 				mCarouselScaledLogoSpacing *
 				pushInfluence;
@@ -651,7 +691,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		// seleccionado y los laterales se achican con una escala normalizada.
 		// Así el centro no "nace chico para luego agrandarse"; nace en su
 		// tamaño correcto, como hace CarouselComponent.
-		const float selectedScale = Math::max(1.0f, mCarouselLogoScale);
 		const float outerW = itemWidth * selectedScale;
 		const float outerH = itemHeight * selectedScale;
 		float itemRenderScale = scale / selectedScale;
@@ -885,7 +924,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			// Borde/overlay opcional para imagen de tarjeta en modo carrusel.
 			// Laterales: tamaño fijo.
 			// Centro: tamaño seleccionado estable, adaptado al logo central.
-			// No usa el scale animado por distancia, para evitar que respire.
+			// El marco sigue el tamaño visual actual del ítem, sin heredar minLogoOpacity.
 			ImageComponent* border = nullptr;
 
 			if (visuallyCentered && !mCarouselImageBorderSelected.empty())
@@ -1545,6 +1584,8 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	mCarouselScaledLogoSpacing = 0.0f;
 	mCarouselLogoAlignment = CAROUSEL_ALIGN_CENTER;
 	mCarouselLogoSize = Vector2f::Zero();
+	mCarouselLogoPosSet = false;
+	mCarouselLogoPos = Vector2f::Zero();
 
 	if (mCarouselMode)
 	{
@@ -1621,6 +1662,18 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 
 	mCarouselLogoOffsetX = 0.0f;
 	mCarouselLogoOffsetY = 0.0f;
+
+	if (elem->has("carouselLogoPos") || elem->has("logoPos"))
+	{
+		Vector2f v = elem->has("carouselLogoPos") ?
+			elem->get<Vector2f>("carouselLogoPos") :
+			elem->get<Vector2f>("logoPos");
+
+		mCarouselLogoPosSet = true;
+		mCarouselLogoPos = Vector2f(
+			v.x() * mSize.x(),
+			v.y() * mSize.y());
+	}
 
 	if (elem->has("logoOffset"))
 	{
