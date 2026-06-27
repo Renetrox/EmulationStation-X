@@ -4,6 +4,7 @@
 
 #include "renderers/Renderer.h"
 #include "math/Vector2i.h"
+#include "resources/MaxSizeInfo.h"
 #include "GuiComponent.h"
 
 class TextureResource;
@@ -18,7 +19,8 @@ public:
 
 	// Loads the image at the given filepath.
 	// Will tile if tile is true.
-	void setImage(std::string path, bool tile = false);
+	// maxSize optionally asks TextureData to decode the image smaller before VRAM upload.
+	void setImage(std::string path, bool tile = false, MaxSizeInfo maxSize = MaxSizeInfo());
 
 	// Loads an image from memory.
 	void setImage(const char* image, size_t length, bool tile = false);
@@ -102,6 +104,9 @@ private:
 
 	// Calculates the correct mSize from our resizing information.
 	void resize();
+
+	// ES-X: derive a texture decode limit from the current visual target.
+	MaxSizeInfo getCurrentMaxSizeInfo(MaxSizeInfo requested = MaxSizeInfo()) const;
 
 	Renderer::Vertex mVertices[4];
 

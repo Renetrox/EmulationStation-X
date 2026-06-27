@@ -51,6 +51,19 @@ ImageComponent::~ImageComponent()
 {
 }
 
+MaxSizeInfo ImageComponent::getCurrentMaxSizeInfo(MaxSizeInfo requested) const
+{
+	if (!requested.empty())
+		return requested;
+
+	// If the component already knows its visual box, use that as a texture decode limit.
+	// setMinSize() behaves like cover, so externalZoom=true.
+	if (mTargetSize.x() > 1.0f && mTargetSize.y() > 1.0f)
+		return MaxSizeInfo(mTargetSize, mTargetIsMin);
+
+	return MaxSizeInfo();
+}
+
 void ImageComponent::resize()
 {
 	if (!mTexture)
@@ -71,6 +84,9 @@ void ImageComponent::resize()
 		// the rasterization step, images with extreme aspect ratios may be cut off.
 		if (mTargetIsMax)
 		{
+			// Clear old crop state if this image was previously used as cover.
+			uncrop();
+
 			mSize = textureSize;
 
 			Vector2f resizeScale(
@@ -128,6 +144,9 @@ void ImageComponent::resize()
 		}
 		else
 		{
+			// Clear old crop state if this image was previously used as cover.
+			uncrop();
+
 			// If both components are set, stretch.
 			// If no components are set, don't resize.
 			mSize =
@@ -171,8 +190,10 @@ void ImageComponent::setDefaultImage(std::string path)
 	mDefaultPath = path;
 }
 
-void ImageComponent::setImage(std::string path, bool tile)
+void ImageComponent::setImage(std::string path, bool tile, MaxSizeInfo maxSize)
 {
+	MaxSizeInfo textureMaxSize = getCurrentMaxSizeInfo(maxSize);
+
 	if (path.empty() ||
 		!ResourceManager::getInstance()->fileExists(path))
 	{
@@ -187,7 +208,8 @@ void ImageComponent::setImage(std::string path, bool tile)
 				mDefaultPath,
 				tile,
 				mForceLoad,
-				mDynamic);
+				mDynamic,
+				textureMaxSize);
 		}
 	}
 	else
@@ -196,7 +218,8 @@ void ImageComponent::setImage(std::string path, bool tile)
 			path,
 			tile,
 			mForceLoad,
-			mDynamic);
+			mDynamic,
+			textureMaxSize);
 	}
 
 	resize();
@@ -505,8 +528,11 @@ void ImageComponent::render(const Transform4x4f& parentTrans)
 
 		if (mTexture->isInitialized())
 		{
-			fadeIn(mTexture->bind());
-			Renderer::drawTriangleStrips(&mVertices[0], 4);
+			const bool textureLoaded = mTexture->bind();
+			fadeIn(textureLoaded);
+
+			if (textureLoaded)
+				Renderer::drawTriangleStrips(&mVertices[0], 4);
 		}
 		else
 		{

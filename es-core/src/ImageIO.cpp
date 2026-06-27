@@ -2,6 +2,7 @@
 
 #include "Log.h"
 #include <FreeImage.h>
+#include <algorithm>
 #include <string.h>
 
 std::vector<unsigned char> ImageIO::loadFromMemoryRGBA32(const unsigned char * data, const size_t size, size_t & width, size_t & height)
@@ -71,6 +72,152 @@ std::vector<unsigned char> ImageIO::loadFromMemoryRGBA32(const unsigned char * d
 		//free FIMEMORY again
 		FreeImage_CloseMemory(fiMemory);
 	}
+	return rawData;
+}
+
+Vector2i ImageIO::adjustPictureSize(Vector2i imageSize, Vector2i maxSize, bool externalZoom)
+{
+	if (imageSize.x() <= 0 || imageSize.y() <= 0 ||
+		maxSize.x() <= 0 || maxSize.y() <= 0)
+	{
+		return imageSize;
+	}
+
+	double scaleX = (double)maxSize.x() / (double)imageSize.x();
+	double scaleY = (double)maxSize.y() / (double)imageSize.y();
+
+	// contain uses the smaller scale.
+	// cover/externalZoom uses the larger scale so the image fills the box.
+	double scale = externalZoom ? std::max(scaleX, scaleY) : std::min(scaleX, scaleY);
+
+	// OptimizeVRAM should never upscale small images.
+	if (scale >= 1.0)
+		return imageSize;
+
+	int targetW = (int)((double)imageSize.x() * scale);
+	int targetH = (int)((double)imageSize.y() * scale);
+
+	if (targetW < 1)
+		targetW = 1;
+	if (targetH < 1)
+		targetH = 1;
+
+	return Vector2i(targetW, targetH);
+}
+
+std::vector<unsigned char> ImageIO::loadFromMemoryRGBA32Ex(
+	const unsigned char* data,
+	const size_t size,
+	size_t& width,
+	size_t& height,
+	int maxWidth,
+	int maxHeight,
+	bool externalZoom,
+	Vector2i& baseSize,
+	Vector2i& packedSize)
+{
+	std::vector<unsigned char> rawData;
+
+	width = 0;
+	height = 0;
+	baseSize = Vector2i::Zero();
+	packedSize = Vector2i::Zero();
+
+	FIMEMORY* fiMemory = FreeImage_OpenMemory((BYTE*)data, (DWORD)size);
+	if (fiMemory != nullptr)
+	{
+		FREE_IMAGE_FORMAT format = FreeImage_GetFileTypeFromMemory(fiMemory);
+		if (format != FIF_UNKNOWN && FreeImage_FIFSupportsReading(format))
+		{
+			FIBITMAP* fiBitmap = FreeImage_LoadFromMemory(format, fiMemory);
+			if (fiBitmap != nullptr)
+			{
+				if (FreeImage_GetBPP(fiBitmap) != 32)
+				{
+					FIBITMAP* fiConverted = FreeImage_ConvertTo32Bits(fiBitmap);
+					if (fiConverted != nullptr)
+					{
+						FreeImage_Unload(fiBitmap);
+						fiBitmap = fiConverted;
+					}
+				}
+
+				if (fiBitmap != nullptr)
+				{
+					width = FreeImage_GetWidth(fiBitmap);
+					height = FreeImage_GetHeight(fiBitmap);
+
+					baseSize = Vector2i((int)width, (int)height);
+
+					if (maxWidth > 1 && maxHeight > 1 &&
+						((int)width > maxWidth || (int)height > maxHeight))
+					{
+						Vector2i newSize = adjustPictureSize(
+							Vector2i((int)width, (int)height),
+							Vector2i(maxWidth, maxHeight),
+							externalZoom);
+
+						if (newSize.x() > 0 && newSize.y() > 0 &&
+							(newSize.x() != (int)width || newSize.y() != (int)height))
+						{
+							FIBITMAP* fiResized = FreeImage_Rescale(
+								fiBitmap,
+								newSize.x(),
+								newSize.y(),
+								FILTER_BOX);
+
+							if (fiResized != nullptr)
+							{
+								FreeImage_Unload(fiBitmap);
+								fiBitmap = fiResized;
+
+								width = FreeImage_GetWidth(fiBitmap);
+								height = FreeImage_GetHeight(fiBitmap);
+								packedSize = Vector2i((int)width, (int)height);
+							}
+						}
+					}
+
+					unsigned char* tempData = new unsigned char[width * height * 4];
+					for (size_t i = 0; i < height; i++)
+					{
+						const BYTE* scanLine = FreeImage_GetScanLine(fiBitmap, (int)i);
+						memcpy(tempData + (i * width * 4), scanLine, width * 4);
+					}
+
+					// convert from BGRA to RGBA
+					for (size_t i = 0; i < width * height; i++)
+					{
+						RGBQUAD bgra = ((RGBQUAD*)tempData)[i];
+						RGBQUAD rgba;
+						rgba.rgbBlue = bgra.rgbRed;
+						rgba.rgbGreen = bgra.rgbGreen;
+						rgba.rgbRed = bgra.rgbBlue;
+						rgba.rgbReserved = bgra.rgbReserved;
+						((RGBQUAD*)tempData)[i] = rgba;
+					}
+
+					rawData = std::vector<unsigned char>(
+						tempData,
+						tempData + width * height * 4);
+
+					FreeImage_Unload(fiBitmap);
+					delete[] tempData;
+				}
+			}
+			else
+			{
+				LOG(LogError) << "Error - Failed to load image from memory!";
+			}
+		}
+		else
+		{
+			LOG(LogError) << "Error - File type " << (format == FIF_UNKNOWN ? "unknown" : "unsupported") << "!";
+		}
+
+		FreeImage_CloseMemory(fiMemory);
+	}
+
 	return rawData;
 }
 

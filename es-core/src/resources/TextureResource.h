@@ -4,8 +4,11 @@
 
 #include "math/Vector2i.h"
 #include "math/Vector2f.h"
+#include "resources/MaxSizeInfo.h"
 #include "resources/ResourceManager.h"
 #include "resources/TextureDataManager.h"
+
+#include <map>
 #include <set>
 #include <string>
 
@@ -16,7 +19,13 @@ class TextureData;
 class TextureResource : public IReloadable
 {
 public:
-	static std::shared_ptr<TextureResource> get(const std::string& path, bool tile = false, bool forceLoad = false, bool dynamic = true);
+	static std::shared_ptr<TextureResource> get(
+		const std::string& path,
+		bool tile = false,
+		bool forceLoad = false,
+		bool dynamic = true,
+		MaxSizeInfo maxSize = MaxSizeInfo());
+
 	void initFromPixels(const unsigned char* dataRGBA, size_t width, size_t height);
 	virtual void initFromMemory(const char* file, size_t length);
 
@@ -36,7 +45,12 @@ public:
 	static size_t getTotalTextureSize(); // returns the number of bytes that would be used if all textures were in memory
 
 protected:
-	TextureResource(const std::string& path, bool tile, bool dynamic);
+	TextureResource(
+		const std::string& path,
+		bool tile,
+		bool dynamic,
+		MaxSizeInfo maxSize = MaxSizeInfo());
+
 	virtual bool unload();
 	virtual void reload();
 

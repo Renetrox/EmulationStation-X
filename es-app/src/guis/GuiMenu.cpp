@@ -932,6 +932,15 @@ void GuiMenu::openOtherSettings()
 		Settings::getInstance()->setInt("MaxVRAM", (int)Math::round(max_vram->getValue()));
 	});
 
+	{
+		auto optimize_image_vram = std::make_shared<SwitchComponent>(mWindow);
+		optimize_image_vram->setState(Settings::getInstance()->getBool("OptimizeImageVRAM"));
+		s->addWithLabel(_("OPTIMIZE IMAGE VRAM").c_str(), optimize_image_vram);
+		s->addSaveFunc([optimize_image_vram] {
+			Settings::getInstance()->setBool("OptimizeImageVRAM", optimize_image_vram->getState());
+		});
+	}
+
 	auto power_saver = std::make_shared<OptionListComponent<std::string>>(mWindow, _("POWER SAVER MODES").c_str(), false);
 	std::vector<std::string> modes;
 	modes.push_back("disabled");

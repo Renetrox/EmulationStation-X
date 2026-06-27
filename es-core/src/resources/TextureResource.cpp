@@ -7,7 +7,15 @@ TextureDataManager		TextureResource::sTextureDataManager;
 std::map< TextureResource::TextureKeyType, std::weak_ptr<TextureResource> > TextureResource::sTextureMap;
 std::set<TextureResource*> 	TextureResource::sAllTextures;
 
-TextureResource::TextureResource(const std::string& path, bool tile, bool dynamic) : mTextureData(nullptr), mSize(0.0f, 0.0f), mSourceSize(0.0f, 0.0f), mForceLoad(false)
+TextureResource::TextureResource(
+	const std::string& path,
+	bool tile,
+	bool dynamic,
+	MaxSizeInfo maxSize) :
+	mTextureData(nullptr),
+	mSize(0.0f, 0.0f),
+	mSourceSize(0.0f, 0.0f),
+	mForceLoad(false)
 {
 	// Create a texture data object for this texture
 	if (!path.empty())
@@ -18,6 +26,7 @@ TextureResource::TextureResource(const std::string& path, bool tile, bool dynami
 		if (dynamic)
 		{
 			data = sTextureDataManager.add(this, tile);
+			data->setMaxSize(maxSize);
 			data->initFromPath(path);
 			// Force the texture manager to load it using a blocking load
 			sTextureDataManager.load(data, true);
@@ -26,6 +35,7 @@ TextureResource::TextureResource(const std::string& path, bool tile, bool dynami
 		{
 			mTextureData = std::shared_ptr<TextureData>(new TextureData(tile));
 			data = mTextureData;
+			data->setMaxSize(maxSize);
 			data->initFromPath(path);
 			// Load it so we can read the width/height
 			data->load();
@@ -47,7 +57,9 @@ TextureResource::~TextureResource()
 	if (mTextureData == nullptr)
 		sTextureDataManager.remove(this);
 
-	sAllTextures.erase(sAllTextures.find(this));
+	auto it = sAllTextures.find(this);
+	if (it != sAllTextures.end())
+		sAllTextures.erase(it);
 }
 
 void TextureResource::initFromPixels(const unsigned char* dataRGBA, size_t width, size_t height)
@@ -91,8 +103,7 @@ bool TextureResource::bind()
 {
 	if (mTextureData != nullptr)
 	{
-		mTextureData->uploadAndBind();
-		return true;
+		return mTextureData->uploadAndBind();
 	}
 	else
 	{
@@ -100,14 +111,19 @@ bool TextureResource::bind()
 	}
 }
 
-std::shared_ptr<TextureResource> TextureResource::get(const std::string& path, bool tile, bool forceLoad, bool dynamic)
+std::shared_ptr<TextureResource> TextureResource::get(
+	const std::string& path,
+	bool tile,
+	bool forceLoad,
+	bool dynamic,
+	MaxSizeInfo maxSize)
 {
 	std::shared_ptr<ResourceManager>& rm = ResourceManager::getInstance();
 
 	const std::string canonicalPath = Utils::FileSystem::getCanonicalPath(path);
 	if(canonicalPath.empty())
 	{
-		std::shared_ptr<TextureResource> tex(new TextureResource("", tile, false));
+		std::shared_ptr<TextureResource> tex(new TextureResource("", tile, false, maxSize));
 		rm->addReloadable(tex); //make sure we get properly deinitialized even though we do nothing on reinitialization
 		return tex;
 	}
@@ -117,12 +133,49 @@ std::shared_ptr<TextureResource> TextureResource::get(const std::string& path, b
 	if(foundTexture != sTextureMap.cend())
 	{
 		if(!foundTexture->second.expired())
-			return foundTexture->second.lock();
+		{
+			std::shared_ptr<TextureResource> tex = foundTexture->second.lock();
+
+			// ES-X OptimizeVRAM:
+			// Keep one cached texture per image path, but allow it to grow.
+			// If the cached texture was previously loaded smaller and this request needs
+			// a larger version, reload it using the larger MaxSizeInfo.
+			if (TextureData::OPTIMIZEVRAM && !maxSize.empty())
+			{
+				std::shared_ptr<TextureData> data;
+
+				if (tex->mTextureData != nullptr)
+					data = tex->mTextureData;
+				else
+					data = sTextureDataManager.get(tex.get(), false);
+
+				if (data != nullptr)
+				{
+					data->setMaxSize(maxSize);
+
+					if (data->isLoaded() && !data->isRequiredTextureSizeOk())
+					{
+						data->releaseVRAM();
+						data->releaseRAM();
+						data->load();
+
+						tex->mSize = Vector2i((int)data->width(), (int)data->height());
+						tex->mSourceSize = Vector2f(data->sourceWidth(), data->sourceHeight());
+					}
+				}
+			}
+
+			return tex;
+		}
+		else
+		{
+			sTextureMap.erase(foundTexture);
+		}
 	}
 
 	// need to create it
 	std::shared_ptr<TextureResource> tex;
-	tex = std::shared_ptr<TextureResource>(new TextureResource(key.first, tile, dynamic));
+	tex = std::shared_ptr<TextureResource>(new TextureResource(key.first, tile, dynamic, maxSize));
 	std::shared_ptr<TextureData> data = sTextureDataManager.get(tex.get());
 
 	// is it an SVG?
@@ -135,11 +188,15 @@ std::shared_ptr<TextureResource> TextureResource::get(const std::string& path, b
 	// Add it to the reloadable list
 	rm->addReloadable(tex);
 
+	if (data != nullptr)
+		data->setMaxSize(maxSize);
+
 	// Force load it if necessary. Note that it may get dumped from VRAM if we run low
 	if (forceLoad)
 	{
 		tex->mForceLoad = forceLoad;
-		data->load();
+		if (data != nullptr)
+			data->load();
 	}
 
 	return tex;
@@ -153,6 +210,7 @@ void TextureResource::rasterizeAt(size_t width, size_t height)
 		data = mTextureData;
 	else
 		data = sTextureDataManager.get(this);
+
 	mSourceSize = Vector2f((float)width, (float)height);
 	data->setSourceSize((float)width, (float)height);
 	if (mForceLoad || (mTextureData != nullptr))

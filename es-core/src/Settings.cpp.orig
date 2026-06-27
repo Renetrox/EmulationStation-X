@@ -121,10 +121,6 @@ void Settings::setDefaults()
 	mIntMap["MaxVRAM"] = 100;
 #endif
 
-	// ES-X: reduce imágenes grandes antes de subirlas a VRAM.
-	// Recomendado ON para Orange Pi / SBCs.
-	mBoolMap["OptimizeImageVRAM"] = true;
-
 	// Compatibilidad antigua + nuevas transiciones separadas
 	mStringMap["TransitionStyle"] = "fade";
 	mStringMap["ListTransitionStyle"] = "fade";
@@ -424,9 +420,6 @@ void Settings::processBackwardCompatibility()
 
 	if (mBoolMap.find("BackgroundMusic") == mBoolMap.end())
 		mBoolMap["BackgroundMusic"] = true;
-
-	if (mBoolMap.find("OptimizeImageVRAM") == mBoolMap.end())
-		mBoolMap["OptimizeImageVRAM"] = true;
 }
 
 #define SETTINGS_GETSET(type, mapName, getMethodName, setMethodName) \

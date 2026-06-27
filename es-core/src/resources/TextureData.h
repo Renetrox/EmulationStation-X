@@ -2,6 +2,9 @@
 #ifndef ES_CORE_RESOURCES_TEXTURE_DATA_H
 #define ES_CORE_RESOURCES_TEXTURE_DATA_H
 
+#include "math/Vector2i.h"
+#include "resources/MaxSizeInfo.h"
+
 #include <mutex>
 #include <string>
 
@@ -13,6 +16,10 @@ public:
 	TextureData(bool tile);
 	~TextureData();
 
+	// ES-X: reduce large images before uploading them to VRAM.
+	// Enabled by default in TextureData.cpp for the OPi-friendly build.
+	static bool OPTIMIZEVRAM;
+
 	// These functions populate mDataRGBA but do not upload the texture to VRAM
 
 	//!!!! Needs to be canonical path. Caller should check for duplicates before calling this
@@ -20,6 +27,10 @@ public:
 	bool initSVGFromMemory(const unsigned char* fileData, size_t length);
 	bool initImageFromMemory(const unsigned char* fileData, size_t length);
 	bool initFromRGBA(const unsigned char* dataRGBA, size_t width, size_t height);
+
+	// ES-X: optional target size used by OptimizeVRAM.
+	void setMaxSize(MaxSizeInfo maxSize);
+	bool isRequiredTextureSizeOk();
 
 	// Read the data into memory if necessary
 	bool load();
@@ -59,6 +70,13 @@ private:
 	float			mSourceHeight;
 	bool			mScalable;
 	bool			mReloadable;
+
+	// ES-X OptimizeVRAM bookkeeping:
+	// mBaseSize is the original decoded image size.
+	// mPackedSize is the optimized/resized texture size. Zero means no resize was done.
+	Vector2i		mBaseSize;
+	Vector2i		mPackedSize;
+	MaxSizeInfo		mMaxSize;
 };
 
 #endif // ES_CORE_RESOURCES_TEXTURE_DATA_H
