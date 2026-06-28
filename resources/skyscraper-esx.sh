@@ -219,8 +219,212 @@ build_generate_flags() {
     echo "${flags}"
 }
 
+
+media_missing_count() {
+    # Outputs: "<total_launchable_roms> <missing_media_count>"
+    # This is an ES-X guard for ONLY_MISSING=true:
+    # Skyscraper's own "onlymissing" works against its resource cache, while users
+    # usually expect "only missing" to mean "do not go online again if final media
+    # already exists". This function checks final generated media/gamelist first.
+    python3 - "${SYSTEM_NAME}" "${ROMDIR}/${SYSTEM_NAME}" "${HOME_DIR}" <<'PY'
+import os
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+system = sys.argv[1]
+rom_dir = Path(sys.argv[2]).expanduser()
+home = Path(sys.argv[3]).expanduser()
+
+# Common launchable extensions. PSX is special because .bin/.wav/.ape tracks
+# should not be treated as independent games.
+psx_exts = {
+    ".cue", ".chd", ".pbp", ".m3u", ".iso", ".img", ".ccd", ".zip", ".7z"
+}
+skip_exts = {
+    ".bin", ".wav", ".ape", ".flac", ".mp3", ".ogg", ".sub", ".toc",
+    ".sbi", ".txt", ".nfo", ".xml", ".png", ".jpg", ".jpeg", ".webp"
+}
+generic_skip_dirs = {"media", "images", "downloaded_media", "manuals", "videos"}
+
+def norm_name(value: str) -> str:
+    return "".join(ch.lower() for ch in value if ch.isalnum())
+
+def is_launchable(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    try:
+        rel_parts = path.relative_to(rom_dir).parts
+        if any(part in generic_skip_dirs for part in rel_parts[:-1]):
+            return False
+    except Exception:
+        pass
+
+    ext = path.suffix.lower()
+
+    if system.lower() in {"psx", "ps1", "playstation"}:
+        return ext in psx_exts
+
+    if ext in skip_exts:
+        return False
+
+    # Conservative generic behavior: ignore obvious sidecar/media files, allow
+    # normal ROM/archive files.
+    return True
+
+def path_variants(path: Path):
+    variants = set()
+    try:
+        rel = path.relative_to(rom_dir)
+        variants.add("./" + rel.as_posix())
+        variants.add(rel.as_posix())
+    except Exception:
+        pass
+    variants.add(str(path))
+    variants.add(path.name)
+    return variants
+
+def existing_media_paths_from_gamelist():
+    covered = set()
+    gamelist_candidates = [
+        rom_dir / "gamelist.xml",
+        home / ".emulationstation" / "gamelists" / system / "gamelist.xml",
+    ]
+
+    for gamelist in gamelist_candidates:
+        if not gamelist.is_file():
+            continue
+
+        try:
+            root = ET.parse(gamelist).getroot()
+        except Exception:
+            continue
+
+        for game in root.findall(".//game"):
+            path_el = game.find("path")
+            if path_el is None or not path_el.text:
+                continue
+
+            rom_ref = path_el.text.strip()
+            media_found = False
+
+            for tag in ("image", "thumbnail", "marquee", "video"):
+                el = game.find(tag)
+                if el is None or not el.text:
+                    continue
+
+                media_ref = el.text.strip()
+                media_path = Path(media_ref)
+                if not media_path.is_absolute():
+                    media_path = rom_dir / media_ref
+
+                if media_path.exists():
+                    media_found = True
+                    break
+
+            if media_found:
+                covered.add(rom_ref)
+                covered.add(Path(rom_ref).name)
+
+    return covered
+
+def media_stem_index():
+    media_dir = rom_dir / "media"
+    stems = set()
+
+    if not media_dir.is_dir():
+        return stems
+
+    media_exts = {".png", ".jpg", ".jpeg", ".webp", ".mp4", ".mkv", ".avi"}
+    for item in media_dir.rglob("*"):
+        if not item.is_file() or item.suffix.lower() not in media_exts:
+            continue
+        stems.add(norm_name(item.stem))
+
+    return stems
+
+if not rom_dir.is_dir():
+    print("0 0")
+    raise SystemExit(0)
+
+roms = sorted([p for p in rom_dir.rglob("*") if is_launchable(p)])
+covered_refs = existing_media_paths_from_gamelist()
+media_stems = media_stem_index()
+
+missing = 0
+
+for rom in roms:
+    variants = path_variants(rom)
+    stem = norm_name(rom.stem)
+
+    has_media = False
+
+    if any(v in covered_refs for v in variants):
+        has_media = True
+    elif rom.name in covered_refs:
+        has_media = True
+    elif stem and stem in media_stems:
+        has_media = True
+
+    if not has_media:
+        missing += 1
+
+print(f"{len(roms)} {missing}")
+PY
+}
+
+should_skip_gather_for_existing_media() {
+    [[ "${ONLY_MISSING}" == "true" ]] || return 1
+
+    local total="0"
+    local missing="0"
+
+    if read -r total missing < <(media_missing_count 2>> "${LOG_FILE}"); then
+        {
+            echo "MEDIA_AWARE_ONLY_MISSING=true"
+            echo "LAUNCHABLE_ROMS=${total}"
+            echo "MISSING_MEDIA=${missing}"
+            echo "-----"
+        } >> "${LOG_FILE}"
+
+        if [[ "${total}" =~ ^[0-9]+$ && "${missing}" =~ ^[0-9]+$ ]]; then
+            if (( total > 0 && missing == 0 )); then
+                {
+                    echo "No missing generated media detected."
+                    echo "Skipping online resource gathering to avoid downloading again."
+                    echo "Use 'Generate gamelist' to rebuild the gamelist from cache."
+                    echo "-----"
+                } >> "${LOG_FILE}"
+                return 0
+            fi
+        fi
+    else
+        {
+            echo "MEDIA_AWARE_ONLY_MISSING=failed"
+            echo "Falling back to Skyscraper native onlymissing."
+            echo "-----"
+        } >> "${LOG_FILE}"
+    fi
+
+    return 1
+}
+
+
 run_gather() {
     local flags="$1"
+
+    {
+        echo "GATHER_FLAGS=${flags}"
+        echo "ONLY_MISSING=${ONLY_MISSING}"
+        echo "VIDEOS_ENABLED=${VIDEOS_ENABLED}"
+        echo "COMMAND=${SKY_BIN} -p ${SYSTEM_NAME} -g ${ROMDIR}/${SYSTEM_NAME} -o ${ROMDIR}/${SYSTEM_NAME}/media -s screenscraper --lang ${LANG_CODE} --flags ${flags}"
+        echo "-----"
+    } >> "${LOG_FILE}"
+
+    if should_skip_gather_for_existing_media; then
+        return 0
+    fi
+
     "${SKY_BIN}" \
         -p "${SYSTEM_NAME}" \
         -g "${ROMDIR}/${SYSTEM_NAME}" \
