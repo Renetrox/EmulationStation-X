@@ -42,7 +42,15 @@ ImageComponent::ImageComponent(Window* window, bool forceLoad, bool dynamic) :
 	mPulseOpacityMax(1.0f),
 	mPulseDuration(2400.0f),
 	mPulseElapsed(0.0f),
-	mPulseFactor(1.0f)
+	mPulseFactor(1.0f),
+	mFrameAnimationEnabled(false),
+	mFrameLoop(true),
+	mFrameFrozen(false),
+	mFrameDuration(350.0f),
+	mFrameElapsed(0.0f),
+	mFrameActiveTime(0.0f),
+	mFrameActiveElapsed(0.0f),
+	mFrameCurrentIndex(0)
 {
 	updateColors();
 }
@@ -357,9 +365,78 @@ void ImageComponent::setOpacity(unsigned char opacity)
 	updateColors();
 }
 
+void ImageComponent::resetFrameAnimation()
+{
+	if (!mFrameAnimationEnabled || mFrameTextures.empty())
+		return;
+
+	mFrameFrozen = false;
+	mFrameElapsed = 0.0f;
+	mFrameActiveElapsed = 0.0f;
+	mFrameCurrentIndex = 0;
+
+	mTexture = mFrameTextures[mFrameCurrentIndex];
+
+	updateVertices();
+	updateColors();
+}
+
 void ImageComponent::update(int deltaTime)
 {
 	GuiComponent::update(deltaTime);
+
+	// ES-X: animación simple por cuadros PNG/JPG.
+	if (mFrameAnimationEnabled &&
+		mFrameTextures.size() > 1 &&
+		!mFrameFrozen)
+	{
+		if (mFrameActiveTime > 0.0f)
+		{
+			mFrameActiveElapsed += static_cast<float>(deltaTime);
+
+			if (mFrameActiveElapsed >= mFrameActiveTime)
+				mFrameFrozen = true;
+		}
+
+		if (!mFrameFrozen)
+		{
+			mFrameElapsed += static_cast<float>(deltaTime);
+
+			while (mFrameElapsed >= mFrameDuration)
+			{
+				mFrameElapsed -= mFrameDuration;
+
+				unsigned int nextIndex =
+					mFrameCurrentIndex + 1;
+
+				if (nextIndex >= mFrameTextures.size())
+				{
+					if (mFrameLoop)
+					{
+						nextIndex = 0;
+					}
+					else
+					{
+						nextIndex =
+							(unsigned int)mFrameTextures.size() - 1;
+
+						mFrameFrozen = true;
+					}
+				}
+
+				if (nextIndex != mFrameCurrentIndex)
+				{
+					mFrameCurrentIndex = nextIndex;
+					mTexture = mFrameTextures[mFrameCurrentIndex];
+
+					updateVertices();
+				}
+
+				if (mFrameFrozen)
+					break;
+			}
+		}
+	}
 
 	if (!mPulseEnabled || mPulseDuration <= 0.0f)
 	{
@@ -696,6 +773,117 @@ void ImageComponent::applyTheme(
 
 		if (mPulseDuration < 100.0f)
 			mPulseDuration = 100.0f;
+	}
+
+	// ES-X: animación simple por cuadros PNG/JPG.
+	mFrameAnimationEnabled = false;
+	mFrameLoop = true;
+	mFrameFrozen = false;
+	mFrameDuration = 350.0f;
+	mFrameElapsed = 0.0f;
+	mFrameActiveTime = 0.0f;
+	mFrameActiveElapsed = 0.0f;
+	mFrameCurrentIndex = 0;
+	mFramePaths.clear();
+	mFrameTextures.clear();
+
+	if (elem->has("frameAnimation"))
+		mFrameAnimationEnabled =
+			elem->get<bool>("frameAnimation");
+
+	if (elem->has("frameLoop"))
+		mFrameLoop =
+			elem->get<bool>("frameLoop");
+
+	if (elem->has("frameDuration"))
+	{
+		mFrameDuration =
+			elem->get<float>("frameDuration");
+
+		if (mFrameDuration < 50.0f)
+			mFrameDuration = 50.0f;
+	}
+
+	if (elem->has("frameActiveTime"))
+	{
+		mFrameActiveTime =
+			elem->get<float>("frameActiveTime");
+
+		if (mFrameActiveTime < 0.0f)
+			mFrameActiveTime = 0.0f;
+	}
+
+	if (mFrameAnimationEnabled)
+	{
+		if (elem->has("frame1"))
+			mFramePaths.push_back(elem->get<std::string>("frame1"));
+
+		if (elem->has("frame2"))
+			mFramePaths.push_back(elem->get<std::string>("frame2"));
+
+		if (elem->has("frame3"))
+			mFramePaths.push_back(elem->get<std::string>("frame3"));
+
+		if (elem->has("frame4"))
+			mFramePaths.push_back(elem->get<std::string>("frame4"));
+
+		if (elem->has("frame5"))
+			mFramePaths.push_back(elem->get<std::string>("frame5"));
+
+		if (elem->has("frame6"))
+			mFramePaths.push_back(elem->get<std::string>("frame6"));
+
+		bool tile =
+			elem->has("tile") &&
+			elem->get<bool>("tile");
+
+		MaxSizeInfo textureMaxSize =
+			getCurrentMaxSizeInfo(MaxSizeInfo());
+
+		for (size_t i = 0; i < mFramePaths.size(); ++i)
+		{
+			const std::string& framePath =
+				mFramePaths[i];
+
+			if (!ResourceManager::getInstance()->fileExists(framePath))
+			{
+				LOG(LogWarning) <<
+					"ImageComponent frame does not exist: " <<
+					framePath;
+
+				continue;
+			}
+
+			mFrameTextures.push_back(
+				TextureResource::get(
+					framePath,
+					tile,
+					mForceLoad,
+					mDynamic,
+					textureMaxSize));
+		}
+
+		if (!mFrameTextures.empty())
+		{
+			mFrameCurrentIndex = 0;
+			mTexture = mFrameTextures[0];
+
+			resize();
+
+			for (size_t i = 1; i < mFrameTextures.size(); ++i)
+			{
+				if (mFrameTextures[i])
+				{
+					mFrameTextures[i]->rasterizeAt(
+						(size_t)mSize.x(),
+						(size_t)mSize.y());
+				}
+			}
+		}
+		else
+		{
+			mFrameAnimationEnabled = false;
+		}
 	}
 
 	mPulseElapsed = 0.0f;

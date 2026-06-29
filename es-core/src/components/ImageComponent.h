@@ -7,6 +7,10 @@
 #include "resources/MaxSizeInfo.h"
 #include "GuiComponent.h"
 
+#include <memory>
+#include <string>
+#include <vector>
+
 class TextureResource;
 
 class ImageComponent : public GuiComponent
@@ -31,8 +35,12 @@ public:
 	void onSizeChanged() override;
 	void setOpacity(unsigned char opacity) override;
 
-	// ES-X: actualización necesaria para el pulso suave de opacidad.
+	// ES-X: actualización necesaria para pulso y animación simple por cuadros.
 	void update(int deltaTime) override;
+	
+	// ES-X: reinicia animación por cuadros.
+// Útil para que el fondo vuelva a animar al cambiar de sistema.
+void resetFrameAnimation();
 
 	// Resize the image to fit this size. If one axis is zero, scale that axis
 	// to maintain aspect ratio. If both are non-zero, potentially break the
@@ -139,6 +147,26 @@ private:
 	float mPulseDuration;
 	float mPulseElapsed;
 	float mPulseFactor;
+
+	// ES-X: animación simple por cuadros PNG/JPG.
+	// No es GIF ni video: cambia entre texturas ya cargadas.
+	// Ideal para fondos vivos, luces, ondas XMB y sprites pequeños.
+	bool mFrameAnimationEnabled;
+	bool mFrameLoop;
+	bool mFrameFrozen;
+
+	float mFrameDuration;
+	float mFrameElapsed;
+
+	// Si es 0, la animación corre indefinidamente.
+	// Si es mayor a 0, corre ese tiempo en ms y queda congelada.
+	float mFrameActiveTime;
+	float mFrameActiveElapsed;
+
+	unsigned int mFrameCurrentIndex;
+
+	std::vector<std::string> mFramePaths;
+	std::vector<std::shared_ptr<TextureResource>> mFrameTextures;
 };
 
 #endif // ES_CORE_COMPONENTS_IMAGE_COMPONENT_H

@@ -41,12 +41,25 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "hideWhenSingleGame", BOOLEAN },
 
 		// ES-X: pulso suave de opacidad para imágenes.
-		{ "pulse", BOOLEAN },
-		{ "pulseOpacityMin", FLOAT },
-		{ "pulseOpacityMax", FLOAT },
-		{ "pulseDuration", FLOAT },
+{ "pulse", BOOLEAN },
+{ "pulseOpacityMin", FLOAT },
+{ "pulseOpacityMax", FLOAT },
+{ "pulseDuration", FLOAT },
 
-		{ "zIndex", FLOAT } } },
+// ES-X: animación simple por cuadros para imágenes.
+// No es GIF ni video: cambia entre frame1-frame6.
+{ "frameAnimation", BOOLEAN },
+{ "frame1", PATH },
+{ "frame2", PATH },
+{ "frame3", PATH },
+{ "frame4", PATH },
+{ "frame5", PATH },
+{ "frame6", PATH },
+{ "frameDuration", FLOAT },
+{ "frameLoop", BOOLEAN },
+{ "frameActiveTime", FLOAT },
+
+{ "zIndex", FLOAT } } },
 
 	{ "imagegrid", {
 		{ "pos", RESOLUTION_PAIR },

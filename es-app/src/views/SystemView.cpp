@@ -148,6 +148,21 @@ namespace
 	}
 }
 
+	static inline void resetFrameAnimationsInExtras(const std::vector<GuiComponent*>& extras)
+	{
+		for (GuiComponent* extra : extras)
+		{
+			if (!extra)
+				continue;
+
+			ImageComponent* image =
+				dynamic_cast<ImageComponent*>(extra);
+
+			if (image)
+				image->resetFrameAnimation();
+		}
+	}
+
 SystemView::SystemView(Window* window) :
 	IList<SystemViewData, SystemData*>(window, LIST_SCROLL_STYLE_SLOW, LIST_ALWAYS_LOOP),
 	mViewNeedsReload(true),
@@ -660,6 +675,16 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 
 	// Al cambiar sistema, volver el foco al carrusel y refrescar visibilidad del botón
 	setInfoFocus(false);
+
+	// ES-X: al cambiar de sistema, reiniciar fondos vivos por cuadros.
+	// Así frameActiveTime vuelve a correr, estilo ES-DE pero sin video.
+	// ES-X: al cambiar de sistema, reiniciar fondos vivos por cuadros.
+// Reiniciamos todos los extras para que, si volvemos a un sistema anterior,
+// también vuelva a animar sus 5 segundos.
+for (auto& entry : mEntries)
+{
+	resetFrameAnimationsInExtras(entry.data.backgroundExtras);
+}
 
 	float startPos = mCamOffset;
 
