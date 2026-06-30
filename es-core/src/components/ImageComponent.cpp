@@ -814,24 +814,36 @@ void ImageComponent::applyTheme(
 	}
 
 	if (mFrameAnimationEnabled)
-	{
-		if (elem->has("frame1"))
-			mFramePaths.push_back(elem->get<std::string>("frame1"));
+{
+	if (elem->has("frame1"))
+		mFramePaths.push_back(elem->get<std::string>("frame1"));
 
-		if (elem->has("frame2"))
-			mFramePaths.push_back(elem->get<std::string>("frame2"));
+	if (elem->has("frame2"))
+		mFramePaths.push_back(elem->get<std::string>("frame2"));
 
-		if (elem->has("frame3"))
-			mFramePaths.push_back(elem->get<std::string>("frame3"));
+	if (elem->has("frame3"))
+		mFramePaths.push_back(elem->get<std::string>("frame3"));
 
-		if (elem->has("frame4"))
-			mFramePaths.push_back(elem->get<std::string>("frame4"));
+	if (elem->has("frame4"))
+		mFramePaths.push_back(elem->get<std::string>("frame4"));
 
-		if (elem->has("frame5"))
-			mFramePaths.push_back(elem->get<std::string>("frame5"));
+	if (elem->has("frame5"))
+		mFramePaths.push_back(elem->get<std::string>("frame5"));
 
-		if (elem->has("frame6"))
-			mFramePaths.push_back(elem->get<std::string>("frame6"));
+	if (elem->has("frame6"))
+		mFramePaths.push_back(elem->get<std::string>("frame6"));
+
+	if (elem->has("frame7"))
+		mFramePaths.push_back(elem->get<std::string>("frame7"));
+
+	if (elem->has("frame8"))
+		mFramePaths.push_back(elem->get<std::string>("frame8"));
+
+	if (elem->has("frame9"))
+		mFramePaths.push_back(elem->get<std::string>("frame9"));
+
+	if (elem->has("frame10"))
+		mFramePaths.push_back(elem->get<std::string>("frame10"));
 
 		bool tile =
 			elem->has("tile") &&
