@@ -375,6 +375,24 @@ void ImageComponent::resetFrameAnimation()
 	mFrameActiveElapsed = 0.0f;
 	mFrameCurrentIndex = 0;
 
+	// Window::deinit() descarga las texturas al lanzar un juego.
+	// Las texturas dinámicas normalmente se recargan bajo demanda, lo que
+	// provocaba cuadros vacíos o saltos durante la primera vuelta al regresar.
+	// Precargar de forma bloqueante solo los cuadros de la animación activa.
+	const size_t frameWidth = static_cast<size_t>(
+		mSize.x() > 1.0f ? mSize.x() : 1.0f);
+	const size_t frameHeight = static_cast<size_t>(
+		mSize.y() > 1.0f ? mSize.y() : 1.0f);
+
+	for (auto& frameTexture : mFrameTextures)
+	{
+		if (!frameTexture)
+			continue;
+
+		frameTexture->rasterizeAt(frameWidth, frameHeight);
+		frameTexture->ensureLoaded();
+	}
+
 	mTexture = mFrameTextures[mFrameCurrentIndex];
 
 	updateVertices();

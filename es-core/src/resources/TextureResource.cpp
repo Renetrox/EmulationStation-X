@@ -111,6 +111,31 @@ bool TextureResource::bind()
 	}
 }
 
+void TextureResource::ensureLoaded()
+{
+	std::shared_ptr<TextureData> data;
+
+	if (mTextureData != nullptr)
+		data = mTextureData;
+	else
+		data = sTextureDataManager.get(this, false);
+
+	if (data == nullptr)
+		return;
+
+	if (!data->isLoaded())
+	{
+		if (mTextureData != nullptr)
+			data->load();
+		else
+			sTextureDataManager.load(data, true);
+	}
+
+	// Actualizar dimensiones cacheadas después de una recarga.
+	mSize = Vector2i((int)data->width(), (int)data->height());
+	mSourceSize = Vector2f(data->sourceWidth(), data->sourceHeight());
+}
+
 std::shared_ptr<TextureResource> TextureResource::get(
 	const std::string& path,
 	bool tile,

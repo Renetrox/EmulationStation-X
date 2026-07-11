@@ -41,6 +41,10 @@ public:
 	const Vector2i getSize() const;
 	bool bind();
 
+	// ES-X: carga inmediatamente una textura dinámica si fue descargada.
+	// Usado para precargar los cuadros activos al volver de un juego.
+	void ensureLoaded();
+
 	static size_t getTotalMemUsage(); // returns an approximation of total VRAM used by textures (in bytes)
 	static size_t getTotalTextureSize(); // returns the number of bytes that would be used if all textures were in memory
 

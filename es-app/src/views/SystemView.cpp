@@ -386,6 +386,38 @@ void SystemView::populate()
 void SystemView::onShow()
 {
 	mShowing = true;
+
+	// ES-X: al volver desde una gamelist o un juego, dejar la vista
+	// de sistemas en un estado completamente estable.
+	finishAnimation(0);
+	cancelAnimation(1);
+	cancelAnimation(2);
+
+	mCamOffset = static_cast<float>(mCursor);
+	mExtrasCamOffset = static_cast<float>(mCursor);
+	mExtrasFadeOpacity = 0.0f;
+
+	setInfoFocus(false);
+
+	// Una salida durante el cambio de sistema puede dejar la información
+	// con una opacidad intermedia. Restaurarla al reaparecer la vista.
+	SystemInfoExtras& infoExtras = getInfoExtras(this);
+	mSystemInfo.setOpacity(255);
+
+	if (infoExtras.gamesLabelEnabled)
+		setComponentOpacity(infoExtras.gamesLabel.get(), 1.0f);
+
+	if (infoExtras.gameCountEnabled)
+		setComponentOpacity(infoExtras.gameCount.get(), 1.0f);
+
+	// Reiniciar únicamente la animación del sistema visible.
+	if (!mEntries.empty() &&
+	    mCursor >= 0 &&
+	    mCursor < static_cast<int>(mEntries.size()))
+	{
+		resetFrameAnimationsInExtras(
+			mEntries.at(mCursor).data.backgroundExtras);
+	}
 }
 
 void SystemView::onHide()
@@ -652,9 +684,9 @@ void SystemView::update(int deltaTime)
 	// ES-X: actualizar los extras del sistema actualmente visible.
 	// Esto permite que ImageComponent::update() ejecute animaciones
 	// como pulseOpacity en imágenes extra="true".
-	if (!mEntries.empty())
+	if (mShowing && !mEntries.empty())
 	{
-		int index = mCursor;
+		const int index = mCursor;
 
 		if (index >= 0 && index < static_cast<int>(mEntries.size()))
 		{
@@ -676,15 +708,15 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 	// Al cambiar sistema, volver el foco al carrusel y refrescar visibilidad del botón
 	setInfoFocus(false);
 
-	// ES-X: al cambiar de sistema, reiniciar fondos vivos por cuadros.
-	// Así frameActiveTime vuelve a correr, estilo ES-DE pero sin video.
-	// ES-X: al cambiar de sistema, reiniciar fondos vivos por cuadros.
-// Reiniciamos todos los extras para que, si volvemos a un sistema anterior,
-// también vuelva a animar sus 5 segundos.
-for (auto& entry : mEntries)
-{
-	resetFrameAnimationsInExtras(entry.data.backgroundExtras);
-}
+	// ES-X: al cambiar de sistema, reiniciar únicamente los fondos vivos
+	// del sistema que acaba de quedar seleccionado.
+	if (!mEntries.empty() &&
+	    mCursor >= 0 &&
+	    mCursor < static_cast<int>(mEntries.size()))
+	{
+		resetFrameAnimationsInExtras(
+			mEntries.at(mCursor).data.backgroundExtras);
+	}
 
 	float startPos = mCamOffset;
 
