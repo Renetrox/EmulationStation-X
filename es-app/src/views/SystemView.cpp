@@ -1287,14 +1287,35 @@ void SystemView::renderInfoBar(const Transform4x4f& trans)
 
 	SystemInfoExtras& infoExtras = getInfoExtras(this);
 
+	std::vector<TextComponent*> components;
+
 	if (!infoExtras.fragmentedEnabled)
-		mSystemInfo.render(trans);
+		components.push_back(&mSystemInfo);
 
-	if (infoExtras.gamesLabelEnabled && infoExtras.gamesLabel && !infoExtras.gamesLabel->getValue().empty())
-		infoExtras.gamesLabel->render(trans);
+	if (infoExtras.gamesLabelEnabled &&
+	    infoExtras.gamesLabel &&
+	    !infoExtras.gamesLabel->getValue().empty())
+	{
+		components.push_back(infoExtras.gamesLabel.get());
+	}
 
-	if (infoExtras.gameCountEnabled && infoExtras.gameCount && !infoExtras.gameCount->getValue().empty())
-		infoExtras.gameCount->render(trans);
+	if (infoExtras.gameCountEnabled &&
+	    infoExtras.gameCount &&
+	    !infoExtras.gameCount->getValue().empty())
+	{
+		components.push_back(infoExtras.gameCount.get());
+	}
+
+	std::stable_sort(
+		components.begin(),
+		components.end(),
+		[](TextComponent* a, TextComponent* b)
+		{
+			return a->getZIndex() < b->getZIndex();
+		});
+
+	for (TextComponent* component : components)
+		component->render(trans);
 }
 
 void SystemView::renderExtras(const Transform4x4f& trans, float lower, float upper)
