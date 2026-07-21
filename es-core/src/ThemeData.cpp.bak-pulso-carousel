@@ -315,12 +315,6 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	// ES-X: pulso de movimiento del sistema central seleccionado.
 	{ "selectedLogoPulse", BOOLEAN },
 
-	// ES-X: pulso de opacidad del logo central del carrusel
-	{ "pulse", BOOLEAN },
-	{ "pulseOpacityMin", FLOAT },
-	{ "pulseOpacityMax", FLOAT },
-	{ "pulseDuration", FLOAT },
-
 	{ "logoSpacing", RESOLUTION_PAIR },
 	{ "logoSpacingX", RESOLUTION_FLOAT },
 	{ "logoSpacingY", RESOLUTION_FLOAT }

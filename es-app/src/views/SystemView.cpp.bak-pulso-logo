@@ -105,13 +105,6 @@ namespace
 		// El tiempo queda local a SystemView y no requiere tocar el header.
 		bool selectedLogoPulse = false;
 		float selectedLogoPulseTime = 0.0f;
-
-		// Pulso de opacidad del logo central, configurado en <carousel>.
-		bool logoOpacityPulse = false;
-		float logoOpacityPulseMin = 0.65f;
-		float logoOpacityPulseMax = 1.0f;
-		float logoOpacityPulseDuration = 1600.0f;
-		float logoOpacityPulseTime = 0.0f;
 	};
 
 	static std::unordered_map<const SystemView*, SystemCarouselExtras> sCarouselExtras;
@@ -714,23 +707,6 @@ void SystemView::update(int deltaTime)
 		carouselExtras.selectedLogoPulseTime = 0.0f;
 	}
 
-	// ES-X: tiempo del pulso de opacidad del logo central.
-	if (mShowing && carouselExtras.logoOpacityPulse && carouselStable)
-	{
-		carouselExtras.logoOpacityPulseTime += static_cast<float>(deltaTime);
-
-		const float duration =
-			std::max(100.0f, carouselExtras.logoOpacityPulseDuration);
-
-		if (carouselExtras.logoOpacityPulseTime >= duration)
-			carouselExtras.logoOpacityPulseTime =
-				std::fmod(carouselExtras.logoOpacityPulseTime, duration);
-	}
-	else
-	{
-		carouselExtras.logoOpacityPulseTime = 0.0f;
-	}
-
 	// ES-X: actualizar los extras del sistema actualmente visible.
 	// Esto permite que ImageComponent::update() ejecute animaciones
 	// como pulseOpacity en imágenes extra="true".
@@ -757,7 +733,6 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 
 	// El nuevo sistema seleccionado comienza el pulso desde reposo.
 	getCarouselExtras(this).selectedLogoPulseTime = 0.0f;
-	getCarouselExtras(this).logoOpacityPulseTime = 0.0f;
 
 	// Al cambiar sistema, volver el foco al carrusel y refrescar visibilidad del botón
 	setInfoFocus(false);
@@ -1316,28 +1291,6 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 		if(opacity < opref)
 			opacity = opref;
 
-		// ES-X: pulso de opacidad únicamente en el logo central.
-		if(selected && extraCfg.logoOpacityPulse)
-		{
-			const bool carouselStable =
-				(getScrollingVelocity() == 0) &&
-				(std::fabs(mCamOffset - static_cast<float>(mCursor)) < 0.001f);
-
-			if(carouselStable)
-			{
-				const float duration =
-					std::max(100.0f, extraCfg.logoOpacityPulseDuration);
-				const float phase =
-					(extraCfg.logoOpacityPulseTime / duration) * 6.28318530718f;
-				const float wave = 0.5f - (0.5f * std::cos(phase));
-				const float factor =
-					extraCfg.logoOpacityPulseMin +
-					(extraCfg.logoOpacityPulseMax - extraCfg.logoOpacityPulseMin) * wave;
-
-				opacity = (int)Math::round(static_cast<float>(opacity) * factor);
-			}
-		}
-
 		const std::shared_ptr<GuiComponent>& comp = mEntries.at(index).data.logo;
 		if(!comp)
 			return;
@@ -1511,11 +1464,6 @@ void SystemView::getDefaultElements(void)
 	extraCfg.logoSpacingY = std::numeric_limits<float>::quiet_NaN();
 	extraCfg.selectedLogoPulse = false;
 	extraCfg.selectedLogoPulseTime = 0.0f;
-	extraCfg.logoOpacityPulse = false;
-	extraCfg.logoOpacityPulseMin = 0.65f;
-	extraCfg.logoOpacityPulseMax = 1.0f;
-	extraCfg.logoOpacityPulseDuration = 1600.0f;
-	extraCfg.logoOpacityPulseTime = 0.0f;
 
 	mSystemInfo.setSize(mSize.x(), mSystemInfo.getFont()->getLetterHeight() * 2.2f);
 	mSystemInfo.setPosition(0, (mCarousel.pos.y() + mCarousel.size.y() - 0.2f));
@@ -1660,25 +1608,6 @@ void SystemView::getCarouselFromTheme(const ThemeData::ThemeElement* elem)
 
 	if(elem->has("selectedLogoPulse"))
 		extraCfg.selectedLogoPulse = elem->get<bool>("selectedLogoPulse");
-
-	// Pulso de opacidad del logo central (propiedades del carousel).
-	if(elem->has("pulse"))
-		extraCfg.logoOpacityPulse = elem->get<bool>("pulse");
-
-	if(elem->has("pulseOpacityMin"))
-		extraCfg.logoOpacityPulseMin =
-			std::max(0.0f, std::min(1.0f, elem->get<float>("pulseOpacityMin")));
-
-	if(elem->has("pulseOpacityMax"))
-		extraCfg.logoOpacityPulseMax =
-			std::max(0.0f, std::min(1.0f, elem->get<float>("pulseOpacityMax")));
-
-	if(extraCfg.logoOpacityPulseMin > extraCfg.logoOpacityPulseMax)
-		std::swap(extraCfg.logoOpacityPulseMin, extraCfg.logoOpacityPulseMax);
-
-	if(elem->has("pulseDuration"))
-		extraCfg.logoOpacityPulseDuration =
-			std::max(100.0f, elem->get<float>("pulseDuration"));
 
 	if(elem->has("logoSpacing"))
 	{
