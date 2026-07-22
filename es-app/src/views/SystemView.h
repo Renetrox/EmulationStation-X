@@ -15,6 +15,7 @@
 
 class AnimatedImageComponent;
 class SystemData;
+class VideoComponent;
 
 enum CarouselType : unsigned int
 {
@@ -88,6 +89,7 @@ private:
 	void getViewElements(const std::shared_ptr<ThemeData>& theme);
 	void getDefaultElements(void);
 	void getCarouselFromTheme(const ThemeData::ThemeElement* elem);
+	void refreshMostPlayedVideo();
 
 	void renderCarousel(const Transform4x4f& parentTrans);
 	void renderExtras(const Transform4x4f& parentTrans, float lower, float upper);
@@ -100,6 +102,7 @@ private:
 
 	SystemViewCarousel mCarousel;
 	TextComponent mSystemInfo;
+	std::unique_ptr<VideoComponent> mMostPlayedVideo;
 
 	float mCamOffset;
 	float mExtrasCamOffset;

@@ -186,7 +186,6 @@ void SystemView::refreshMostPlayedVideo()
 
 	// Detener y limpiar siempre el sistema anterior antes de cargar el nuevo.
 	mMostPlayedVideo->onHide();
-	mMostPlayedVideo->topWindow(false);
 	mMostPlayedVideo->setVideo("");
 	mMostPlayedVideo->setImage("");
 	mMostPlayedVideo->setVisible(false);
@@ -232,12 +231,7 @@ void SystemView::refreshMostPlayedVideo()
 	mMostPlayedVideo->setVisible(themeVisible && (hasVideo || hasImage));
 
 	if (mMostPlayedVideo->isVisible())
-	{
-		// El reproductor no es child de SystemView, por eso debemos
-		// propagar manualmente el estado de ventana activa.
-		mMostPlayedVideo->topWindow(true);
 		mMostPlayedVideo->onShow();
-	}
 }
 
 SystemView::SystemView(Window* window) :
@@ -525,10 +519,7 @@ void SystemView::onHide()
 	mShowing = false;
 
 	if (mMostPlayedVideo)
-	{
 		mMostPlayedVideo->onHide();
-		mMostPlayedVideo->topWindow(false);
-	}
 }
 
 void SystemView::goToSystem(SystemData* system, bool animate)

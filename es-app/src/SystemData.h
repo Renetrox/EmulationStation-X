@@ -65,8 +65,9 @@ public:
 	std::string  getMostPlayedName() const;
 	std::string  getMostPlayedFull() const;
 
-	// NUEVO: imagen del juego más jugado (para usar en el tema)
+	// Media del mismo juego más jugado.
 	std::string  getMostPlayedImage() const;
+	std::string  getMostPlayedVideo() const;
 
 	static void deleteSystems();
 	static bool loadConfig(Window* window);
@@ -104,6 +105,9 @@ public:
 
 private:
 	static SystemData* loadSystem(pugi::xml_node system);
+
+	// Fuente compartida por mostPlayedImage y mostPlayedVideo.
+	FileData* getMostPlayedGame() const;
 
 	bool mIsCollectionSystem;
 	bool mIsGameSystem;

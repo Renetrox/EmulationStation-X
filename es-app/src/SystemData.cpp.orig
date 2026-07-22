@@ -612,29 +612,6 @@ unsigned int SystemData::getFavoriteCount() const
 	return fav;
 }
 
-FileData* SystemData::getMostPlayedGame() const
-{
-	FileData* best = nullptr;
-	int maxcount = 0;
-
-	auto games = mRootFolder->getFilesRecursive(GAME, true);
-	for (auto game : games)
-	{
-		const int pc = game->metadata.getInt("playcount");
-		if (pc > maxcount)
-		{
-			maxcount = pc;
-			best = game;
-		}
-	}
-
-	// Nadie jugado todavía.
-	if (maxcount <= 0)
-		return nullptr;
-
-	return best;
-}
-
 unsigned int SystemData::getMostPlayedCount() const
 {
 	unsigned int maxcount = 0;
@@ -694,8 +671,21 @@ std::string SystemData::getMostPlayedFull() const
 // ✅ NUEVO: imagen del más jugado con fallback pulido (boxart → image → thumbnail → titleshot → marquee)
 std::string SystemData::getMostPlayedImage() const
 {
-	FileData* best = getMostPlayedGame();
-	if (!best)
+	FileData* best = nullptr;
+	int maxcount = -1;
+
+	auto games = mRootFolder->getFilesRecursive(GAME, true);
+	for (auto game : games)
+	{
+		int pc = game->metadata.getInt("playcount");
+		if (pc > maxcount)
+		{
+			maxcount = pc;
+			best = game;
+		}
+	}
+
+	if (!best || maxcount <= 0)
 		return "";
 
 	// Orden pulido (lo que acordamos): boxart → image → thumbnail → (titleshot opcional) → marquee
@@ -780,45 +770,6 @@ std::string SystemData::getMostPlayedImage() const
 	return "";
 }
 
-std::string SystemData::getMostPlayedVideo() const
-{
-	FileData* best = getMostPlayedGame();
-	if (!best)
-		return "";
-
-	std::string raw = expandHomeTilde(best->getVideoPath());
-	if (raw.empty())
-		return "";
-
-	// Normalmente MetaDataList ya entrega una ruta absoluta.
-	if (raw[0] == '/' && fileExistsAny(raw))
-		return Utils::FileSystem::getGenericPath(raw);
-
-	// Compatibilidad con rutas relativas al directorio de ROMs.
-	{
-		std::string candidate =
-			Utils::FileSystem::resolveRelativePath(raw, getStartPath(), false, true);
-
-		candidate = Utils::FileSystem::getGenericPath(candidate);
-		if (fileExistsAny(candidate))
-			return candidate;
-	}
-
-	// Segundo intento para gamelists externos/legacy.
-	{
-		const std::string base =
-			Utils::FileSystem::getParent(getGamelistPath(false));
-		std::string candidate =
-			Utils::FileSystem::resolveRelativePath(raw, base, false, true);
-
-		candidate = Utils::FileSystem::getGenericPath(candidate);
-		if (fileExistsAny(candidate))
-			return candidate;
-	}
-
-	return "";
-}
-
 void SystemData::loadTheme()
 {
 	mTheme = std::make_shared<ThemeData>();
@@ -844,9 +795,8 @@ void SystemData::loadTheme()
 		sysData.insert(std::make_pair("system.mostPlayedName", getMostPlayedName()));
 		sysData.insert(std::make_pair("system.mostPlayedFull", getMostPlayedFull()));
 
-		// ✅ NUEVO: rutas de media resueltas
+		// ✅ NUEVO: ruta de imagen resuelta
 		sysData.insert(std::make_pair("system.mostPlayedImage", getMostPlayedImage()));
-		sysData.insert(std::make_pair("system.mostPlayedVideo", getMostPlayedVideo()));
 
 		mTheme->loadFile(sysData, path);
 	}
