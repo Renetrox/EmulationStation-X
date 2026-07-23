@@ -15,6 +15,7 @@
 #include "NavigationSounds.h"
 
 #include "components/ImageComponent.h"
+#include "components/ScrollableContainer.h"
 #include "components/TextComponent.h"
 #ifdef _OMX_
 #include "components/VideoPlayerComponent.h"
@@ -143,11 +144,49 @@ namespace
 		bool fragmentedEnabled = false;
 	};
 
+	// Visual temable de la descripción de cada sistema. Se mantiene fuera de
+	// SystemViewData para no modificar el header ni la semántica de las entradas.
+	struct SystemDescriptionVisual
+	{
+		// Declarar primero el texto hace que el contenedor se destruya antes
+		// (orden inverso), mientras todavía existe su child no propietario.
+		std::unique_ptr<TextComponent> text;
+		std::unique_ptr<ScrollableContainer> container;
+	};
+
+	struct SystemDescriptionExtras
+	{
+		std::unordered_map<SystemData*, SystemDescriptionVisual> bySystem;
+	};
+
 	static std::unordered_map<const SystemView*, SystemInfoExtras> sInfoExtras;
+	static std::unordered_map<const SystemView*, SystemDescriptionExtras> sDescriptionExtras;
 
 	static inline SystemInfoExtras& getInfoExtras(const SystemView* view)
 	{
 		return sInfoExtras[view];
+	}
+
+	static inline SystemDescriptionExtras& getDescriptionExtras(const SystemView* view)
+	{
+		return sDescriptionExtras[view];
+	}
+
+	static inline SystemDescriptionVisual* getDescriptionVisual(
+		const SystemView* view, SystemData* system)
+	{
+		if (!system)
+			return nullptr;
+
+		auto viewIt = sDescriptionExtras.find(view);
+		if (viewIt == sDescriptionExtras.end())
+			return nullptr;
+
+		auto visualIt = viewIt->second.bySystem.find(system);
+		if (visualIt == viewIt->second.bySystem.end())
+			return nullptr;
+
+		return &visualIt->second;
 	}
 
 	static inline void setComponentOpacity(TextComponent* comp, float value01)
@@ -260,6 +299,7 @@ SystemView::SystemView(Window* window) :
 
 	// asegurar entradas locales
 	getCarouselExtras(this);
+	getDescriptionExtras(this);
 	SystemInfoExtras& infoExtras = getInfoExtras(this);
 	infoExtras.gamesLabel.reset(new TextComponent(window, "", Font::get(FONT_SIZE_SMALL), 0xFFFFFFFF, ALIGN_LEFT));
 	infoExtras.gameCount.reset(new TextComponent(window, "", Font::get(FONT_SIZE_SMALL), 0xFFFFFFFF, ALIGN_RIGHT));
@@ -302,10 +342,20 @@ SystemView::~SystemView()
 	{
 		sCarouselExtras.erase(itCarousel);
 	}
+
+	auto itDescription = sDescriptionExtras.find(this);
+	if (itDescription != sDescriptionExtras.end())
+	{
+		itDescription->second.bySystem.clear();
+		sDescriptionExtras.erase(itDescription);
+	}
 }
 
 void SystemView::populate()
 {
+	// Los contenedores no forman parte de backgroundExtras; liberar primero
+	// las instancias visuales de la población anterior.
+	getDescriptionExtras(this).bySystem.clear();
 	mEntries.clear();
 
 	for(auto it = SystemData::sSystemVector.cbegin(); it != SystemData::sSystemVector.cend(); it++)
@@ -411,10 +461,56 @@ void SystemView::populate()
 			e.data.backgroundExtras = ThemeData::makeExtras((*it)->getTheme(), "system", mWindow);
 
 			// ─────────────────────────────────────────────
-			// Descripción: SOLO como dato desde theme key "system-description"
+			// Descripción: dato completo + visual limitado/recortado.
+			// El elemento XML NO debe usar extra="true", para evitar que
+			// ThemeData::makeExtras() cree además un TextComponent libre.
 			// ─────────────────────────────────────────────
 			e.data.descriptionText = getResolvedThemeText(theme, "system", "system-description");
 			e.data.hasDescription  = !e.data.descriptionText.empty();
+
+			const ThemeData::ThemeElement* descriptionElem =
+				theme->getElement("system", "system-description", "text");
+
+			if (descriptionElem && e.data.hasDescription)
+			{
+				SystemDescriptionVisual visual;
+				visual.text.reset(new TextComponent(
+					mWindow,
+					e.data.descriptionText,
+					Font::get(FONT_SIZE_SMALL),
+					0xFFFFFFFF,
+					ALIGN_LEFT));
+				visual.container.reset(new ScrollableContainer(mWindow, 4000));
+
+				visual.container->setDefaultZIndex(40);
+				visual.text->setDefaultZIndex(0);
+
+				// El contenedor recibe posición, tamaño, origen, visibilidad y zIndex.
+				// GuiComponent ignora las propiedades tipográficas que no le corresponden.
+				visual.container->applyTheme(
+					theme,
+					"system",
+					"system-description",
+					ThemeFlags::ALL);
+
+				// El texto recibe la tipografía y el estilo del mismo elemento,
+				// pero queda anclado al origen local del contenedor.
+				visual.text->applyTheme(
+					theme,
+					"system",
+					"system-description",
+					ThemeFlags::ALL);
+				visual.text->setPosition(0.0f, 0.0f, 0.0f);
+				visual.text->setOrigin(0.0f, 0.0f);
+				visual.text->setZIndex(0);
+				visual.text->setSize(visual.container->getSize().x(), 0.0f);
+				visual.text->setText(e.data.descriptionText);
+
+				visual.container->addChild(visual.text.get());
+				visual.container->setAutoScroll(true, 4000);
+
+				getDescriptionExtras(this).bySystem.emplace(*it, std::move(visual));
+			}
 
 			// ─────────────────────────────────────────────
 			// infoButton (idle/focused) temable
@@ -515,6 +611,13 @@ void SystemView::onShow()
 	{
 		resetFrameAnimationsInExtras(
 			mEntries.at(mCursor).data.backgroundExtras);
+
+		if (SystemDescriptionVisual* visual =
+				getDescriptionVisual(this, mEntries.at(mCursor).object))
+		{
+			if (visual->container)
+				visual->container->reset();
+		}
 	}
 
 	refreshMostPlayedVideo();
@@ -844,6 +947,13 @@ void SystemView::update(int deltaTime)
 				if (extra)
 					extra->update(deltaTime);
 			}
+
+			if (SystemDescriptionVisual* visual =
+					getDescriptionVisual(this, mEntries.at(index).object))
+			{
+				if (visual->container)
+					visual->container->update(deltaTime);
+			}
 		}
 	}
 }
@@ -870,6 +980,13 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 	{
 		resetFrameAnimationsInExtras(
 			mEntries.at(mCursor).data.backgroundExtras);
+
+		if (SystemDescriptionVisual* visual =
+				getDescriptionVisual(this, mEntries.at(mCursor).object))
+		{
+			if (visual->container)
+				visual->container->reset();
+		}
 	}
 
 	float startPos = mCamOffset;
@@ -1587,9 +1704,28 @@ void SystemView::renderExtras(const Transform4x4f& trans, float lower, float upp
 
 			bool videoRendered = false;
 
-			for(unsigned int j = 0; j < data.backgroundExtras.size(); j++)
+			// Integrar el contenedor de descripción en el mismo orden z que
+			// los extras y el video, sin transferir su propiedad.
+			std::vector<GuiComponent*> renderComponents = data.backgroundExtras;
+			if (SystemDescriptionVisual* visual =
+					getDescriptionVisual(this, mEntries.at(index).object))
 			{
-				GuiComponent* extra = data.backgroundExtras[j];
+				if (visual->container)
+					renderComponents.push_back(visual->container.get());
+			}
+
+			std::stable_sort(
+				renderComponents.begin(),
+				renderComponents.end(),
+				[](GuiComponent* a, GuiComponent* b)
+				{
+					return b->getZIndex() > a->getZIndex();
+				});
+
+			for (GuiComponent* extra : renderComponents)
+			{
+				if (!extra)
+					continue;
 
 				if (renderVideoHere &&
 				    !videoRendered &&

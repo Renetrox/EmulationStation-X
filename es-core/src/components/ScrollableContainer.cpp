@@ -78,6 +78,7 @@ void ScrollableContainer::setAutoScroll(bool autoScroll, int delayMs)
 		mAutoScrollSpeed = 0;
 		mAutoScrollAccumulator = 0;
 		mAutoScrollResetAccumulator = 0;
+		mScrollPos = Vector2f(0, 0);
 		mAtEnd = false;
 	}
 }
