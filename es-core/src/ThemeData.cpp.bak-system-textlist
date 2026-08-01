@@ -285,34 +285,6 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 
 { "carousel", {
 	{ "type", STRING },
-
-	// ES-X: modo textlist para SystemView.
-	// Mantiene la navegación real de SystemView, pero dibuja filas y selector
-	// con una apariencia equivalente a TextListComponent.
-	{ "displayMode", STRING },
-	{ "fontPath", PATH },
-	{ "fontSize", RESOLUTION_FLOAT },
-	{ "primaryColor", COLOR },
-	{ "secondaryColor", COLOR },
-	{ "selectedColor", COLOR },
-	{ "selectorColor", COLOR },
-	{ "selectorColorEnd", COLOR },
-	{ "selectorGradientType", STRING },
-	{ "selectorHeight", RESOLUTION_FLOAT },
-	{ "selectorOffsetY", RESOLUTION_FLOAT },
-	{ "selectorWidth", RESOLUTION_FLOAT },
-	{ "selectorHorizontalOffset", RESOLUTION_FLOAT },
-
-	// ES-X: selector de imagen y numeración para SystemView textlist.
-	{ "selectorImagePath", PATH },
-	{ "selectorImageTile", BOOLEAN },
-	{ "showRowNumbers", BOOLEAN },
-
-	{ "horizontalMargin", RESOLUTION_FLOAT },
-	{ "alignment", STRING },
-	{ "forceUppercase", BOOLEAN },
-	{ "lineSpacing", FLOAT },
-	{ "textSource", STRING },
 	{ "size", RESOLUTION_PAIR },
 	{ "pos", RESOLUTION_PAIR },
 	{ "origin", NORMALIZED_PAIR },

@@ -88,9 +88,6 @@ struct SystemViewCarousel
 	Alignment textAlignment;
 	bool textForceUppercase;
 	std::string textSource;
-
-	// ES-X: selector de imagen y numeración para SystemView textlist.
-	bool textShowRowNumbers;
 };
 
 class SystemView : public IList<SystemViewData, SystemData*>
@@ -135,10 +132,6 @@ private:
 
 	SystemViewCarousel mCarousel;
 	TextComponent mSystemInfo;
-
-	// ES-X: selector de imagen y numeración para SystemView textlist.
-	ImageComponent mTextListSelectorImage;
-
 	std::unique_ptr<VideoComponent> mMostPlayedVideo;
 
 	float mCamOffset;

@@ -1069,6 +1069,8 @@ void CollectionSystemManager::populateAutoCollection(CollectionSystemData* sysDa
 	}
 
 	sysData->isPopulated = true;
+	// La colección ya está llena: recalcular las variables del tema.
+newSys->loadTheme();
 }
 
 // populates a Custom Collection System
@@ -1111,7 +1113,10 @@ void CollectionSystemManager::populateCustomCollection(CollectionSystemData* sys
 	}
 	rootFolder->sort(getSortTypeFromString(sysDecl.defaultSort));
 	updateCollectionFolderMetadata(newSys);
-	sysData->isPopulated = true;
+sysData->isPopulated = true;
+
+// Recalcular ${system.gameCount} después de cargar los juegos.
+newSys->loadTheme();
 }
 
 /* Handle System View removal and insertion of Collections */

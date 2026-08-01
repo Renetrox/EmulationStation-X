@@ -15,7 +15,6 @@
 
 class AnimatedImageComponent;
 class SystemData;
-class TextCache;
 class VideoComponent;
 
 enum CarouselType : unsigned int
@@ -29,13 +28,6 @@ enum CarouselType : unsigned int
 struct SystemViewData
 {
 	std::shared_ptr<GuiComponent> logo;
-
-	// ES-X: modo textlist para SystemView.
-	// Caché independiente del logo tradicional; solo se utiliza al renderizar
-	// nombres de sistemas como filas de texto.
-	std::shared_ptr<TextCache> textCache;
-	std::string textCacheValue;
-
 	std::vector<GuiComponent*> backgroundExtras;
 
 	// InfoButton (temable)
@@ -67,30 +59,6 @@ struct SystemViewCarousel
 	// mejoras visuales (compat Batocera)
 	float minLogoOpacity;
 	float scaledLogoSpacing;
-
-	// ES-X: modo textlist para SystemView.
-	// "image" conserva exactamente el carrusel histórico.
-	// "textlist" usa filas uniformes y selector, como la lista de juegos.
-	std::string displayMode;
-	std::shared_ptr<Font> textFont;
-	unsigned int textPrimaryColor;
-	unsigned int textSecondaryColor;
-	unsigned int textSelectedColor;
-	unsigned int textSelectorColor;
-	unsigned int textSelectorColorEnd;
-	bool textSelectorGradientHorizontal;
-	float textSelectorHeight;
-	float textSelectorOffsetY;
-	float textSelectorWidth;
-	float textSelectorHorizontalOffset;
-	float textHorizontalMargin;
-	float textLineSpacing;
-	Alignment textAlignment;
-	bool textForceUppercase;
-	std::string textSource;
-
-	// ES-X: selector de imagen y numeración para SystemView textlist.
-	bool textShowRowNumbers;
 };
 
 class SystemView : public IList<SystemViewData, SystemData*>
@@ -124,7 +92,6 @@ private:
 	void refreshMostPlayedVideo();
 
 	void renderCarousel(const Transform4x4f& parentTrans);
-	void renderTextList(const Transform4x4f& parentTrans);
 	void renderExtras(const Transform4x4f& parentTrans, float lower, float upper);
 	void renderInfoBar(const Transform4x4f& trans);
 	void renderFade(const Transform4x4f& trans);
@@ -135,10 +102,6 @@ private:
 
 	SystemViewCarousel mCarousel;
 	TextComponent mSystemInfo;
-
-	// ES-X: selector de imagen y numeración para SystemView textlist.
-	ImageComponent mTextListSelectorImage;
-
 	std::unique_ptr<VideoComponent> mMostPlayedVideo;
 
 	float mCamOffset;
@@ -153,10 +116,6 @@ private:
 
 	// foco actual en el botón info
 	bool mInfoFocus;
-
-	// Estado visual de la ventana de filas del modo textlist.
-	int mTextListCursorPrev;
-	int mTextListViewportHeight;
 };
 
 #endif // ES_APP_VIEWS_SYSTEM_VIEW_H

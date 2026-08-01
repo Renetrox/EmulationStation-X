@@ -282,10 +282,6 @@ void SystemView::refreshMostPlayedVideo()
 SystemView::SystemView(Window* window) :
 	IList<SystemViewData, SystemData*>(window, LIST_SCROLL_STYLE_SLOW, LIST_ALWAYS_LOOP),
 	mSystemInfo(window, "SYSTEM INFO", Font::get(FONT_SIZE_SMALL), 0x33333300, ALIGN_CENTER),
-
-	// ES-X: selector de imagen y numeración para SystemView textlist.
-	mTextListSelectorImage(window),
-
 	mMostPlayedVideo(nullptr),
 	mViewNeedsReload(true),
 	mShowing(false),
@@ -1403,34 +1399,15 @@ void SystemView::renderTextList(const Transform4x4f& trans)
 		(mCursor - mViewportTop) * entrySize +
 		mCarousel.textSelectorOffsetY;
 
-	// ES-X: selector de imagen y numeración para SystemView textlist.
-	if(mTextListSelectorImage.hasImage())
-	{
-		mTextListSelectorImage.setSize(
-			selectorWidth,
-			selectorHeight);
-		mTextListSelectorImage.setPosition(
-			mCarousel.textSelectorHorizontalOffset,
-			selectorY,
-			0.0f);
-		mTextListSelectorImage.setColorShift(
-			mCarousel.textSelectorColor);
-		mTextListSelectorImage.setColorShiftEnd(
-			mCarousel.textSelectorColorEnd);
-		mTextListSelectorImage.render(listTrans);
-	}
-	else
-	{
-		Renderer::setMatrix(listTrans);
-		Renderer::drawRect(
-			mCarousel.textSelectorHorizontalOffset,
-			selectorY,
-			selectorWidth,
-			selectorHeight,
-			mCarousel.textSelectorColor,
-			mCarousel.textSelectorColorEnd,
-			mCarousel.textSelectorGradientHorizontal);
-	}
+	Renderer::setMatrix(listTrans);
+	Renderer::drawRect(
+		mCarousel.textSelectorHorizontalOffset,
+		selectorY,
+		selectorWidth,
+		selectorHeight,
+		mCarousel.textSelectorColor,
+		mCarousel.textSelectorColorEnd,
+		mCarousel.textSelectorGradientHorizontal);
 
 	const float margin =
 		std::max(0.0f, mCarousel.textHorizontalMargin);
@@ -1456,11 +1433,6 @@ void SystemView::renderTextList(const Transform4x4f& trans)
 
 		if(mCarousel.textForceUppercase)
 			displayName = Utils::String::toUpper(displayName);
-
-		// ES-X: selector de imagen y numeración para SystemView textlist.
-		if(mCarousel.textShowRowNumbers)
-			displayName =
-				std::to_string(i + 1) + ". " + displayName;
 
 		if(!entry.data.textCache ||
 		   entry.data.textCacheValue != displayName)
@@ -2025,10 +1997,6 @@ void SystemView::getDefaultElements(void)
 	mCarousel.textForceUppercase = false;
 	mCarousel.textSource = "fullName";
 
-	// ES-X: selector de imagen y numeración para SystemView textlist.
-	mCarousel.textShowRowNumbers = false;
-	mTextListSelectorImage.setImage("");
-
 	mTextListCursorPrev = -1;
 	mTextListViewportHeight = 0;
 	mViewportTop = 0;
@@ -2176,29 +2144,6 @@ void SystemView::getCarouselFromTheme(const ThemeData::ThemeElement* elem)
 		const std::string source =
 			Utils::String::toLower(elem->get<std::string>("textSource"));
 		mCarousel.textSource = (source == "name") ? "name" : "fullName";
-	}
-
-	// ES-X: selector de imagen y numeración para SystemView textlist.
-	if(elem->has("showRowNumbers"))
-		mCarousel.textShowRowNumbers = elem->get<bool>("showRowNumbers");
-
-	if(elem->has("selectorImagePath"))
-	{
-		const std::string path =
-			elem->get<std::string>("selectorImagePath");
-		const bool tile =
-			elem->has("selectorImageTile") &&
-			elem->get<bool>("selectorImageTile");
-
-		mTextListSelectorImage.setImage(path, tile);
-		mTextListSelectorImage.setColorShift(
-			mCarousel.textSelectorColor);
-		mTextListSelectorImage.setColorShiftEnd(
-			mCarousel.textSelectorColorEnd);
-	}
-	else
-	{
-		mTextListSelectorImage.setImage("");
 	}
 
 	if(elem->has("type"))

@@ -302,12 +302,6 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "selectorOffsetY", RESOLUTION_FLOAT },
 	{ "selectorWidth", RESOLUTION_FLOAT },
 	{ "selectorHorizontalOffset", RESOLUTION_FLOAT },
-
-	// ES-X: selector de imagen y numeración para SystemView textlist.
-	{ "selectorImagePath", PATH },
-	{ "selectorImageTile", BOOLEAN },
-	{ "showRowNumbers", BOOLEAN },
-
 	{ "horizontalMargin", RESOLUTION_FLOAT },
 	{ "alignment", STRING },
 	{ "forceUppercase", BOOLEAN },
