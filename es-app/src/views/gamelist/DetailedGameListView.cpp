@@ -20,14 +20,20 @@ DetailedGameListView::DetailedGameListView(Window* window, FileData* root) :
 	mRating(window), mReleaseDate(window), mDeveloper(window), mPublisher(window),
 	mGenre(window), mPlayers(window), mLastPlayed(window), mPlayCount(window),
 	mName(window),
-	mGameCounter(window)
+	mGameCounter(window),
+	mInfoPanelDelay(0),
+	mInfoPanelPending(false),
+	mInfoPanelScheduledThisFrame(false)
 {
 	const float padding = 0.01f;
 
 	mList.setPosition(mSize.x() * (0.50f + padding), mList.getPosition().y());
 	mList.setSize(mSize.x() * (0.50f - padding), mList.getSize().y());
 	mList.setAlignment(TextListComponent<FileData*>::ALIGN_LEFT);
-	mList.setCursorChangedCallback([&](const CursorState& /*state*/) { updateInfoPanel(); });
+	mList.setCursorChangedCallback([this](const CursorState& state)
+	{
+		scheduleInfoPanelUpdate(state);
+	});
 
 	// Fondo dinámico por juego
 	mBackground.setOrigin(0.0f, 0.0f);
@@ -246,9 +252,79 @@ int DetailedGameListView::getCurrentGameIndex(FileData* file) const
 	return 0;
 }
 
+void DetailedGameListView::scheduleInfoPanelUpdate(const CursorState& /*state*/)
+{
+	if (mList.size() == 0)
+	{
+		mInfoPanelPending = false;
+		mInfoPanelDelay = 0;
+		updateInfoPanel();
+		return;
+	}
+
+	// Nombre y contador responden inmediatamente. Los elementos costosos se
+	// aplican solo cuando la selección permanece estable durante unos frames.
+	updateLightInfoPanel();
+	mInfoPanelDelay = INFO_PANEL_DELAY;
+	mInfoPanelPending = true;
+	mInfoPanelScheduledThisFrame = true;
+}
+
+void DetailedGameListView::updateLightInfoPanel()
+{
+	if (mList.size() == 0)
+	{
+		mName.setValue("");
+		mGameCounter.setValue("");
+		return;
+	}
+
+	FileData* file = mList.getSelected();
+	if (file == nullptr)
+		return;
+
+	mName.setValue(file->metadata.get("name"));
+
+	const int total = (int)mList.size();
+	int index = getCurrentGameIndex(file);
+	if (index <= 0 && total > 0)
+		index = 1;
+
+	std::stringstream ss;
+	ss << index << " / " << total;
+	mGameCounter.setValue(ss.str());
+}
+
+void DetailedGameListView::update(int deltaTime)
+{
+	BasicGameListView::update(deltaTime);
+
+	if (!mInfoPanelPending)
+	{
+		mInfoPanelScheduledThisFrame = false;
+		return;
+	}
+
+	// El input se procesa antes de update(). No descontar el delta del mismo
+	// frame en el que se programó la actualización, especialmente tras un tirón.
+	if (mInfoPanelScheduledThisFrame)
+	{
+		mInfoPanelScheduledThisFrame = false;
+		return;
+	}
+
+	mInfoPanelDelay -= deltaTime;
+	if (mInfoPanelDelay > 0)
+		return;
+
+	mInfoPanelPending = false;
+	mInfoPanelDelay = 0;
+	updateInfoPanel();
+}
+
 void DetailedGameListView::updateInfoPanel()
 {
-	FileData* file = (mList.size() == 0 || mList.isScrolling()) ? NULL : mList.getSelected();
+	FileData* file = (mList.size() == 0) ? NULL : mList.getSelected();
 
 	bool fadingOut;
 	if (file == NULL)
@@ -377,4 +453,8 @@ void DetailedGameListView::onFocusLost()
 {
 	mDescContainer.reset();
 	mList.stopScrolling(true);
+
+	mInfoPanelPending = false;
+	mInfoPanelDelay = 0;
+	mInfoPanelScheduledThisFrame = false;
 }

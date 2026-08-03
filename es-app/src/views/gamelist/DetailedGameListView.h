@@ -13,6 +13,7 @@ public:
 	DetailedGameListView(Window* window, FileData* root);
 
 	virtual void onThemeChanged(const std::shared_ptr<ThemeData>& theme) override;
+	virtual void update(int deltaTime) override;
 
 	virtual const char* getName() const override { return "detailed"; }
 
@@ -22,6 +23,8 @@ public:
 
 private:
 	void updateInfoPanel();
+	void updateLightInfoPanel();
+	void scheduleInfoPanelUpdate(const CursorState& state);
 
 	void initMDLabels();
 	void initMDValues();
@@ -51,6 +54,11 @@ private:
 
 	ScrollableContainer mDescContainer;
 	TextComponent mDescription;
+
+	static constexpr int INFO_PANEL_DELAY = 120;
+	int mInfoPanelDelay;
+	bool mInfoPanelPending;
+	bool mInfoPanelScheduledThisFrame;
 };
 
 #endif // ES_APP_VIEWS_GAME_LIST_DETAILED_GAME_LIST_VIEW_H

@@ -251,11 +251,14 @@ protected:
 
 		// we delay scrolling until after scroll tier has updated so isScrolling() returns accurately during onCursorChanged callbacks
 		// we don't just do scroll tier first because it would not catch the scrollDelay == tier length case
-		int scrollCount = 0;
-		while(mScrollCursorAccumulator >= mTierList.tiers[mScrollTier].scrollDelay)
+		bool shouldScroll = false;
+		const int scrollDelay = mTierList.tiers[mScrollTier].scrollDelay;
+		if(scrollDelay > 0 && mScrollCursorAccumulator >= scrollDelay)
 		{
-			mScrollCursorAccumulator -= mTierList.tiers[mScrollTier].scrollDelay;
-			scrollCount++;
+			// Conservar solo la fracción restante. No recuperar varios pasos
+			// dentro de un mismo frame si el render o la carga se demoraron.
+			mScrollCursorAccumulator %= scrollDelay;
+			shouldScroll = true;
 		}
 
 		// are we ready to go even FASTER?
@@ -266,7 +269,7 @@ protected:
 		}
 
 		// actually perform the scrolling
-		for(int i = 0; i < scrollCount; i++)
+		if(shouldScroll)
 			scroll(mScrollVelocity);
 	}
 

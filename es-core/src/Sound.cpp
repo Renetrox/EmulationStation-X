@@ -134,6 +134,11 @@ void Sound::play()
 	if (!isMixerAvailable())
 		return;
 
+	// No apilar varias reproducciones del mismo sonido. Esto evita que el
+	// sonido de desplazamiento ocupe varios canales durante la navegación.
+	if (isPlaying())
+		stop();
+
 	// Play once. (no loop)
 	// Devuelve canal asignado o -1 si falló.
 	mChannel = Mix_PlayChannel(-1, mChunk, 0);

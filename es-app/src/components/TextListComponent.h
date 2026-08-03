@@ -159,8 +159,15 @@ public:
 protected:
 	virtual void onScroll(int /*amt*/) override
 	{
-		if (!mScrollSound.empty())
-			Sound::get(mScrollSound)->play();
+		if (mScrollSound.empty())
+			return;
+
+		std::shared_ptr<Sound> sound = Sound::get(mScrollSound);
+
+		// Comportamiento tipo ES-DE: durante el desplazamiento acelerado no
+		// reiniciar el sonido mientras la reproducción anterior siga activa.
+		if (!isScrolling() || !sound->isPlaying())
+			sound->play();
 	}
 
 	virtual void onCursorChanged(const CursorState& state) override;
