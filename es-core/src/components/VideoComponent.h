@@ -21,6 +21,8 @@ class VideoComponent : public GuiComponent
 		bool							showSnapshotNoVideo;
 		bool							showSnapshotDelay;
 		std::string						defaultVideoPath;
+		unsigned						iterationCount;
+		std::string						onIterationsDone;
 	};
 
 public:
@@ -58,6 +60,12 @@ public:
 
 	virtual void update(int deltaTime) override;
 
+protected:
+	// Registers a completed playback and returns true when it should play again.
+	// iterationCount == 0 preserves the classic infinite loop.
+	bool completePlaybackIteration();
+
+public:
 	// Resize the video to fit this size. If one axis is zero, scale that axis to maintain aspect ratio.
 	// If both are non-zero, potentially break the aspect ratio.  If both are zero, no resizing.
 	// Can be set before or after a video is loaded.
@@ -99,6 +107,8 @@ protected:
 
 	std::string						mVideoPath;
 	std::string						mPlayingVideoPath;
+	unsigned						mCompletedIterations;
+	bool							mPlaybackFinished;
 	bool							mStartDelayed;
 	unsigned						mStartTime;
 	bool							mIsPlaying;

@@ -55,6 +55,8 @@ VideoComponent::VideoComponent(Window* window) :
 	mStaticImage(window),
 	mVideoHeight(0),
 	mVideoWidth(0),
+	mCompletedIterations(0),
+	mPlaybackFinished(false),
 	mStartDelayed(false),
 	mIsPlaying(false),
 	mShowing(false),
@@ -68,6 +70,8 @@ VideoComponent::VideoComponent(Window* window) :
 	mConfig.showSnapshotDelay 		= false;
 	mConfig.showSnapshotNoVideo		= false;
 	mConfig.startDelay				= 0;
+	mConfig.iterationCount			= 0;
+	mConfig.onIterationsDone		= "nothing";
 	if (mWindow->getGuiStackSize() > 1) {
 		topWindow(false);
 	}
@@ -109,7 +113,18 @@ bool VideoComponent::setVideo(std::string path)
 
 	// Check that it's changed
 	if (fullPath == mVideoPath)
+	{
+		// An explicit reload of a completed video should make it playable again.
+		if (mPlaybackFinished)
+		{
+			mCompletedIterations = 0;
+			mPlaybackFinished = false;
+		}
 		return !path.empty();
+	}
+
+	mCompletedIterations = 0;
+	mPlaybackFinished = false;
 
 	// Store the path
 	mVideoPath = fullPath;
@@ -168,7 +183,12 @@ void VideoComponent::renderSnapshot(const Transform4x4f& parentTrans)
 {
 	// This is the case where the video is not currently being displayed. Work out
 	// if we need to display a static image
-	if ((mConfig.showSnapshotNoVideo && mVideoPath.empty()) || (mStartDelayed && mConfig.showSnapshotDelay))
+	const bool showAfterIterations =
+		mPlaybackFinished && mConfig.onIterationsDone == "image";
+
+	if (showAfterIterations ||
+	    (mConfig.showSnapshotNoVideo && mVideoPath.empty()) ||
+	    (mStartDelayed && mConfig.showSnapshotDelay))
 	{
 		// Display the static image instead
 		mStaticImage.setOpacity((unsigned char)(mFadeIn * 255.0f));
@@ -198,6 +218,28 @@ void VideoComponent::applyTheme(const std::shared_ptr<ThemeData>& theme, const s
 
 	if(elem->has("default"))
 		mConfig.defaultVideoPath = elem->get<std::string>("default");
+
+	// ES-DE-compatible playback controls.
+	// Zero iterations means the classic infinite loop.
+	mConfig.iterationCount = 0;
+	mConfig.onIterationsDone = "nothing";
+
+	if (elem->has("iterationCount"))
+	{
+		const float count = elem->get<float>("iterationCount");
+		if (count > 0.0f)
+		{
+			const unsigned parsed = static_cast<unsigned>(count);
+			mConfig.iterationCount = parsed > 10 ? 10 : parsed;
+		}
+	}
+
+	if (elem->has("onIterationsDone"))
+	{
+		const std::string action = elem->get<std::string>("onIterationsDone");
+		if (action == "image" || action == "nothing")
+			mConfig.onIterationsDone = action;
+	}
 
 	if((properties & ThemeFlags::DELAY) && elem->has("delay"))
 		mConfig.startDelay = (unsigned)(elem->get<float>("delay") * 1000.0f);
@@ -236,6 +278,14 @@ void VideoComponent::handleStartDelay()
 
 void VideoComponent::handleLooping()
 {
+}
+
+bool VideoComponent::completePlaybackIteration()
+{
+	++mCompletedIterations;
+
+	return mConfig.iterationCount == 0 ||
+	       mCompletedIterations < mConfig.iterationCount;
 }
 
 void VideoComponent::startVideoWithDelay()
@@ -320,7 +370,7 @@ void VideoComponent::manageState()
 	if (!mIsPlaying)
 	{
 		// If we are on display then see if we should start the video
-		if (show && !mVideoPath.empty())
+		if (show && !mVideoPath.empty() && !mPlaybackFinished)
 		{
 			startVideoWithDelay();
 		}
@@ -329,6 +379,12 @@ void VideoComponent::manageState()
 
 void VideoComponent::onShow()
 {
+	if (!mShowing)
+	{
+		mCompletedIterations = 0;
+		mPlaybackFinished = false;
+	}
+
 	mShowing = true;
 	manageState();
 }
@@ -353,6 +409,13 @@ void VideoComponent::onScreenSaverDeactivate()
 
 void VideoComponent::topWindow(bool isTop)
 {
+	// Re-entering the active window starts a fresh preview.
+	if (isTop && mDisable)
+	{
+		mCompletedIterations = 0;
+		mPlaybackFinished = false;
+	}
+
 	mDisable = !isTop;
 	manageState();
 }

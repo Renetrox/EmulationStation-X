@@ -237,9 +237,17 @@ void VideoVlcComponent::handleLooping()
 		libvlc_state_t state = libvlc_media_player_get_state(mMediaPlayer);
 		if (state == libvlc_Ended)
 		{
-			setMuteMode();
-			libvlc_media_player_set_media(mMediaPlayer, mMedia);
-			libvlc_media_player_play(mMediaPlayer);
+			if (completePlaybackIteration())
+			{
+				setMuteMode();
+				libvlc_media_player_set_media(mMediaPlayer, mMedia);
+				libvlc_media_player_play(mMediaPlayer);
+			}
+			else
+			{
+				mPlaybackFinished = true;
+				stopVideo();
+			}
 		}
 	}
 }
