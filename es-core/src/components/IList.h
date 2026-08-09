@@ -231,10 +231,24 @@ protected:
 		return (prevCursor != mCursor);
 	}
 
+	// Permite que componentes derivados cambien el ritmo de repetición sin
+	// alterar el comportamiento por defecto de las listas clásicas.
+	virtual const ScrollTierList& getScrollTierList() const
+	{
+		return mTierList;
+	}
+
 	void listUpdate(int deltaTime)
 	{
+		const ScrollTierList& tierList = getScrollTierList();
+
+		// Si el estilo cambia mientras la vista está activa, mantener el índice
+		// de tier dentro del rango válido.
+		if (mScrollTier >= tierList.count)
+			mScrollTier = tierList.count - 1;
+
 		// update the title overlay opacity
-		const int dir = (mScrollTier >= mTierList.count - 1) ? 1 : -1; // fade in if scroll tier is >= 1, otherwise fade out
+		const int dir = (mScrollTier >= tierList.count - 1) ? 1 : -1; // fade in if scroll tier is >= 1, otherwise fade out
 		int op = mTitleOverlayOpacity + deltaTime*dir; // we just do a 1-to-1 time -> opacity, no scaling
 		if(op >= 255)
 			mTitleOverlayOpacity = 255;
@@ -252,7 +266,7 @@ protected:
 		// we delay scrolling until after scroll tier has updated so isScrolling() returns accurately during onCursorChanged callbacks
 		// we don't just do scroll tier first because it would not catch the scrollDelay == tier length case
 		bool shouldScroll = false;
-		const int scrollDelay = mTierList.tiers[mScrollTier].scrollDelay;
+		const int scrollDelay = tierList.tiers[mScrollTier].scrollDelay;
 		if(scrollDelay > 0 && mScrollCursorAccumulator >= scrollDelay)
 		{
 			// Conservar solo la fracción restante. No recuperar varios pasos
@@ -262,9 +276,9 @@ protected:
 		}
 
 		// are we ready to go even FASTER?
-		while(mScrollTier < mTierList.count - 1 && mScrollTierAccumulator >= mTierList.tiers[mScrollTier].length)
+		while(mScrollTier < tierList.count - 1 && mScrollTierAccumulator >= tierList.tiers[mScrollTier].length)
 		{
-			mScrollTierAccumulator -= mTierList.tiers[mScrollTier].length;
+			mScrollTierAccumulator -= tierList.tiers[mScrollTier].length;
 			mScrollTier++;
 		}
 

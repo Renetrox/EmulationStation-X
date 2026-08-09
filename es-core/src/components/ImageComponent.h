@@ -89,6 +89,7 @@ void resetFrameAnimation();
 	Vector2f getSize() const override;
 
 	bool hasImage();
+	inline bool getScrollFadeIn() const { return mScrollFadeIn; }
 
 	void render(const Transform4x4f& parentTrans) override;
 
@@ -134,6 +135,7 @@ private:
 	bool mFading;
 	bool mForceLoad;
 	bool mDynamic;
+	bool mScrollFadeIn;
 	bool mRotateByTargetSize;
 
 	Vector2f mTopLeftCrop;

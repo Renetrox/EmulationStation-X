@@ -34,6 +34,7 @@ ImageComponent::ImageComponent(Window* window, bool forceLoad, bool dynamic) :
 	mFading(false),
 	mForceLoad(forceLoad),
 	mDynamic(dynamic),
+	mScrollFadeIn(false),
 	mRotateByTargetSize(false),
 	mTopLeftCrop(0.0f, 0.0f),
 	mBottomRightCrop(1.0f, 1.0f),
@@ -698,6 +699,11 @@ void ImageComponent::applyTheme(
 
 	if (!elem)
 		return;
+
+	// ES-DE style: optional short fade-in when game media changes.
+	mScrollFadeIn =
+		elem->has("scrollFadeIn") &&
+		elem->get<bool>("scrollFadeIn");
 
 	Vector2f scale =
 		getParent() ?

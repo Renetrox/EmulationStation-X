@@ -170,6 +170,16 @@ protected:
 			sound->play();
 	}
 
+	// En modo carrusel usamos el ritmo SLOW de ES-DE (500 ms iniciales,
+	// luego 200 ms entre pasos). Las textlists normales conservan QUICK.
+	const ScrollTierList& getScrollTierList() const override
+	{
+		if (isCarouselMode())
+			return LIST_SCROLL_STYLE_SLOW;
+
+		return IList<TextListData, T>::getScrollTierList();
+	}
+
 	virtual void onCursorChanged(const CursorState& state) override;
 
 private:

@@ -357,6 +357,39 @@ void VideoGameListView::updateInfoPanel()
 		mTexture.setImage(file->getTexturePath());
 		mFanart.setImage(file->getFanartPath());
 
+		// ES-DE style scrollFadeIn:
+		// soften individual game-media changes from 50% to 100% opacity
+		// over 325 ms. Disabled by default and enabled per image in the theme.
+		ImageComponent* scrollFadeImages[] = {
+			&mBackground,
+			&mThumbnail,
+			&mMarquee,
+			&mImage,
+			&mCover,
+			&mScreenshot,
+			&mWheel,
+			&mTexture,
+			&mFanart
+		};
+
+		for (ImageComponent* image : scrollFadeImages)
+		{
+			if (!image->getScrollFadeIn() || !image->hasImage())
+				continue;
+
+			auto func = [image](float t)
+			{
+				image->setOpacity(
+					(unsigned char)(Math::lerp(0.5f, 1.0f, t) * 255.0f));
+			};
+
+			image->setAnimation(
+				new LambdaAnimation(func, 325),
+				0,
+				nullptr,
+				false);
+		}
+
 		mDescription.setText(file->metadata.get("desc"));
 		mDescContainer.reset();
 
