@@ -26,7 +26,6 @@ namespace PlatformIds
 		"c64", // commodore 64
 		"daphne",
 		"intellivision",
-		"j2me",
 		"macintosh",
 		"xbox",
 		"xbox360",

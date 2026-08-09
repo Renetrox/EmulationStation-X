@@ -27,6 +27,7 @@ namespace PlatformIds
 		COMMODORE_64,
 		DAPHNE,
 		INTELLIVISION,
+		J2ME,
 		MAC_OS,
 		XBOX,
 		XBOX_360,

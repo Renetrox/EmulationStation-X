@@ -13,7 +13,6 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
-#include <cstdlib>
 #include <regex>
 
 using namespace PlatformIds;
@@ -482,39 +481,13 @@ void ScreenScraperRequest::processGame(const pugi::xml_document& xmldoc, std::ve
 		LOG(LogDebug) << "Release Date (unparsed): " << _date;
 
 		// Date can be YYYY-MM-DD or just YYYY.
-		// Do not feed malformed ScreenScraper values to the permissive
-		// ES date parser, otherwise they can become absurd years.
-		bool validDate = false;
-
-		if (std::regex_match(_date, std::regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")))
+		if (_date.length() > 4)
 		{
-			const int year  = std::atoi(_date.substr(0, 4).c_str());
-			const int month = std::atoi(_date.substr(5, 2).c_str());
-			const int day   = std::atoi(_date.substr(8, 2).c_str());
-
-			if (year >= 1900 && year <= 2099 &&
-				month >= 1 && month <= 12 &&
-				day >= 1 && day <= 31)
-			{
-				result.mdl.set("releasedate",
-					Utils::Time::DateTime(Utils::Time::stringToTime(_date, "%Y-%m-%d")));
-				validDate = true;
-			}
-		}
-		else if (std::regex_match(_date, std::regex("^[0-9]{4}$")))
+			result.mdl.set("releasedate", Utils::Time::DateTime(Utils::Time::stringToTime(_date, "%Y-%m-%d")));
+		} else if (_date.length() > 0)
 		{
-			const int year = std::atoi(_date.c_str());
-
-			if (year >= 1900 && year <= 2099)
-			{
-				result.mdl.set("releasedate",
-					Utils::Time::DateTime(Utils::Time::stringToTime(_date, "%Y")));
-				validDate = true;
-			}
+			result.mdl.set("releasedate", Utils::Time::DateTime(Utils::Time::stringToTime(_date, "%Y")));
 		}
-
-		if (!validDate && !_date.empty())
-			LOG(LogWarning) << "ScreenScraper: ignoring malformed release date: " << _date;
 
 		LOG(LogDebug) << "Release Date (parsed): " << result.mdl.get("releasedate");
 
@@ -547,56 +520,46 @@ void ScreenScraperRequest::processGame(const pugi::xml_document& xmldoc, std::ve
 		{
 			pugi::xml_node art = pugi::xml_node(NULL);
 
-			auto findMedia = [&](const std::string& type) -> pugi::xml_node
+			// Do an XPath query for media[type='$media_type'], then filter by region
+			pugi::xpath_node_set results = media_list.select_nodes(
+				(static_cast<std::string>("media[@type='") + ssConfig.media_name + "']").c_str()
+			);
+
+			if (results.size())
 			{
-				pugi::xpath_node_set mediaResults = media_list.select_nodes(
-					(static_cast<std::string>("media[@type='") + type + "']").c_str()
-				);
-
-				if (!mediaResults.size())
-					return pugi::xml_node(NULL);
-
-				// First try the preferred regions.
-				for (const auto& wantedRegion :
-					 std::vector<std::string>{ region, "wor", "us", "cus", "jp", "eu" })
+				// Region fallback: región actual, WOR(LD), US, CUS(TOM?), JP, EU
+				for (auto _region : std::vector<std::string>{ region, "wor", "us", "cus", "jp", "eu" })
 				{
-					for (auto node : mediaResults)
+					if (art)
+						break;
+
+					for (auto node : results)
 					{
-						if (node.node().attribute("region").value() == wantedRegion)
-							return node.node();
+						if (node.node().attribute("region").value() == _region)
+						{
+							art = node.node();
+							break;
+						}
 					}
 				}
-
-				// If media exists in another region, use it rather than
-				// leaving the result without artwork.
-				return mediaResults.first().node();
-			};
-
-			// Keep the configured artwork as first choice.
-			art = findMedia(ssConfig.media_name);
-
-			// J2ME and some less complete systems often have screenshots
-			// but no box-2D artwork.
-			if (!art && ssConfig.media_name != "ss")
-				art = findMedia("ss");
-
-			if (!art && ssConfig.media_name != "sstitle")
-				art = findMedia("sstitle");
+			} // results
 
 			if (art)
 			{
+				// Fix espacios en la URL
 				result.imageUrl = Utils::String::replace(art.text().get(), " ", "%20");
 
+				// Tipo de imagen
 				std::string media_type = art.attribute("format").value();
 				if (!media_type.empty())
 					result.imageType = "." + media_type;
 
+				// Thumbnail pequeño para el scraper
 				result.thumbnailUrl = result.imageUrl + "&maxheight=250";
+			}else{
+				LOG(LogDebug) << "Failed to find media XML node with name=" << ssConfig.media_name;
 			}
-			else
-			{
-				LOG(LogDebug) << "ScreenScraper: no usable image media found";
-			}
+
 		}
 
 		out_results.push_back(result);
