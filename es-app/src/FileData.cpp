@@ -251,7 +251,7 @@ std::string FileData::getBackgroundCandidate() const
 	if (!screenshot.empty())
 		return screenshot;
 
-	return "";
+	return getUniversalScreenshotCandidate();
 }
 
 std::string FileData::getArtBySource(const std::string& source) const
