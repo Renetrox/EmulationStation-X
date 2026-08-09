@@ -17,6 +17,33 @@
 ## Multilingual scraper
 <img width="1366" height="768" alt="Captura de pantalla_2025-12-01_12-24-53" src="https://github.com/user-attachments/assets/83dedb20-1c32-432b-8495-24d2f6fca3a7" />
 
+### ☕ Native Java ME (J2ME) Scraping
+
+ES-X includes dedicated scraping support for Java ME games through the
+internal ScreenScraper integration.
+
+Unlike traditional filename-based scraping, ES-X can inspect the JAR package
+and read `MIDlet-Name` directly from `META-INF/MANIFEST.MF` to identify the
+actual game title.
+
+This is especially useful for J2ME collections, where downloaded games often
+contain device names, screen resolutions, database IDs, language tags, or
+repacker information in their filenames.
+
+Features include:
+
+- Native J2ME platform mapping to ScreenScraper
+- Automatic `MIDlet-Name` detection from JAR manifests
+- Cleaned filename fallback for renamed or repacked games
+- Artwork fallback when traditional box art is unavailable
+- Protection against malformed release dates
+- No requirement to manually rename the original JAR files
+
+Because Java ME preservation databases are incomplete, not every title can be
+matched automatically, but ES-X significantly improves identification of
+real-world J2ME collections.
+<img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/f3bb5625-2bb8-4299-b333-b0c97c9b7537" />
+
 ## Example Theme Options
 <img width="1366" height="768" alt="Captura de pantalla_2025-12-05_07-07-19" src="https://github.com/user-attachments/assets/06f4504c-ea88-4088-953c-7b61d3726ca7" />
 
@@ -199,7 +226,14 @@ Beautiful themes should not require engine hacks.
 | Audio ducking | ✅ Stable |
 | Controller overlay | 🔄 Planned |
 | Network indicator |  ✅ Stable |
-
+| Native J2ME scraping | ✅ Available |
+| MIDlet manifest detection | ✅ Available |
+| Theme Browser | ✅ Stable |
+| System descriptions / Info viewer | ✅ Stable |
+| Quick System Select | ✅ Stable |
+| Integrated Skyscraper interface | ✅ Available |
+| Gamelist carousel | ✅ Stable |
+| Enhanced Grid layouts | ✅ Stable |
 Core systems are stable for daily use. New capabilities are introduced carefully to preserve compatibility and performance.
 
 ## Installation
