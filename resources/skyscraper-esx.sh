@@ -434,14 +434,132 @@ run_gather() {
         --flags "${flags}"
 }
 
+optimize_fanart() {
+    local fanart_dir="${ROMDIR}/${SYSTEM_NAME}/media/fanart"
+    local identify_bin=""
+    local convert_bin=""
+    local max_w=1280
+    local max_h=720
+    local jpg_quality=85
+    local processed=0
+    local skipped=0
+    local failed=0
+
+    [[ -d "${fanart_dir}" ]] || {
+        echo "FANART_OPTIMIZE: no fanart directory: ${fanart_dir}"
+        return 0
+    }
+
+    if command -v magick >/dev/null 2>&1; then
+        identify_bin="magick identify"
+        convert_bin="magick"
+    elif command -v identify >/dev/null 2>&1 && command -v convert >/dev/null 2>&1; then
+        identify_bin="identify"
+        convert_bin="convert"
+    else
+        echo "FANART_OPTIMIZE: ImageMagick not found; skipping fanart optimization."
+        return 0
+    fi
+
+    echo "FANART_OPTIMIZE: limiting fanart to ${max_w}x${max_h} (JPEG quality ${jpg_quality})."
+
+    while IFS= read -r -d '' image; do
+        local dims=""
+        local width=""
+        local height=""
+        local tmp=""
+        local ext=""
+
+        if [[ "${identify_bin}" == "magick identify" ]]; then
+            dims="$(magick identify -format '%w %h' "${image}" 2>/dev/null || true)"
+        else
+            dims="$(identify -format '%w %h' "${image}" 2>/dev/null || true)"
+        fi
+
+        read -r width height <<< "${dims}"
+
+        if [[ ! "${width}" =~ ^[0-9]+$ || ! "${height}" =~ ^[0-9]+$ ]]; then
+            echo "FANART_OPTIMIZE: could not read dimensions: ${image}"
+            failed=$((failed + 1))
+            continue
+        fi
+
+        # Avoid recompressing already-small fanart on every gamelist generation.
+        if (( width <= max_w && height <= max_h )); then
+            skipped=$((skipped + 1))
+            continue
+        fi
+
+        ext="${image##*.}"
+        ext="${ext,,}"
+        tmp="${image}.esx-tmp.${ext}"
+
+        rm -f "${tmp}"
+
+        if [[ "${convert_bin}" == "magick" ]]; then
+            if [[ "${ext}" == "jpg" || "${ext}" == "jpeg" ]]; then
+                if magick "${image}" -auto-orient -resize "${max_w}x${max_h}>" -strip -quality "${jpg_quality}" "${tmp}" 2>/dev/null; then
+                    mv -f "${tmp}" "${image}"
+                    processed=$((processed + 1))
+                else
+                    rm -f "${tmp}"
+                    echo "FANART_OPTIMIZE: failed: ${image}"
+                    failed=$((failed + 1))
+                fi
+            else
+                if magick "${image}" -auto-orient -resize "${max_w}x${max_h}>" -strip "${tmp}" 2>/dev/null; then
+                    mv -f "${tmp}" "${image}"
+                    processed=$((processed + 1))
+                else
+                    rm -f "${tmp}"
+                    echo "FANART_OPTIMIZE: failed: ${image}"
+                    failed=$((failed + 1))
+                fi
+            fi
+        else
+            if [[ "${ext}" == "jpg" || "${ext}" == "jpeg" ]]; then
+                if convert "${image}" -auto-orient -resize "${max_w}x${max_h}>" -strip -quality "${jpg_quality}" "${tmp}" 2>/dev/null; then
+                    mv -f "${tmp}" "${image}"
+                    processed=$((processed + 1))
+                else
+                    rm -f "${tmp}"
+                    echo "FANART_OPTIMIZE: failed: ${image}"
+                    failed=$((failed + 1))
+                fi
+            else
+                if convert "${image}" -auto-orient -resize "${max_w}x${max_h}>" -strip "${tmp}" 2>/dev/null; then
+                    mv -f "${tmp}" "${image}"
+                    processed=$((processed + 1))
+                else
+                    rm -f "${tmp}"
+                    echo "FANART_OPTIMIZE: failed: ${image}"
+                    failed=$((failed + 1))
+                fi
+            fi
+        fi
+    done < <(
+        find "${fanart_dir}" -type f \
+            \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \) \
+            -print0 2>/dev/null
+    )
+
+    echo "FANART_OPTIMIZE: resized=${processed} already_ok=${skipped} failed=${failed}"
+    return 0
+}
+
 run_generate() {
     local flags="$1"
+
     "${SKY_BIN}" \
         -p "${SYSTEM_NAME}" \
         -g "${ROMDIR}/${SYSTEM_NAME}" \
         -o "${ROMDIR}/${SYSTEM_NAME}/media" \
         --lang "${LANG_CODE}" \
         --flags "${flags}"
+
+    # ES-X uses media/fanart directly. Keep oversized backgrounds from causing
+    # unnecessary GPU/memory pressure when browsing the game list.
+    optimize_fanart
 }
 
 maintenance_size() {
