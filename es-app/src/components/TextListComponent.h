@@ -903,8 +903,42 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 			entry.data.carouselImage->uncrop();
 
+			// ES-X:
+			// El origin de la imagen sigue la alineación real del carrusel,
+			// como en CarouselComponent/ES-DE. De esta forma el escalado
+			// conserva el borde de anclaje: left crece hacia la derecha,
+			// right hacia la izquierda, top hacia abajo y bottom hacia arriba.
+			float imageOriginX = 0.5f;
+			float imageOriginY = 0.5f;
 			float imagePosX = std::round(drawX + (scaledW * 0.5f));
 			float imagePosY = std::round(drawY + (scaledH * 0.5f));
+
+			if (verticalCarousel)
+			{
+				if (mCarouselLogoAlignment == CAROUSEL_ALIGN_LEFT)
+				{
+					imageOriginX = 0.0f;
+					imagePosX = std::round(drawX);
+				}
+				else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_RIGHT)
+				{
+					imageOriginX = 1.0f;
+					imagePosX = std::round(drawX + scaledW);
+				}
+			}
+			else
+			{
+				if (mCarouselLogoAlignment == CAROUSEL_ALIGN_TOP)
+				{
+					imageOriginY = 0.0f;
+					imagePosY = std::round(drawY);
+				}
+				else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_BOTTOM)
+				{
+					imageOriginY = 1.0f;
+					imagePosY = std::round(drawY + scaledH);
+				}
+			}
 
 			if (hasFallbackImage)
 			{
@@ -924,7 +958,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				entry.data.carouselImage->setMaxSize(visualImageW, visualImageH);
 			}
 
-			entry.data.carouselImage->setOrigin(0.5f, 0.5f);
+			entry.data.carouselImage->setOrigin(imageOriginX, imageOriginY);
 			entry.data.carouselImage->setPosition(imagePosX, imagePosY, 0.0f);
 			entry.data.carouselImage->setOpacity((unsigned char)(opacity01 * 255.0f));
 
