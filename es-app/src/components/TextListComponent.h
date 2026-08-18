@@ -904,41 +904,15 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			entry.data.carouselImage->uncrop();
 
 			// ES-X:
-			// El origin de la imagen sigue la alineación real del carrusel,
-			// como en CarouselComponent/ES-DE. De esta forma el escalado
-			// conserva el borde de anclaje: left crece hacia la derecha,
-			// right hacia la izquierda, top hacia abajo y bottom hacia arriba.
-			float imageOriginX = 0.5f;
-			float imageOriginY = 0.5f;
-			float imagePosX = std::round(drawX + (scaledW * 0.5f));
-			float imagePosY = std::round(drawY + (scaledH * 0.5f));
-
-			if (verticalCarousel)
-			{
-				if (mCarouselLogoAlignment == CAROUSEL_ALIGN_LEFT)
-				{
-					imageOriginX = 0.0f;
-					imagePosX = std::round(drawX);
-				}
-				else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_RIGHT)
-				{
-					imageOriginX = 1.0f;
-					imagePosX = std::round(drawX + scaledW);
-				}
-			}
-			else
-			{
-				if (mCarouselLogoAlignment == CAROUSEL_ALIGN_TOP)
-				{
-					imageOriginY = 0.0f;
-					imagePosY = std::round(drawY);
-				}
-				else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_BOTTOM)
-				{
-					imageOriginY = 1.0f;
-					imagePosY = std::round(drawY + scaledH);
-				}
-			}
+			// drawX/drawY ya incorporan logoAlignment (left/right/top/bottom).
+			// La imagen interna, en cambio, debe centrarse dentro de esa caja
+			// visual. Esto desacopla el anclaje del tile del ajuste contain/cover:
+			// un fanart en cover se recorta desde el centro y un fallback/contain
+			// queda centrado aunque su tamaño real sea menor que scaledW/scaledH.
+			const float imageOriginX = 0.5f;
+			const float imageOriginY = 0.5f;
+			const float imagePosX = std::round(drawX + (scaledW * 0.5f));
+			const float imagePosY = std::round(drawY + (scaledH * 0.5f));
 
 			if (hasFallbackImage)
 			{
@@ -965,11 +939,32 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			Transform4x4f imageTrans = trans;
 
 			// ES-X:
-			// No agregamos un clipRect extra. ImageComponent ya resuelve cover
-			// mediante setMinSize()+crop interno; el clip adicional podía
-			// comportarse distinto en GLES/Panfrost. Esto imita mejor a un
-			// <image> normal del theme, como md_thumbnail.
+			// En modo cover, setMinSize() garantiza que la imagen cubra toda
+			// la caja, pero la textura puede sobresalir por el eje excedente.
+			// Recortamos solo el render de la imagen a su caja visual; el marco
+			// se dibuja después y queda fuera de este clip.
+			const bool clipCoverImage = !hasFallbackImage && mCarouselImageFit == "cover";
+
+			if (clipCoverImage)
+			{
+				const float clipX = imagePosX - (visualImageW * imageOriginX);
+				const float clipY = imagePosY - (visualImageH * imageOriginY);
+
+				Vector3f clipPos(clipX, clipY, 0.0f);
+				clipPos = imageTrans * clipPos;
+
+				Vector3f clipDim(visualImageW, visualImageH, 0.0f);
+				clipDim = imageTrans * clipDim - imageTrans.translation();
+
+				Renderer::pushClipRect(
+					Vector2i((int)std::round(clipPos.x()), (int)std::round(clipPos.y())),
+					Vector2i((int)std::round(clipDim.x()), (int)std::round(clipDim.y())));
+			}
+
 			entry.data.carouselImage->render(imageTrans);
+
+			if (clipCoverImage)
+				Renderer::popClipRect();
 
 			// ES-X:
 			// Borde/overlay opcional para imagen de tarjeta en modo carrusel.
@@ -996,6 +991,11 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				// imagen interna ni desde un clip.
 				float fixedBorderW = Math::max(1.0f, currentCardW * borderScale);
 				float fixedBorderH = Math::max(1.0f, currentCardH * borderScale);
+
+				// ES-X:
+				// El marco usa el centro de la misma caja visual. logoAlignment ya
+				// fue resuelto al calcular drawX/drawY, así que no debe alterar
+				// el origin del PNG del borde ni el recorte interno de la imagen.
 				border->setOrigin(0.5f, 0.5f);
 				border->setPosition(imagePosX, imagePosY, 0.0f);
 
