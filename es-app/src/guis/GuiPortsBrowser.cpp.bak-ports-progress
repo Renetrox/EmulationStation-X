@@ -1,0 +1,871 @@
+// es-app/src/guis/GuiPortsBrowser.cpp
+#include "guis/GuiPortsBrowser.h"
+
+#include "Log.h"
+#include "Window.h"
+#include "resources/Font.h"
+#include "utils/FileSystemUtil.h"
+#include "renderers/Renderer.h"
+#include "components/BusyComponent.h"
+#include "guis/GuiInfoPopup.h"
+#include "guis/GuiMsgBox.h"
+#include "LocaleES.h"
+
+#include <algorithm>
+#include <cstdlib>
+#include <fstream>
+#include <sstream>
+#include <unistd.h>
+#include <cctype>
+#include <signal.h>
+#include <fcntl.h>
+#include <cstring>
+#include <chrono>
+
+static inline std::string trPorts(const std::string& key)
+{
+    return LocaleES::getInstance().translate(key);
+}
+
+static inline std::string trimPorts(const std::string& s)
+{
+    size_t b = s.find_first_not_of(" \t\r\n");
+    if (b == std::string::npos)
+        return "";
+
+    size_t e = s.find_last_not_of(" \t\r\n");
+    return s.substr(b, (e - b) + 1);
+}
+
+static inline std::string ellipsizePorts(const std::string& s, size_t maxLen)
+{
+    if (s.size() <= maxLen)
+        return s;
+
+    if (maxLen <= 3)
+        return s.substr(0, maxLen);
+
+    return s.substr(0, maxLen - 3) + "...";
+}
+
+static inline std::string quotePorts(const std::string& s)
+{
+    std::string out = "'";
+    for (char c : s)
+    {
+        if (c == '\'')
+            out += "'\\''";
+        else
+            out += c;
+    }
+    out += "'";
+    return out;
+}
+
+static bool parseShellAssignment(const std::string& rawLine,
+                                 const std::string& key,
+                                 std::string& value)
+{
+    std::string line = trimPorts(rawLine);
+    const std::string prefix = key + "=";
+
+    if (line.compare(0, prefix.size(), prefix) != 0)
+        return false;
+
+    value = trimPorts(line.substr(prefix.size()));
+
+    if (value.size() >= 2)
+    {
+        const char first = value.front();
+        const char last = value.back();
+
+        if ((first == '"' && last == '"') ||
+            (first == '\'' && last == '\''))
+        {
+            value = value.substr(1, value.size() - 2);
+        }
+    }
+
+    return true;
+}
+
+GuiPortsBrowser::GuiPortsBrowser(Window* window)
+    : GuiComponent(window)
+    , mFrame(window)
+    , mList(window)
+    , mHeader(window, trPorts("RETROPIE PORTS"), Font::get(FONT_SIZE_MEDIUM), 0xFFFFFFFF, ALIGN_CENTER)
+    , mSubHeader(window, trPorts("SELECT PORT TO INSTALL / UPDATE / REMOVE"),
+                 Font::get(FONT_SIZE_SMALL), 0x9A9A9AFF, ALIGN_CENTER)
+    , mFooter(window, "", Font::get(FONT_SIZE_SMALL), 0xFFFFFFFF, ALIGN_CENTER)
+    , mLastSelectedIndex(0)
+    , mInnerX(0.0f)
+    , mInnerY(0.0f)
+    , mInnerW(0.0f)
+    , mInnerH(0.0f)
+    , mBusy(nullptr)
+    , mBusyVisible(false)
+    , mJobRunning(false)
+    , mJobDone(false)
+    , mJobOk(false)
+    , mJobRefreshPorts(false)
+    , mJobDoneMsg("")
+{
+    const std::string home = Utils::FileSystem::getHomePath();
+    mLogPath = home + "/.emulationstation/esx/ports-browser.log";
+
+    const float sw = (float)Renderer::getScreenWidth();
+    const float sh = (float)Renderer::getScreenHeight();
+
+    const float frameW = sw * 0.64f;
+    const float frameH = sh * 0.82f;
+    const float frameX = (sw - frameW) * 0.5f;
+    const float frameY = (sh - frameH) * 0.5f;
+
+    mFrame.setImagePath(":/frame_dark.png");
+    mFrame.setPosition(Vector3f(frameX, frameY, 0.0f));
+    mFrame.setSize(Vector2f(frameW, frameH));
+    mFrame.setCornerSize(Vector2f(16.0f, 16.0f));
+    mFrame.setOpacity(0.96f);
+
+    const float padX = sw * 0.018f;
+    const float padY = sh * 0.018f;
+
+    mInnerX = frameX + padX;
+    mInnerY = frameY + padY;
+    mInnerW = frameW - (padX * 2.0f);
+    mInnerH = frameH - (padY * 2.0f);
+
+    // More separation between title/subtitle, closer to Batocera's dialog.
+    mHeader.setPosition(mInnerX, mInnerY + 2.0f);
+    mHeader.setSize(mInnerW, 30.0f);
+
+    mSubHeader.setPosition(mInnerX, mInnerY + 36.0f);
+    mSubHeader.setSize(mInnerW, 18.0f);
+
+    // Give the list breathing room and keep the last row clear of the footer.
+    const float topPad = 70.0f;
+    const float bottomPad = 52.0f;
+
+    mList.setPosition(mInnerX, mInnerY + topPad);
+    mList.setSize(mInnerW, mInnerH - topPad - bottomPad);
+
+    mFooter.setPosition(mInnerX, mInnerY + mInnerH - 31.0f);
+    mFooter.setSize(mInnerW, 24.0f);
+
+    mBusy.reset(new BusyComponent(mWindow));
+    mBusy->setPosition(Vector3f(0.0f, 0.0f, 0.0f));
+    mBusy->setSize(Vector2f(sw, sh));
+    addChild(mBusy.get());
+    setBusyVisible(false);
+
+    loadPorts();
+    rebuildList();
+
+    mList.onFocusGained();
+    updateFooter();
+    updateHelpPrompts();
+}
+
+GuiPortsBrowser::~GuiPortsBrowser()
+{
+    if (mJobThread.joinable())
+        mJobThread.join();
+}
+
+void GuiPortsBrowser::setBusyVisible(bool visible)
+{
+    mBusyVisible = visible;
+    if (mBusy)
+        mBusy->setVisible(visible);
+}
+
+void GuiPortsBrowser::showPopup(const std::string& msg, int durationMs)
+{
+    mWindow->setInfoPopup(new GuiInfoPopup(mWindow, msg, durationMs));
+}
+
+bool GuiPortsBrowser::findRetroPieSetup()
+{
+    const std::string home = Utils::FileSystem::getHomePath();
+
+    std::vector<std::string> candidates;
+
+    const char* env = std::getenv("RETROPIE_SETUP_DIR");
+    if (env && *env)
+        candidates.push_back(env);
+
+    candidates.push_back(home + "/RetroPie-Setup");
+    candidates.push_back(home + "/retropie-setup");
+    candidates.push_back("/opt/retropie-setup");
+
+    for (const std::string& dir : candidates)
+    {
+        const std::string packages = dir + "/retropie_packages.sh";
+        const std::string ports = dir + "/scriptmodules/ports";
+
+        if (Utils::FileSystem::isRegularFile(packages) &&
+            Utils::FileSystem::isDirectory(ports))
+        {
+            mRetroPieSetupDir = dir;
+            mPackagesScript = packages;
+            mPortsModulesDir = ports;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool GuiPortsBrowser::readModuleMetadata(const std::string& path,
+                                         PortEntry& entry) const
+{
+    std::ifstream file(path);
+    if (!file.is_open())
+        return false;
+
+    std::string line;
+
+    while (std::getline(file, line))
+    {
+        std::string value;
+
+        if (parseShellAssignment(line, "rp_module_id", value))
+            entry.id = value;
+        else if (parseShellAssignment(line, "rp_module_desc", value))
+            entry.description = value;
+        else if (parseShellAssignment(line, "rp_module_section", value))
+            entry.section = value;
+        else if (parseShellAssignment(line, "rp_module_flags", value))
+            entry.flags = value;
+    }
+
+    return !entry.id.empty();
+}
+
+int GuiPortsBrowser::sectionRank(const std::string& section) const
+{
+    if (section == "main") return 0;
+    if (section == "opt") return 1;
+    if (section == "exp") return 2;
+    return 3;
+}
+
+std::string GuiPortsBrowser::sectionName(const std::string& section) const
+{
+    if (section == "main") return trPorts("MAIN");
+    if (section == "opt") return trPorts("OPTIONAL");
+    if (section == "exp") return trPorts("EXPERIMENTAL");
+    if (section.empty()) return trPorts("OTHER");
+
+    std::string name = section;
+    std::transform(name.begin(), name.end(), name.begin(),
+        [](unsigned char c) { return (char)std::toupper(c); });
+    return name;
+}
+
+bool GuiPortsBrowser::loadPorts()
+{
+    mPorts.clear();
+
+    if (!findRetroPieSetup())
+        return false;
+
+    // RetroPie-Setup registra módulos tanto desde:
+    //   scriptmodules/ports
+    // como desde repositorios externos:
+    //   ext/*/scriptmodules/ports
+    //
+    // De este modo también aparecen RetroPie-Extra y cualquier otro
+    // repositorio compatible con el mecanismo ext/ de RetroPie-Setup.
+    std::vector<std::string> portDirs;
+    portDirs.push_back(mPortsModulesDir);
+
+    const std::string extDir = mRetroPieSetupDir + "/ext";
+    if (Utils::FileSystem::isDirectory(extDir))
+    {
+        Utils::FileSystem::stringList vendors =
+            Utils::FileSystem::getDirContent(extDir);
+
+        for (const std::string& vendorPath : vendors)
+        {
+            if (!Utils::FileSystem::isDirectory(vendorPath))
+                continue;
+
+            const std::string externalPorts =
+                vendorPath + "/scriptmodules/ports";
+
+            if (Utils::FileSystem::isDirectory(externalPorts))
+                portDirs.push_back(externalPorts);
+        }
+    }
+
+    // Si dos repositorios definen el mismo id, dejamos una sola entrada.
+    // La última definición encontrada reemplaza la anterior.
+    for (const std::string& portDir : portDirs)
+    {
+        Utils::FileSystem::stringList files =
+            Utils::FileSystem::getDirContent(portDir);
+
+        for (const std::string& path : files)
+        {
+            if (!Utils::FileSystem::isRegularFile(path))
+                continue;
+
+            if (Utils::FileSystem::getExtension(path) != ".sh")
+                continue;
+
+            PortEntry entry;
+            if (!readModuleMetadata(path, entry))
+                continue;
+
+            entry.installed =
+                Utils::FileSystem::isDirectory("/opt/retropie/ports/" + entry.id);
+
+            auto existing = std::find_if(
+                mPorts.begin(), mPorts.end(),
+                [&entry](const PortEntry& p)
+                {
+                    return p.id == entry.id;
+                });
+
+            if (existing != mPorts.end())
+                *existing = entry;
+            else
+                mPorts.push_back(entry);
+        }
+    }
+
+    std::sort(mPorts.begin(), mPorts.end(),
+        [this](const PortEntry& a, const PortEntry& b)
+        {
+            const int sa = sectionRank(a.section);
+            const int sb = sectionRank(b.section);
+
+            if (sa != sb)
+                return sa < sb;
+
+            const std::string aa =
+                a.description.empty() ? a.id : a.description;
+            const std::string bb =
+                b.description.empty() ? b.id : b.description;
+
+            return aa < bb;
+        });
+
+    if (mPorts.empty())
+        mLastSelectedIndex = 0;
+    else if (mLastSelectedIndex >= (int)mPorts.size())
+        mLastSelectedIndex = (int)mPorts.size() - 1;
+
+    return !mPorts.empty();
+}
+
+void GuiPortsBrowser::rebuildList()
+{
+    mList.clear();
+
+    if (mPorts.empty())
+    {
+        ComponentListRow row;
+
+        const std::string msg = mRetroPieSetupDir.empty()
+            ? trPorts("RETROPIE-SETUP NOT FOUND.")
+            : trPorts("NO RETROPIE PORT MODULES FOUND.");
+
+        auto txt = std::make_shared<TextComponent>(
+            mWindow, msg,
+            Font::get(FONT_SIZE_MEDIUM),
+            0xFFFFFFFF,
+            ALIGN_LEFT);
+
+        row.addElement(txt, false);
+        mList.addRow(row, true);
+        return;
+    }
+
+    std::string previousSection;
+
+    for (int i = 0; i < (int)mPorts.size(); ++i)
+    {
+        const PortEntry& port = mPorts[i];
+        const std::string section = sectionName(port.section);
+
+        if (section != previousSection)
+        {
+            ComponentListRow headerRow;
+
+            auto header = std::make_shared<TextComponent>(
+                mWindow,
+                section,
+                Font::get(FONT_SIZE_SMALL),
+                0x8E8E8EFF,
+                ALIGN_LEFT);
+
+            headerRow.addElement(header, false);
+            mList.addRow(headerRow, false);
+
+            previousSection = section;
+        }
+
+        ComponentListRow row;
+
+        const std::string icon = port.installed ? "✓  " : "↓  ";
+
+        std::string title =
+            port.description.empty() ? port.id : port.description;
+
+        // Avoid long RetroPie descriptions running outside the panel.
+        title = ellipsizePorts(title, 62);
+
+        // Keep the secondary line user-facing. RetroPie flags such as !mali
+        // are useful internally, but make the browser look like a debug view.
+        // El glifo comunica el estado:
+        // ↓ disponible para instalar
+        // ✓ instalado
+        // ⟳ reservado para "actualización disponible"
+        std::string meta = port.id;
+
+        const std::string label = icon + title + "\n    " + meta;
+
+        auto txt = std::make_shared<TextComponent>(
+            mWindow,
+            label,
+            Font::get(FONT_SIZE_SMALL),
+            0xFFFFFFFF,
+            ALIGN_LEFT);
+
+        row.addElement(txt, false);
+
+        row.makeAcceptInputHandler([this, i]()
+        {
+            mLastSelectedIndex = i;
+            updateFooter();
+            updateHelpPrompts();
+        });
+
+        mList.addRow(row, (i == mLastSelectedIndex));
+    }
+
+    updateFooter();
+    updateHelpPrompts();
+}
+
+void GuiPortsBrowser::updateFooter()
+{
+    if (mPorts.empty())
+    {
+        mFooter.setText("B " + trPorts("BACK"));
+        return;
+    }
+
+    const PortEntry& port = mPorts[mLastSelectedIndex];
+
+    std::string footer = "A ";
+    footer += port.installed ? trPorts("UPDATE") : trPorts("INSTALL");
+
+    if (port.installed)
+        footer += "    X " + trPorts("REMOVE");
+
+    footer += "    Y " + trPorts("REFRESH") + "    B " + trPorts("BACK");
+    mFooter.setText(footer);
+}
+
+bool GuiPortsBrowser::canUseSudo() const
+{
+    if (geteuid() == 0)
+        return true;
+
+    return std::system("sudo -n true >/dev/null 2>&1") == 0;
+}
+
+int GuiPortsBrowser::runCmd(const std::string& cmd)
+{
+    LOG(LogInfo) << "GuiPortsBrowser detached cmd: " << cmd;
+
+    const std::string statusPath = mLogPath + ".status";
+    ::unlink(statusPath.c_str());
+
+    const std::string qStatus = quotePorts(statusPath);
+
+    const std::string worker =
+        "printf 'RUNNING\\n' > " + qStatus + "; "
+        "(" + cmd + "); "
+        "rc=$?; "
+        "if [ $rc -eq 0 ]; then "
+        "  printf 'SUCCESS\\n' > " + qStatus + "; "
+        "else "
+        "  printf 'ERROR:%s\\n' $rc > " + qStatus + "; "
+        "fi; "
+        "exit $rc";
+
+    pid_t first = ::fork();
+    if (first < 0)
+    {
+        LOG(LogError) << "GuiPortsBrowser: first fork() failed";
+        return 127;
+    }
+
+    if (first == 0)
+    {
+        pid_t second = ::fork();
+        if (second < 0)
+            _exit(127);
+
+        if (second > 0)
+            _exit(0);
+
+        sigset_t emptyMask;
+        sigemptyset(&emptyMask);
+        sigprocmask(SIG_SETMASK, &emptyMask, nullptr);
+
+        struct sigaction sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_handler = SIG_DFL;
+        sigemptyset(&sa.sa_mask);
+        sigaction(SIGCHLD, &sa, nullptr);
+
+        int nullFd = ::open("/dev/null", O_RDWR);
+        if (nullFd >= 0)
+        {
+            ::dup2(nullFd, STDIN_FILENO);
+            ::dup2(nullFd, STDOUT_FILENO);
+            ::dup2(nullFd, STDERR_FILENO);
+            if (nullFd > STDERR_FILENO)
+                ::close(nullFd);
+        }
+
+        ::execl("/bin/sh", "sh", "-c", worker.c_str(), (char*)nullptr);
+        _exit(127);
+    }
+
+    std::string status;
+
+    for (int i = 0; i < 50; ++i)
+    {
+        std::ifstream in(statusPath);
+        if (in.is_open())
+        {
+            std::getline(in, status);
+            status = trimPorts(status);
+            if (!status.empty())
+                break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    if (status.empty())
+    {
+        LOG(LogError) << "GuiPortsBrowser: detached worker did not start";
+        return 127;
+    }
+
+    const int maxPolls = 12 * 60 * 60 * 4;
+
+    for (int i = 0; i < maxPolls; ++i)
+    {
+        std::ifstream in(statusPath);
+        if (in.is_open())
+        {
+            std::getline(in, status);
+            status = trimPorts(status);
+
+            if (status == "SUCCESS")
+                return 0;
+
+            if (status.compare(0, 6, "ERROR:") == 0)
+            {
+                const int rc = std::atoi(status.substr(6).c_str());
+                return rc == 0 ? 1 : rc;
+            }
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    }
+
+    LOG(LogError) << "GuiPortsBrowser: detached worker timed out";
+    return 124;
+}
+
+bool GuiPortsBrowser::installOrUpdatePort(const PortEntry& port)
+{
+    if (mPackagesScript.empty())
+        return false;
+
+    Utils::FileSystem::createDirectory(
+        Utils::FileSystem::getParent(mLogPath));
+
+    const std::string cmd =
+        "sudo -n " + quotePorts(mPackagesScript) + " " +
+        quotePorts(port.id) + " _autoupdate_ >> " +
+        quotePorts(mLogPath) + " 2>&1";
+
+    return runCmd(cmd) == 0;
+}
+
+bool GuiPortsBrowser::removePort(const PortEntry& port)
+{
+    if (mPackagesScript.empty())
+        return false;
+
+    Utils::FileSystem::createDirectory(
+        Utils::FileSystem::getParent(mLogPath));
+
+    const std::string cmd =
+        "sudo -n " + quotePorts(mPackagesScript) + " " +
+        quotePorts(port.id) + " remove >> " +
+        quotePorts(mLogPath) + " 2>&1";
+
+    return runCmd(cmd) == 0;
+}
+
+void GuiPortsBrowser::startJob(const std::string& busyMsg,
+                               std::function<bool()> fn,
+                               const std::string& okMsg,
+                               const std::string& failMsg,
+                               bool refreshPorts)
+{
+    if (mJobRunning)
+        return;
+
+    mJobRunning = true;
+    mJobDone = false;
+    mJobOk = false;
+    mJobRefreshPorts = refreshPorts;
+
+    setBusyVisible(true);
+    showPopup(busyMsg, 1200);
+
+    if (mJobThread.joinable())
+        mJobThread.join();
+
+    mJobThread = std::thread([this, fn, okMsg, failMsg]()
+    {
+        const bool ok = fn();
+
+        {
+            std::lock_guard<std::mutex> lock(mJobMutex);
+            mJobOk = ok;
+            mJobDoneMsg = ok ? okMsg : failMsg;
+        }
+
+        mJobDone = true;
+        mJobRunning = false;
+    });
+}
+
+void GuiPortsBrowser::finishJobIfDone()
+{
+    if (!mJobDone)
+        return;
+
+    if (mJobThread.joinable())
+        mJobThread.join();
+
+    setBusyVisible(false);
+
+    std::string msg;
+    bool ok = false;
+    bool refresh = false;
+
+    {
+        std::lock_guard<std::mutex> lock(mJobMutex);
+        msg = mJobDoneMsg;
+        ok = mJobOk;
+        refresh = mJobRefreshPorts;
+    }
+
+    if (!ok)
+        msg += "\n" + trPorts("SEE LOG") + ": " + mLogPath;
+
+    showPopup(msg, ok ? 2500 : 5000);
+
+    if (refresh)
+        loadPorts();
+
+    rebuildList();
+    mJobDone = false;
+}
+
+bool GuiPortsBrowser::input(InputConfig* config, Input input)
+{
+    if (input.value == 0)
+        return GuiComponent::input(config, input);
+
+    if (mJobRunning)
+        return true;
+
+    if (config->isMappedTo("b", input) ||
+        config->isMappedTo("back", input))
+    {
+        mWindow->removeGui(this);
+        return true;
+    }
+
+    if (mPorts.empty())
+    {
+        if (config->isMappedTo("y", input))
+        {
+            loadPorts();
+            rebuildList();
+            return true;
+        }
+
+        return GuiComponent::input(config, input);
+    }
+
+    if (config->isMappedLike("up", input))
+    {
+        --mLastSelectedIndex;
+
+        if (mLastSelectedIndex < 0)
+            mLastSelectedIndex = (int)mPorts.size() - 1;
+
+        rebuildList();
+        return true;
+    }
+
+    if (config->isMappedLike("down", input))
+    {
+        ++mLastSelectedIndex;
+
+        if (mLastSelectedIndex >= (int)mPorts.size())
+            mLastSelectedIndex = 0;
+
+        rebuildList();
+        return true;
+    }
+
+    if (config->isMappedTo("y", input))
+    {
+        loadPorts();
+        rebuildList();
+        showPopup(trPorts("PORTS LIST REFRESHED."), 1800);
+        return true;
+    }
+
+    if (config->isMappedTo("a", input) ||
+        config->isMappedTo("start", input))
+    {
+        if (!canUseSudo())
+        {
+            showPopup(
+                trPorts("RETROPIE-SETUP NEEDS PASSWORDLESS SUDO FOR ES-X.") + "\n" +
+                trPorts("TEST WITH") + ": sudo -n true",
+                5000);
+            return true;
+        }
+
+        const PortEntry current = mPorts[mLastSelectedIndex];
+
+        startJob(
+            current.installed ? trPorts("CHECKING/UPDATING PORT...") : trPorts("INSTALLING PORT..."),
+            [this, current]() { return installOrUpdatePort(current); },
+            current.installed ? trPorts("PORT IS UP TO DATE / UPDATED.") : trPorts("PORT INSTALLED."),
+            trPorts("RETROPIE-SETUP ACTION FAILED."),
+            true);
+
+        return true;
+    }
+
+    if (config->isMappedTo("x", input) ||
+        config->isMappedTo("delete", input))
+    {
+        const PortEntry current = mPorts[mLastSelectedIndex];
+
+        if (!current.installed)
+        {
+            showPopup(trPorts("PORT IS NOT INSTALLED."), 2200);
+            return true;
+        }
+
+        if (!canUseSudo())
+        {
+            showPopup(
+                trPorts("RETROPIE-SETUP NEEDS PASSWORDLESS SUDO FOR ES-X.") + "\n" +
+                trPorts("TEST WITH") + ": sudo -n true",
+                5000);
+            return true;
+        }
+
+        const std::string name =
+            current.description.empty() ? current.id : current.description;
+
+        mWindow->pushGui(new GuiMsgBox(
+            mWindow,
+            trPorts("REMOVE") + " " + name + "?",
+            "YES",
+            [this, current]()
+            {
+                startJob(
+                    trPorts("REMOVING PORT..."),
+                    [this, current]() { return removePort(current); },
+                    trPorts("PORT REMOVED."),
+                    trPorts("REMOVE FAILED."),
+                    true);
+            },
+            "NO",
+            nullptr));
+
+        return true;
+    }
+
+    return GuiComponent::input(config, input);
+}
+
+void GuiPortsBrowser::update(int deltaTime)
+{
+    GuiComponent::update(deltaTime);
+
+    mFrame.update(deltaTime);
+    mList.update(deltaTime);
+    mHeader.update(deltaTime);
+    mSubHeader.update(deltaTime);
+    mFooter.update(deltaTime);
+
+    finishJobIfDone();
+}
+
+void GuiPortsBrowser::render(const Transform4x4f& parentTrans)
+{
+    Transform4x4f trans = parentTrans * getTransform();
+    Renderer::setMatrix(trans);
+
+    mFrame.render(trans);
+    mHeader.render(trans);
+    mSubHeader.render(trans);
+    mList.render(trans);
+    mFooter.render(trans);
+
+    renderChildren(trans);
+}
+
+std::vector<HelpPrompt> GuiPortsBrowser::getHelpPrompts()
+{
+    std::vector<HelpPrompt> prompts;
+
+    prompts.push_back(HelpPrompt("up/down", trPorts("MOVE")));
+
+    if (!mPorts.empty())
+    {
+        const bool installed = mPorts[mLastSelectedIndex].installed;
+
+        prompts.push_back(
+            HelpPrompt("a", installed ? trPorts("UPDATE") : trPorts("INSTALL")));
+
+        if (installed)
+            prompts.push_back(HelpPrompt("x", trPorts("REMOVE")));
+
+        prompts.push_back(HelpPrompt("y", trPorts("REFRESH")));
+    }
+
+    prompts.push_back(HelpPrompt("b", trPorts("BACK")));
+
+    return prompts;
+}
+
+void GuiPortsBrowser::updateHelpPrompts()
+{
+    HelpStyle style;
+    mWindow->setHelpPrompts(getHelpPrompts(), style);
+}

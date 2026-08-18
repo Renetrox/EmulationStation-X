@@ -13,7 +13,6 @@
 #include "guis/GuiSettings.h"
 #include "guis/GuiThemeOptions.h"
 #include "guis/GuiThemeBrowser.h" // Theme Downloader (ES-X)
-#include "guis/GuiPortsBrowser.h" // RetroPie Ports Browser (ES-X)
 #include "views/UIModeController.h"
 #include "views/ViewController.h"
 #include "CollectionSystemManager.h"
@@ -143,10 +142,6 @@ if (isFullUI)
 	// Scrapers juntos.
 	addEntry(menuLabel("♘", "SCRAPER"), menuColor, true, [this] { openScraperSettings(); });
 	addEntry(menuLabel("♞", "SKYSCRAPER"), menuColor, true, [this] { openSkyscraperMenu(); });
-
-	addEntry(menuLabel("↓", "RETROPIE PORTS"), menuColor, true, [this] {
-		mWindow->pushGui(new GuiPortsBrowser(mWindow));
-	});
 
 	// Organización y sistema.
 	addEntry(menuLabel("★", "GAME COLLECTION SETTINGS"), menuColor, true, [this] { openCollectionSystemSettings(); });

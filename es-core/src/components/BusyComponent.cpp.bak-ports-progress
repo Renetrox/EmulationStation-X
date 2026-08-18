@@ -81,13 +81,3 @@ void BusyComponent::reset()
 	if (mAnimation)
 		mAnimation->load(&BUSY_ANIMATION_DEF);
 }
-
-void BusyComponent::setText(const std::string& text)
-{
-	if (!mText)
-		return;
-
-	mText->setText(text);
-	onSizeChanged();
-}
-

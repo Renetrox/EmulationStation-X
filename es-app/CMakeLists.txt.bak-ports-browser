@@ -17,7 +17,6 @@ set(ES_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ThemeOptions.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeOptions.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeBrowser.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiPortsBrowser.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/RestartRequest.h
 
 
@@ -93,7 +92,6 @@ set(ES_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeOptions.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeOptions.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeBrowser.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiPortsBrowser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiTextEditKeyboardPopup.cpp
     
 

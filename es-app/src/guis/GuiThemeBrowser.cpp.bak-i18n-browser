@@ -6,7 +6,6 @@
 #include "resources/Font.h"
 #include "utils/FileSystemUtil.h"
 #include "renderers/Renderer.h"
-#include "LocaleES.h"
 
 // Busy overlay (ya existe y ya anima busy_0..3.svg)
 #include "components/BusyComponent.h"
@@ -18,11 +17,6 @@
 #include <sstream>
 #include <cstdlib>
 #include <cstdio>   // popen/pclose
-
-static inline std::string trTheme(const std::string& key)
-{
-	return LocaleES::getInstance().translate(key);
-}
 
 static inline std::string trim(const std::string& s)
 {
@@ -55,7 +49,7 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	, mList(window)
 	, mPreview(window)
 	, mRepoLabel(window, "", Font::get(FONT_SIZE_SMALL), 0x777777CC, ALIGN_LEFT)
-	, mHeader(window, trTheme("THEME DOWNLOADER"), Font::get(FONT_SIZE_LARGE), 0xFFFFFFFF, ALIGN_CENTER)
+	, mHeader(window, "Theme Downloader", Font::get(FONT_SIZE_LARGE), 0xFFFFFFFF, ALIGN_CENTER)
 	, mFooter(window, "", Font::get(FONT_SIZE_SMALL), 0xFFFFFFFF, ALIGN_CENTER)
 	, mCatalogDir("")
 	, mPreviewDir("")
@@ -174,10 +168,10 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	// ============================================================
 	// Actualizar catálogo en background (sin congelar UI)
 	// ============================================================
-	startJob(trTheme("UPDATING THEME CATALOG..."),
+	startJob("Updating theme catalog...",
 		[this]() { return updateCatalogZipSilent(); },
-		trTheme("CATALOG READY."),
-		trTheme("CATALOG UPDATE FAILED."),
+		"Catalog ready.",
+		"Catalog update failed.",
 		true /*refreshCatalogAfter*/);
 }
 
@@ -524,7 +518,7 @@ void GuiThemeBrowser::rebuildList()
 	{
 		ComponentListRow row;
 		auto txt = std::make_shared<TextComponent>(
-			mWindow, trTheme("NO THEMES FOUND (THEMES.INI EMPTY?)"),
+			mWindow, "No themes found (themes.ini empty?)",
 			Font::get(FONT_SIZE_MEDIUM), 0xFFFFFFFF, ALIGN_LEFT
 		);
 
@@ -601,7 +595,7 @@ void GuiThemeBrowser::updatePreview()
 {
 	if (mThemes.empty())
 	{
-		mHeader.setText(trTheme("THEME DOWNLOADER"));
+		mHeader.setText("Theme Downloader");
 		mPreview.setImage("");
 		mRepoLabel.setText("");
 		return;
@@ -618,7 +612,7 @@ void GuiThemeBrowser::updatePreview()
 	mPreview.setImage(preview.empty() ? "" : preview);
 
 	std::string repoLine = e.repo.empty() ? "" : ellipsize(e.repo, 70);
-	std::string authorLine = e.author.empty() ? "" : (trTheme("BY") + " " + e.author);
+	std::string authorLine = e.author.empty() ? "" : ("by " + e.author);
 
 	if (!repoLine.empty() && !authorLine.empty())
 		mRepoLabel.setText(repoLine + "\n" + authorLine);
@@ -632,7 +626,7 @@ void GuiThemeBrowser::updateFooter()
 {
 	if (mThemes.empty())
 	{
-		mFooter.setText("B " + trTheme("BACK"));
+		mFooter.setText("B Back");
 		return;
 	}
 
@@ -640,9 +634,9 @@ void GuiThemeBrowser::updateFooter()
 	const bool installed = isInstalled(e);
 
 	std::string s = "A ";
-	s += installed ? trTheme("UPDATE") : trTheme("DOWNLOAD");
-	if (installed) s += "    X " + trTheme("UNINSTALL");
-	s += "    B " + trTheme("BACK");
+	s += installed ? "Update" : "Download";
+	if (installed) s += "    X Uninstall";
+	s += "    B Back";
 
 	mFooter.setText(s);
 }
@@ -831,10 +825,10 @@ bool GuiThemeBrowser::input(InputConfig* config, Input input)
 		const ThemeEntry cur = mThemes[mLastSelectedIndex];
 		const bool installed = isInstalled(cur);
 
-		startJob(installed ? trTheme("UPDATING THEME...") : trTheme("DOWNLOADING THEME..."),
+		startJob(installed ? "Updating theme..." : "Downloading theme...",
 			[this, cur]() { return downloadOrUpdateSilent(cur); },
-			trTheme("THEME READY."),
-			trTheme("DOWNLOAD/UPDATE FAILED."),
+			"Theme ready.",
+			"Download/Update failed.",
 			false);
 
 		return true;
@@ -846,14 +840,14 @@ bool GuiThemeBrowser::input(InputConfig* config, Input input)
 
 		if (!isInstalled(cur))
 		{
-			showPopup(trTheme("NOT INSTALLED."), 2500);
+			showPopup("Not installed.", 2500);
 			return true;
 		}
 
-		startJob(trTheme("REMOVING THEME..."),
+		startJob("Removing theme...",
 			[this, cur]() { return uninstallThemeSilent(cur); },
-			trTheme("THEME REMOVED."),
-			trTheme("REMOVE FAILED."),
+			"Theme removed.",
+			"Remove failed.",
 			false);
 
 		return true;
@@ -908,17 +902,17 @@ std::vector<HelpPrompt> GuiThemeBrowser::getHelpPrompts()
 {
 	std::vector<HelpPrompt> p;
 
-	p.push_back(HelpPrompt("up/down", trTheme("MOVE")));
+	p.push_back(HelpPrompt("up/down", "Move"));
 
 	const bool hasThemes = !mThemes.empty();
 	const bool installed = (hasThemes ? isInstalled(mThemes[mLastSelectedIndex]) : false);
 
-	p.push_back(HelpPrompt("a", installed ? trTheme("UPDATE") : trTheme("DOWNLOAD")));
+	p.push_back(HelpPrompt("a", installed ? "Update" : "Download"));
 
 	if (installed)
-		p.push_back(HelpPrompt("x", trTheme("UNINSTALL")));
+		p.push_back(HelpPrompt("x", "Uninstall"));
 
-	p.push_back(HelpPrompt("b", trTheme("BACK")));
+	p.push_back(HelpPrompt("b", "Back"));
 
 	return p;
 }

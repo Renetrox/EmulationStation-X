@@ -2,8 +2,6 @@
 #ifndef ES_CORE_COMPONENTS_BUSY_COMPONENT_H
 #define ES_CORE_COMPONENTS_BUSY_COMPONENT_H
 
-#include <string>
-
 #include "components/ComponentGrid.h"
 #include "components/NinePatchComponent.h"
 #include "GuiComponent.h"
@@ -19,7 +17,6 @@ public:
 	void onSizeChanged() override;
 
 	void reset(); // reset to frame 0
-	void setText(const std::string& text); // dynamic status text
 
 private:
 	NinePatchComponent mBackground;
