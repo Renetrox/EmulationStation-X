@@ -589,14 +589,21 @@ void GuiMenu::openUISettings()
 
 		for (auto& code : languages)
 		{
-			std::string label;
+			// ES-X: mostrar NAME= definido en [META] del archivo de idioma.
+			// El valor interno sigue siendo el stem del archivo (ej. gn_PY),
+			// para no romper la carga actual de locales.
+			std::string label = LocaleES::getInstance().getLanguageName(code);
 
-			if (code == "en")
-				label = "English";
-			else if (code == "es")
-				label = "Español";
-			else
-				label = Utils::String::toUpper(code);
+			// Compatibilidad con locales antiguos que no tengan NAME=.
+			if (label.empty())
+			{
+				if (code == "en")
+					label = "English";
+				else if (code == "es")
+					label = "Español";
+				else
+					label = Utils::String::toUpper(code);
+			}
 
 			language_list->add(label, code, (currentLang == code));
 		}

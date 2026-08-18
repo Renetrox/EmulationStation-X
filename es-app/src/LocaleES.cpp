@@ -126,6 +126,66 @@ bool LocaleES::loadLanguageFile(const std::string& filePath)
 }
 
 // --------------------
+// Nombre visible del idioma
+// --------------------
+std::string LocaleES::getLanguageName(const std::string& code) const
+{
+    auto readNameFromFile = [](const std::string& filePath) -> std::string
+    {
+        std::ifstream in(filePath);
+        if (!in.is_open())
+            return "";
+
+        std::string line;
+        bool inMetaSection = false;
+
+        while (std::getline(in, line))
+        {
+            trim(line);
+
+            if (line.empty() || line[0] == '#' || line[0] == ';')
+                continue;
+
+            if (line.front() == '[' && line.back() == ']')
+            {
+                std::string section = line.substr(1, line.size() - 2);
+                inMetaSection = (normalizeKey(section) == "meta");
+                continue;
+            }
+
+            if (!inMetaSection)
+                continue;
+
+            const auto pos = line.find('=');
+            if (pos == std::string::npos)
+                continue;
+
+            std::string key = line.substr(0, pos);
+            std::string value = line.substr(pos + 1);
+
+            trim(key);
+            trim(value);
+
+            if (normalizeKey(key) == "name" && !value.empty())
+                return value;
+        }
+
+        return "";
+    };
+
+    const std::string home = Utils::FileSystem::getHomePath();
+    const std::string exePath = Utils::FileSystem::getExePath();
+
+    std::string name = readNameFromFile(
+        home + "/.emulationstation/lang/" + code + ".ini");
+
+    if (name.empty())
+        name = readNameFromFile(exePath + "/lang/" + code + ".ini");
+
+    return name;
+}
+
+// --------------------
 // Cargar según Settings
 // --------------------
 void LocaleES::loadFromSettings()

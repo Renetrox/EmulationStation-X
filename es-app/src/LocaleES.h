@@ -10,6 +10,7 @@ public:
 
 	bool loadLanguageFile(const std::string& filePath);
 	void loadFromSettings();
+	std::string getLanguageName(const std::string& code) const;
 
 	std::string translate(const std::string& key) const;
 	static std::string get(const std::string& key);
