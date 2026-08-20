@@ -134,32 +134,31 @@ GuiMenu::GuiMenu(Window* window)
 	unsigned int menuColor = getMenuTextColor();
 if (isFullUI)
 {
-	// ES-X: primero lo visual/interfaz, porque es la identidad del frontend.
-	addEntry(menuLabel("♔", "UI SETTINGS"), menuColor, true, [this] { openUISettings(); });
+	// ES-X: interfaz y apariencia.
+	addEntry(menuLabel("🎨", "UI SETTINGS"), menuColor, true, [this] { openUISettings(); });
 
-	// Luego sonido.
-	addEntry(menuLabel("♫", "SOUND SETTINGS"), menuColor, true, [this] { openSoundSettings(); });
+	// Sonido.
+	addEntry(menuLabel("🔊", "SOUND SETTINGS"), menuColor, true, [this] { openSoundSettings(); });
 
-	// Scrapers juntos.
-	addEntry(menuLabel("♘", "SCRAPER"), menuColor, true, [this] { openScraperSettings(); });
-	addEntry(menuLabel("♞", "SKYSCRAPER"), menuColor, true, [this] { openSkyscraperMenu(); });
+	// Scrapers.
+	addEntry(menuLabel("🔍", "SCRAPER"), menuColor, true, [this] { openScraperSettings(); });
+	addEntry(menuLabel("🌐", "SKYSCRAPER"), menuColor, true, [this] { openSkyscraperMenu(); });
 
-	addEntry(menuLabel("↓", "RETROPIE PORTS"), menuColor, true, [this] {
+	addEntry(menuLabel("📦", "RETROPIE PORTS"), menuColor, true, [this] {
 		mWindow->pushGui(new GuiPortsBrowser(mWindow));
 	});
 
 	// Organización y sistema.
-	addEntry(menuLabel("★", "GAME COLLECTION SETTINGS"), menuColor, true, [this] { openCollectionSystemSettings(); });
+	addEntry(menuLabel("⭐", "GAME COLLECTION SETTINGS"), menuColor, true, [this] { openCollectionSystemSettings(); });
 	addEntry(menuLabel("⚙", "OTHER SETTINGS"), menuColor, true, [this] { openOtherSettings(); });
-	addEntry(menuLabel("▶", "CONFIGURE INPUT"), menuColor, true, [this] { openConfigInput(); });
+	addEntry(menuLabel("🎮", "CONFIGURE INPUT"), menuColor, true, [this] { openConfigInput(); });
 }
 else
 {
-	// Modo restringido: mantener solo lo básico.
-	addEntry(menuLabel("♫", "SOUND SETTINGS"), menuColor, true, [this] { openSoundSettings(); });
+	addEntry(menuLabel("🔊", "SOUND SETTINGS"), menuColor, true, [this] { openSoundSettings(); });
 }
 
-addEntry(menuLabel("⚑", "QUIT"), menuColor, true, [this] { openQuitMenu(); });
+addEntry(menuLabel("🚪", "QUIT"), menuColor, true, [this] { openQuitMenu(); });
 
 	addChild(&mMenu);
 

@@ -37,7 +37,7 @@ namespace
 
 	inline std::string buildControllerPopupMessage(bool connected, const std::string& joyName)
 	{
-		return std::string(connected ? "★ " : "☆ ")
+		return std::string(connected ? "🎮 ✓ " : "🎮 ✕ ")
 			+ tr(connected ? "CONTROLLER_CONNECTED" : "CONTROLLER_DISCONNECTED")
 			+ ": " + joyName;
 	}

@@ -227,28 +227,11 @@ void Font::getTextureForNewGlyph(const Vector2i& glyphSize, FontTexture*& tex_ou
 
 std::vector<std::string> getFallbackFontPaths()
 {
-	std::vector<std::string> fontPaths;
-
-	// ES-X bundled fallback fonts.
-	// These are resolved by ResourceManager from resources/fonts/, so Unicode
-	// support no longer depends on fonts installed by the operating system.
-	const char* bundledPaths[] = {
-		":/fonts/NotoEmoji.ttf",
-		":/fonts/DejaVuSans.ttf",
-		":/fonts/FreeMono.ttf",
-		":/fonts/DroidSansFallbackFull.ttf",
-		":/fonts/NanumSquareNeo-bRg.ttf",
-		":/fonts/Ubuntu-C.ttf"
-	};
-
-	for(unsigned int i = 0; i < sizeof(bundledPaths) / sizeof(bundledPaths[0]); i++)
-	{
-		if(ResourceManager::getInstance()->fileExists(bundledPaths[i]))
-			fontPaths.push_back(bundledPaths[i]);
-	}
-
 #ifdef WIN32
-	// Keep system fonts as a final fallback on Windows.
+	// Windows
+
+	// get this system's equivalent of "C:\Windows" (might be on a different drive or in a different folder)
+	// so we can check the Fonts subdirectory for fallback fonts
 	TCHAR winDir[MAX_PATH];
 	GetWindowsDirectory(winDir, MAX_PATH);
 	std::string fontDir = winDir;
@@ -260,29 +243,40 @@ std::vector<std::string> getFallbackFontPaths()
 		"arial.ttf"   // latin
 	};
 
+	//prepend to font file names
+	std::vector<std::string> fontPaths;
+	fontPaths.reserve(sizeof(fontNames) / sizeof(fontNames[0]));
+
 	for(unsigned int i = 0; i < sizeof(fontNames) / sizeof(fontNames[0]); i++)
 	{
 		std::string path = fontDir + fontNames[i];
 		if(ResourceManager::getInstance()->fileExists(path))
 			fontPaths.push_back(path);
 	}
-#else
-	// Keep the traditional Linux paths as a final fallback for compatibility.
-	const char* systemPaths[] = {
-		"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-		"/usr/share/fonts/truetype/freefont/FreeMono.ttf",
-		"/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf"
-	};
-
-	for(unsigned int i = 0; i < sizeof(systemPaths) / sizeof(systemPaths[0]); i++)
-	{
-		if(ResourceManager::getInstance()->fileExists(systemPaths[i]))
-			fontPaths.push_back(systemPaths[i]);
-	}
-#endif
 
 	fontPaths.shrink_to_fit();
 	return fontPaths;
+
+#else
+	// Linux
+
+	const char* paths[] = {
+		"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+		"/usr/share/fonts/truetype/freefont/FreeMono.ttf",
+		"/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf" // japanese, chinese, present on Debian
+	};
+
+	std::vector<std::string> fontPaths;
+	for(unsigned int i = 0; i < sizeof(paths) / sizeof(paths[0]); i++)
+	{
+		if(ResourceManager::getInstance()->fileExists(paths[i]))
+			fontPaths.push_back(paths[i]);
+	}
+
+	fontPaths.shrink_to_fit();
+	return fontPaths;
+
+#endif
 }
 
 FT_Face Font::getFaceForChar(unsigned int id)
