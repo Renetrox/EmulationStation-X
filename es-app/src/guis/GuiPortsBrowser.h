@@ -37,6 +37,15 @@ private:
         std::string section;
         std::string flags;
         bool installed = false;
+
+        // X-TRAS: free games share the browser with RetroPie ports.
+        bool isGame = false;
+        std::string system;
+        std::string url;
+        std::string filename;
+        std::string author;
+        std::string license;
+        std::string summary;
     };
 
     void setBusyVisible(bool visible);
@@ -51,6 +60,13 @@ private:
 
     bool installOrUpdatePort(const PortEntry& port);
     bool removePort(const PortEntry& port);
+
+    // X-TRAS: minimal free-games backend.
+    void loadFreeGames();
+    bool hasCommand(const std::string& cmd) const;
+    std::string gamePath(const PortEntry& game) const;
+    bool downloadGame(const PortEntry& game);
+    bool removeGame(const PortEntry& game);
 
     std::string sectionName(const std::string& section) const;
     int sectionRank(const std::string& section) const;

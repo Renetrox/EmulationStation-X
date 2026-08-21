@@ -144,7 +144,7 @@ if (isFullUI)
 	addEntry(menuLabel("🔍", "SCRAPER"), menuColor, true, [this] { openScraperSettings(); });
 	addEntry(menuLabel("🌐", "SKYSCRAPER"), menuColor, true, [this] { openSkyscraperMenu(); });
 
-	addEntry(menuLabel("📦", "X-TRAS"), menuColor, true, [this] {
+	addEntry(menuLabel("📦", "RETROPIE PORTS"), menuColor, true, [this] {
 		mWindow->pushGui(new GuiPortsBrowser(mWindow));
 	});
 

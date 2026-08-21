@@ -93,8 +93,8 @@ GuiPortsBrowser::GuiPortsBrowser(Window* window)
     : GuiComponent(window)
     , mFrame(window)
     , mList(window)
-    , mHeader(window, trPorts("RETROPIE PORTS"), Font::get(FONT_SIZE_MEDIUM), 0xFFFFFFFF, ALIGN_CENTER)
-    , mSubHeader(window, trPorts("SELECT PORT TO INSTALL / UPDATE / REMOVE"),
+    , mHeader(window, trPorts("X-TRAS"), Font::get(FONT_SIZE_MEDIUM), 0xFFFFFFFF, ALIGN_CENTER)
+    , mSubHeader(window, trPorts("PORTS AND FREE GAMES"),
                  Font::get(FONT_SIZE_SMALL), 0x9A9A9AFF, ALIGN_CENTER)
     , mFooter(window, "", Font::get(FONT_SIZE_SMALL), 0xFFFFFFFF, ALIGN_CENTER)
     , mLastSelectedIndex(0)
@@ -250,10 +250,28 @@ bool GuiPortsBrowser::readModuleMetadata(const std::string& path,
 
 int GuiPortsBrowser::sectionRank(const std::string& section) const
 {
-    if (section == "main") return 0;
-    if (section == "opt") return 1;
-    if (section == "exp") return 2;
-    return 3;
+    // X-TRAS: Free Games always come first.
+    if (section == "games:nes")          return 0;
+    if (section == "games:snes")         return 1;
+    if (section == "games:gb")           return 2;
+    if (section == "games:gbc")          return 3;
+    if (section == "games:gba")          return 4;
+    if (section == "games:mastersystem") return 5;
+    if (section == "games:gamegear")     return 6;
+    if (section == "games:megadrive")    return 7;
+    if (section == "games:pcengine")     return 8;
+    if (section == "games:dreamcast")    return 9;
+
+    // Any future X-TRAS game system still stays above RetroPie ports.
+    if (section.compare(0, 6, "games:") == 0)
+        return 10;
+
+    // RetroPie ports afterwards.
+    if (section == "main") return 20;
+    if (section == "opt")  return 21;
+    if (section == "exp")  return 22;
+
+    return 23;
 }
 
 std::string GuiPortsBrowser::sectionName(const std::string& section) const
@@ -261,6 +279,18 @@ std::string GuiPortsBrowser::sectionName(const std::string& section) const
     if (section == "main") return trPorts("MAIN");
     if (section == "opt") return trPorts("OPTIONAL");
     if (section == "exp") return trPorts("EXPERIMENTAL");
+
+    if (section == "games:nes")       return trPorts("FREE GAMES") + " · NES";
+    if (section == "games:snes")      return trPorts("FREE GAMES") + " · SNES";
+    if (section == "games:gb")        return trPorts("FREE GAMES") + " · " + trPorts("GAME BOY");
+    if (section == "games:gbc")       return trPorts("FREE GAMES") + " · " + trPorts("GAME BOY COLOR");
+    if (section == "games:gba")          return trPorts("FREE GAMES") + " · " + trPorts("GAME BOY ADVANCE");
+    if (section == "games:mastersystem") return trPorts("FREE GAMES") + " · " + trPorts("MASTER SYSTEM");
+    if (section == "games:gamegear")     return trPorts("FREE GAMES") + " · " + trPorts("GAME GEAR");
+    if (section == "games:megadrive")    return trPorts("FREE GAMES") + " · " + trPorts("MEGA DRIVE");
+    if (section == "games:pcengine")     return trPorts("FREE GAMES") + " · " + trPorts("PC ENGINE");
+    if (section == "games:dreamcast") return trPorts("FREE GAMES") + " · " + trPorts("DREAMCAST");
+
     if (section.empty()) return trPorts("OTHER");
 
     std::string name = section;
@@ -341,6 +371,9 @@ bool GuiPortsBrowser::loadPorts()
         }
     }
 
+    // X-TRAS: append the lightweight free-games catalog.
+    loadFreeGames();
+
     std::sort(mPorts.begin(), mPorts.end(),
         [this](const PortEntry& a, const PortEntry& b)
         {
@@ -364,6 +397,209 @@ bool GuiPortsBrowser::loadPorts()
         mLastSelectedIndex = (int)mPorts.size() - 1;
 
     return !mPorts.empty();
+}
+
+void GuiPortsBrowser::loadFreeGames()
+{
+    // X-TRAS catalog:
+    // ~/.emulationstation/esx/xtras-free-games.ini
+    //
+    // Only entries with ready=yes and a non-empty direct download URL
+    // are exposed to the user. This lets the catalog keep verified
+    // redistribution candidates before a stable mirror is available.
+
+    const std::string catalogPath =
+        Utils::FileSystem::getHomePath() +
+        "/.emulationstation/esx/xtras-free-games.ini";
+
+    std::ifstream file(catalogPath);
+    if (!file.is_open())
+    {
+        LOG(LogWarning) << "GuiPortsBrowser: X-TRAS catalog not found: "
+                        << catalogPath;
+        return;
+    }
+
+    PortEntry current;
+    bool inSection = false;
+    bool ready = false;
+
+    auto flushGame = [&]()
+    {
+        if (!inSection)
+            return;
+
+        if (ready &&
+            !current.id.empty() &&
+            !current.system.empty() &&
+            !current.filename.empty() &&
+            !current.url.empty())
+        {
+            current.isGame = true;
+            current.section = "games:" + current.system;
+            current.installed =
+                Utils::FileSystem::isRegularFile(gamePath(current));
+
+            mPorts.push_back(current);
+        }
+
+        current = PortEntry{};
+        inSection = false;
+        ready = false;
+    };
+
+    std::string line;
+
+    while (std::getline(file, line))
+    {
+        line = trimPorts(line);
+
+        if (line.empty())
+            continue;
+
+        if (line[0] == ';' || line[0] == '#')
+            continue;
+
+        if (line.front() == '[' && line.back() == ']')
+        {
+            flushGame();
+
+            current = PortEntry{};
+            current.id = trimPorts(
+                line.substr(1, line.size() - 2));
+
+            inSection = true;
+            ready = false;
+            continue;
+        }
+
+        if (!inSection)
+            continue;
+
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos)
+            continue;
+
+        const std::string key =
+            trimPorts(line.substr(0, eq));
+        const std::string value =
+            trimPorts(line.substr(eq + 1));
+
+        if (key == "title")
+            current.description = value;
+        else if (key == "system")
+            current.system = value;
+        else if (key == "filename")
+            current.filename = value;
+        else if (key == "author")
+            current.author = value;
+        else if (key == "license")
+            current.license = value;
+        else if (key == "summary")
+            current.summary = value;
+        else if (key == "download")
+            current.url = value;
+        else if (key == "ready")
+            ready = (value == "yes" ||
+                     value == "true" ||
+                     value == "1");
+    }
+
+    flushGame();
+}
+
+bool GuiPortsBrowser::hasCommand(const std::string& cmd) const
+{
+    if (cmd.empty())
+        return false;
+
+    const std::string test =
+        "command -v " + cmd + " >/dev/null 2>&1";
+
+    return std::system(test.c_str()) == 0;
+}
+
+std::string GuiPortsBrowser::gamePath(const PortEntry& game) const
+{
+    return Utils::FileSystem::getHomePath() +
+        "/RetroPie/roms/" + game.system + "/" + game.filename;
+}
+
+bool GuiPortsBrowser::downloadGame(const PortEntry& game)
+{
+    if (!game.isGame || game.url.empty() ||
+        game.system.empty() || game.filename.empty())
+        return false;
+
+    const std::string dst = gamePath(game);
+    const std::string dstDir = Utils::FileSystem::getParent(dst);
+    const std::string tmp = dst + ".part";
+
+    Utils::FileSystem::createDirectory(dstDir);
+    Utils::FileSystem::createDirectory(
+        Utils::FileSystem::getParent(mLogPath));
+
+    ::unlink(tmp.c_str());
+
+    std::string cmd;
+
+    if (hasCommand("curl"))
+    {
+        cmd = "curl -L --fail --silent --show-error -o " +
+            quotePorts(tmp) + " " + quotePorts(game.url);
+    }
+    else if (hasCommand("wget"))
+    {
+        cmd = "wget -q -O " +
+            quotePorts(tmp) + " " + quotePorts(game.url);
+    }
+    else
+    {
+        LOG(LogError) << "GuiPortsBrowser: curl/wget not found";
+        return false;
+    }
+
+    cmd += " >> " + quotePorts(mLogPath) + " 2>&1";
+
+    if (runCmd(cmd) != 0 ||
+        !Utils::FileSystem::isRegularFile(tmp))
+    {
+        ::unlink(tmp.c_str());
+        return false;
+    }
+
+    // Reject an empty response before replacing an existing ROM.
+    std::ifstream check(tmp, std::ios::binary | std::ios::ate);
+    if (!check.is_open() || check.tellg() <= 0)
+    {
+        check.close();
+        ::unlink(tmp.c_str());
+        return false;
+    }
+    check.close();
+
+    // Atomic-enough final step for a local filesystem:
+    // the old ROM is only replaced after a successful download.
+    if (::rename(tmp.c_str(), dst.c_str()) != 0)
+    {
+        ::unlink(tmp.c_str());
+        return false;
+    }
+
+    return true;
+}
+
+bool GuiPortsBrowser::removeGame(const PortEntry& game)
+{
+    if (!game.isGame)
+        return false;
+
+    const std::string dst = gamePath(game);
+
+    if (!Utils::FileSystem::exists(dst))
+        return true;
+
+    return ::unlink(dst.c_str()) == 0;
 }
 
 void GuiPortsBrowser::rebuildList()
@@ -431,7 +667,28 @@ void GuiPortsBrowser::rebuildList()
         // ⟳ reservado para "actualización disponible"
         std::string meta = port.id;
 
-        const std::string label = icon + title + "\n    " + meta;
+        if (port.isGame)
+        {
+            meta.clear();
+
+            if (!port.author.empty())
+                meta += port.author;
+
+            if (!port.license.empty())
+            {
+                if (!meta.empty())
+                    meta += " · ";
+                meta += port.license;
+            }
+
+            if (meta.empty())
+                meta = trPorts("FREE GAME");
+        }
+
+        std::string label = icon + title + "\n    " + meta;
+
+        if (port.isGame && !port.summary.empty())
+            label += "\n    " + ellipsizePorts(port.summary, 72);
 
         auto txt = std::make_shared<TextComponent>(
             mWindow,
@@ -892,6 +1149,21 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
     if (config->isMappedTo("a", input) ||
         config->isMappedTo("start", input))
     {
+        const PortEntry current = mPorts[mLastSelectedIndex];
+
+        if (current.isGame)
+        {
+            startJob(
+                trPorts("DOWNLOADING GAME..."),
+                [this, current]() { return downloadGame(current); },
+                trPorts("GAME DOWNLOADED.") + "\n" +
+                    trPorts("RESTART ES-X TO REFRESH THE GAME LIST."),
+                trPorts("GAME DOWNLOAD FAILED."),
+                true);
+
+            return true;
+        }
+
         if (!canUseSudo())
         {
             showPopup(
@@ -900,8 +1172,6 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
                 5000);
             return true;
         }
-
-        const PortEntry current = mPorts[mLastSelectedIndex];
 
         startJob(
             current.installed ? trPorts("CHECKING/UPDATING PORT...") : trPorts("INSTALLING PORT..."),
@@ -920,7 +1190,35 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
 
         if (!current.installed)
         {
-            showPopup(trPorts("PORT IS NOT INSTALLED."), 2200);
+            showPopup(
+                current.isGame ? trPorts("GAME IS NOT INSTALLED.")
+                               : trPorts("PORT IS NOT INSTALLED."),
+                2200);
+            return true;
+        }
+
+        const std::string name =
+            current.description.empty() ? current.id : current.description;
+
+        if (current.isGame)
+        {
+            mWindow->pushGui(new GuiMsgBox(
+                mWindow,
+                trPorts("REMOVE") + " " + name + "?",
+                "YES",
+                [this, current]()
+                {
+                    startJob(
+                        trPorts("REMOVING GAME..."),
+                        [this, current]() { return removeGame(current); },
+                        trPorts("GAME REMOVED.") + "\n" +
+                            trPorts("RESTART ES-X TO REFRESH THE GAME LIST."),
+                        trPorts("REMOVE FAILED."),
+                        true);
+                },
+                "NO",
+                nullptr));
+
             return true;
         }
 
@@ -932,9 +1230,6 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
                 5000);
             return true;
         }
-
-        const std::string name =
-            current.description.empty() ? current.id : current.description;
 
         mWindow->pushGui(new GuiMsgBox(
             mWindow,
