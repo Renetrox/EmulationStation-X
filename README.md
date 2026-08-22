@@ -41,7 +41,8 @@ The goal is deliberately simple: **a user starting with zero games can install a
 
 The catalog is intentionally small and curated rather than trying to become a massive game store. It is also structured so other projects can reuse or extend the catalog format if they wish.
 
-*A screenshot of the X-TRAS browser will be added here.*
+<img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/d87cca37-3d72-4bbb-894f-8c5fe8ca0865" />
+
 
 ## Example Theme Gallery
 <img width="1366" height="768" alt="Captura de pantalla_2026-01-09_19-20-24" src="https://github.com/user-attachments/assets/07912879-ca8d-4122-a640-d32cd15c6fd9" />
