@@ -10,6 +10,38 @@
 
 [YouTube demo](https://www.youtube.com/watch?v=E0kRlrkbLo0)
 
+## 🎁 X-TRAS — Free Games Starter Catalog
+
+X-TRAS gives a fresh RetroPie installation something useful to launch immediately.
+
+Instead of bundling commercial ROMs, ES-X includes a curated catalog of free homebrew games whose redistribution rights are explicitly documented. Games can be downloaded directly from the ES-X interface and are placed automatically in the correct RetroPie ROM folder.
+
+> **X-TRAS is not an abandonware or commercial-ROM catalog.** Active entries must have clear redistribution rights and a verifiable upstream source.
+
+X-TRAS is designed around a strict catalog policy:
+
+- Free and legally redistributable homebrew only
+- No abandonware
+- No commercial ROMs
+- No freeware-only titles when redistribution permission is unclear
+- No fan games or assets with unclear rights
+- Author, license and upstream source are documented for every catalog entry
+- Direct downloads are used only when a stable, verified source is available
+- Already installed games are detected automatically
+
+The catalog is external to the executable:
+
+- Repository catalog: `esx/xtras-free-games.ini`
+- Installed catalog: `~/.emulationstation/esx/xtras-free-games.ini`
+- Catalog entries can be updated without recompiling ES-X
+
+The initial starter catalog already covers multiple classic systems, including **Game Boy, Game Boy Color, Game Boy Advance, NES, Master System, Game Gear and Mega Drive / Genesis**.
+
+The goal is deliberately simple: **a user starting with zero games can install a small legal starter library and immediately test several systems from inside ES-X.**
+
+The catalog is intentionally small and curated rather than trying to become a massive game store. It is also structured so other projects can reuse or extend the catalog format if they wish.
+
+*A screenshot of the X-TRAS browser will be added here.*
 
 ## Example Theme Gallery
 <img width="1366" height="768" alt="Captura de pantalla_2026-01-09_19-20-24" src="https://github.com/user-attachments/assets/07912879-ca8d-4122-a640-d32cd15c6fd9" />
@@ -232,6 +264,7 @@ Beautiful themes should not require engine hacks.
 | System descriptions / Info viewer | ✅ Stable |
 | Quick System Select | ✅ Stable |
 | Integrated Skyscraper interface | ✅ Available |
+| X-TRAS free games catalog | ✅ Available |
 | Gamelist carousel | ✅ Stable |
 | Enhanced Grid layouts | ✅ Stable |
 Core systems are stable for daily use. New capabilities are introduced carefully to preserve compatibility and performance.
