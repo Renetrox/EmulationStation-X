@@ -114,7 +114,7 @@ static const InputConfigStructure GUI_INPUT_CONFIG_LIST[inputCount] =
 
 GuiInputConfig::GuiInputConfig(Window* window, InputConfig* target, bool reconfigureAll, const std::function<void()>& okCallback) : GuiComponent(window),
 	mBackground(window, getFramePath()), mGrid(window, Vector2i(1, 7)),
-	mTargetConfig(target), mHoldingInput(false), mBusyAnim(window)
+	mTargetConfig(target), mHoldingInput(false), mSkipAxis(false), mBusyAnim(window)
 {
 	LOG(LogInfo) << "Configuring device " << target->getDeviceId() << " (" << target->getDeviceName() << ").";
 
@@ -197,7 +197,7 @@ GuiInputConfig::GuiInputConfig(Window* window, InputConfig* target, bool reconfi
 			}
 
 			if(filterTrigger(input, config, i))
-				return false;
+				return true;
 
 			if(input.value != 0)
 			{
@@ -411,17 +411,25 @@ bool GuiInputConfig::filterTrigger(Input input, InputConfig* config, int inputId
 
 	if(input.type == TYPE_AXIS && (genericTrigger || anbernicTrigger))
 	{
-		if(strstr(GUI_INPUT_CONFIG_LIST[inputId].name, "Trigger") != NULL)
+		const bool configuringTrigger = strstr(GUI_INPUT_CONFIG_LIST[inputId].name, "Trigger") != NULL;
+
+		if(configuringTrigger)
 		{
-			if(input.value == 1)
+			// Negative-rest trigger axes (DS3-style and some clones) cross -1 before +1.
+			// Arm the one-shot filter only after that negative pole is actually observed.
+			if(input.value == -1)
+			{
 				mSkipAxis = true;
-			else if(input.value == -1)
 				return true;
+			}
 		}
 		else if(mSkipAxis)
 		{
+			// Consume only the expected negative return-to-rest event. If the first
+			// later event is anything else, it is real input and stale state is cleared.
 			mSkipAxis = false;
-			return true;
+			if(input.value == -1)
+				return true;
 		}
 	}
 #else
