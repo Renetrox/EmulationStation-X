@@ -3,3 +3,16 @@ CMakeFiles/
 CMakeCache.txt
 Makefile
 cmake_install.cmake
+
+# Local/temporary backups
+*.bak
+*.bak-*
+*.bak.*
+*.backup
+*.backup-*
+*.backup.*
+*.orig
+
+# Build products
+*.a
+/emulationstation
