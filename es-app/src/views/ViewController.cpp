@@ -119,6 +119,12 @@ void ViewController::goToSystemView(SystemData* system)
 	systemList->setPosition(getSystemId(system) * (float)Renderer::getScreenWidth(), systemList->getPosition().y());
 
 	systemList->goToSystem(system, false);
+
+	// goToSystem() agenda la actualización de systemInfo en el slot 1.
+	// Completarla antes de onShow() evita que éste la cancele y deje
+	// visible el texto provisional "SYSTEM INFO" al iniciar ES-X.
+	systemList->finishAnimation(1);
+
 	mCurrentView = systemList;
 	mCurrentView->onShow();
 	PowerSaver::setState(true);
