@@ -2,7 +2,6 @@
 
 #include "components/TextComponent.h"
 #include "guis/GuiInputConfig.h"
-#include "utils/FileSystemUtil.h"
 #include "utils/StringUtil.h"
 #include "InputManager.h"
 #include "PowerSaver.h"
@@ -119,8 +118,9 @@ void GuiDetectDevice::update(int deltaTime)
 {
 	if(mHoldingConfig)
 	{
-		// If ES starts and if a known device is connected after startup skip controller configuration
-		if(mFirstRun && Utils::FileSystem::exists(InputManager::getConfigPath()) && InputManager::getInstance()->getNumConfiguredDevices() > 0)
+		// A controller auto-mapped in memory is already usable even if there is
+		// no es_input.cfg yet, so first-run configuration can be skipped.
+		if(mFirstRun && InputManager::getInstance()->getNumConfiguredDevices() > 0)
 		{
 			if(mDoneCallback)
 				mDoneCallback();

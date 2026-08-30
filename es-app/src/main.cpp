@@ -406,7 +406,8 @@ int main(int argc, char* argv[])
 
 	if(errorMsg == NULL)
 	{
-		if(Utils::FileSystem::exists(InputManager::getConfigPath()) && InputManager::getInstance()->getNumConfiguredDevices() > 0)
+		// SDL auto-mapped controllers are valid even when es_input.cfg does not exist.
+		if(InputManager::getInstance()->getNumConfiguredDevices() > 0)
 		{
 			ViewController::get()->goToStart();
 		}else{
