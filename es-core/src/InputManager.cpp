@@ -935,7 +935,7 @@ void InputManager::doOnFinish()
 					{
 						std::string tocall = command.text().get();
 
-						LOG(LogInfo) << "\t" << tocall;
+						LOG(LogInfo) << "	" << tocall;
 						std::cout << "==============================================\ninput config finish command:\n";
 						int exitCode = runSystemCommand(tocall);
 						std::cout << "==============================================\n";
