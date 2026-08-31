@@ -93,6 +93,33 @@ namespace
 		return false;
 	}
 
+	bool retropieInputAutoConfigurationDisabled()
+	{
+		const std::string path = "/opt/retropie/configs/all/autoconf.cfg";
+		if(!Utils::FileSystem::exists(path))
+			return false;
+
+		std::ifstream file(path.c_str());
+		if(!file)
+			return false;
+
+		std::string line;
+		while(std::getline(file, line))
+		{
+			line.erase(std::remove_if(line.begin(), line.end(), [](unsigned char c) {
+				return c == ' ' || c == '\t' || c == '\r';
+			}), line.end());
+
+			if(line.empty() || line[0] == '#')
+				continue;
+
+			if(line == "disable=\"1\"" || line == "disable=1")
+				return true;
+		}
+
+		return false;
+	}
+
 	bool hasSavedInputConfig(InputConfig* config)
 	{
 		const std::string path = InputManager::getConfigPath();
@@ -164,6 +191,11 @@ namespace
 	bool writeAutoConfigThroughRetroPie(InputConfig* config)
 	{
 		if(!hasRetroPieInputConfigurationAction())
+			return false;
+
+		// Match RetroPie's own inputconfiguration.sh gate. When its automatic
+		// configuration is disabled, keep the SDL mapping in memory for ES-X only.
+		if(retropieInputAutoConfigurationDisabled())
 			return false;
 
 		if(!isRetroPieAutoConfigComplete(config))
@@ -1070,7 +1102,7 @@ void InputManager::doOnFinish()
 					{
 						std::string tocall = command.text().get();
 
-						LOG(LogInfo) << "\t" << tocall;
+						LOG(LogInfo) << "	" << tocall;
 						std::cout << "==============================================\ninput config finish command:\n";
 						int exitCode = runSystemCommand(tocall);
 						std::cout << "==============================================\n";
