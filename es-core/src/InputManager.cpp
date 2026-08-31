@@ -19,6 +19,7 @@
 #include <assert.h>
 #include <algorithm>
 #include <cstdlib>
+#include <fstream>
 #include <sstream>
 
 #define KEYBOARD_GUID_STRING "-1"
@@ -63,6 +64,33 @@ namespace
 	inline void stripSpaces(std::string& value)
 	{
 		value.erase(std::remove(value.begin(), value.end(), ' '), value.end());
+	}
+
+	bool retropieSwapABEnabled()
+	{
+		const std::string path = "/opt/retropie/configs/all/autoconf.cfg";
+		if(!Utils::FileSystem::exists(path))
+			return false;
+
+		std::ifstream file(path.c_str());
+		if(!file)
+			return false;
+
+		std::string line;
+		while(std::getline(file, line))
+		{
+			line.erase(std::remove_if(line.begin(), line.end(), [](unsigned char c) {
+				return c == ' ' || c == '\t' || c == '\r';
+			}), line.end());
+
+			if(line.empty() || line[0] == '#')
+				continue;
+
+			if(line == "es_swap_a_b=\"1\"" || line == "es_swap_a_b=1")
+				return true;
+		}
+
+		return false;
 	}
 
 	bool parseNonNegativeInt(const std::string& text, int& value)
@@ -254,6 +282,7 @@ namespace
 
 		std::stringstream stream(mapping.substr(secondComma + 1));
 		std::string token;
+		const bool swapAB = retropieSwapABEnabled();
 
 		while(std::getline(stream, token, ','))
 		{
@@ -294,10 +323,11 @@ namespace
 				mapBindingEndpoint(config, deviceId, "Select", binding, false);
 			// SDL GameController uses positional Xbox-style names. ES-X/RetroPie
 			// labels the face buttons by position: A=east, B=south, X=north, Y=west.
+			// RetroPie's es_swap_a_b option swaps only these two ES actions.
 			else if(logical == "a")
-				mapBindingEndpoint(config, deviceId, "B", binding, false);
+				mapBindingEndpoint(config, deviceId, swapAB ? "A" : "B", binding, false);
 			else if(logical == "b")
-				mapBindingEndpoint(config, deviceId, "A", binding, false);
+				mapBindingEndpoint(config, deviceId, swapAB ? "B" : "A", binding, false);
 			else if(logical == "x")
 				mapBindingEndpoint(config, deviceId, "Y", binding, false);
 			else if(logical == "y")
@@ -341,6 +371,10 @@ namespace
 		Input selectInput;
 		if(config->getInputByName("Select", &selectInput))
 			config->mapInput("HotKeyEnable", selectInput);
+
+		if(swapAB)
+			LOG(LogInfo) << "SDL auto-mapping: honoring RetroPie es_swap_a_b for '"
+			             << config->getDeviceName() << "'.";
 
 		return true;
 	}
@@ -438,13 +472,23 @@ void InputManager::addJoystickByDeviceIndex(int id)
 {
 	assert(id > -1);
 	assert(id < SDL_NumJoysticks());
-
 	// open joystick & add to our list
 	SDL_Joystick* joy = SDL_JoystickOpen(id);
 	assert(joy);
 
 	// add it to our list so we can close it again later
 	SDL_JoystickID joyId = SDL_JoystickInstanceID(joy);
+
+	// SDL_INIT_GAMECONTROLLER can leave an SDL_JOYDEVICEADDED event queued for
+	// a device already opened during the initial scan. Do not replace/leak the
+	// existing joystick/config objects if the same instance is reported again.
+	if(mJoysticks.find(joyId) != mJoysticks.end())
+	{
+		LOG(LogDebug) << "Ignoring duplicate joystick add for instance ID " << joyId << ".";
+		SDL_JoystickClose(joy); // balance the extra SDL_JoystickOpen reference
+		return;
+	}
+
 	mJoysticks[joyId] = joy;
 
 	// ✅ Cachear nombre por instance id (para REMOVED seguro)
@@ -675,6 +719,16 @@ bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 		// ev.jdevice.which is a device index
 		int deviceIndex = ev.jdevice.which;
 
+#if SDL_VERSION_ATLEAST(2,0,4)
+		SDL_JoystickID instanceId = SDL_JoystickGetDeviceInstanceID(deviceIndex);
+		if(instanceId != -1 && mJoysticks.find(instanceId) != mJoysticks.end())
+		{
+			LOG(LogDebug) << "Ignoring duplicate SDL_JOYDEVICEADDED for instance ID "
+			              << instanceId << ".";
+			return true;
+		}
+#endif
+
 		addJoystickByDeviceIndex(deviceIndex);
 
 		// ✅ Notificar SOLO hotplug real (no durante init/scan)
@@ -684,8 +738,8 @@ bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 			std::string joyName = "Controller";
 
 #if SDL_VERSION_ATLEAST(2,0,4)
-			SDL_JoystickID instanceId = SDL_JoystickGetDeviceInstanceID(deviceIndex);
-			auto it = mJoystickNameCache.find(instanceId);
+			SDL_JoystickID popupInstanceId = SDL_JoystickGetDeviceInstanceID(deviceIndex);
+			auto it = mJoystickNameCache.find(popupInstanceId);
 			if(it != mJoystickNameCache.end() && !it->second.empty())
 				joyName = it->second;
 			else
