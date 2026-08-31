@@ -93,6 +93,152 @@ namespace
 		return false;
 	}
 
+	bool retropieInputAutoConfigurationDisabled()
+	{
+		const std::string path = "/opt/retropie/configs/all/autoconf.cfg";
+		if(!Utils::FileSystem::exists(path))
+			return false;
+
+		std::ifstream file(path.c_str());
+		if(!file)
+			return false;
+
+		std::string line;
+		while(std::getline(file, line))
+		{
+			line.erase(std::remove_if(line.begin(), line.end(), [](unsigned char c) {
+				return c == ' ' || c == '\t' || c == '\r';
+			}), line.end());
+
+			if(line.empty() || line[0] == '#')
+				continue;
+
+			if(line == "disable=\"1\"" || line == "disable=1")
+				return true;
+		}
+
+		return false;
+	}
+
+	bool hasSavedInputConfig(InputConfig* config)
+	{
+		const std::string path = InputManager::getConfigPath();
+		if(!Utils::FileSystem::exists(path))
+			return false;
+
+		pugi::xml_document doc;
+		if(!doc.load_file(path.c_str()))
+			return false;
+
+		pugi::xml_node root = doc.child("inputList");
+		if(!root)
+			return false;
+
+		pugi::xml_node configNode = root.find_child_by_attribute(
+			"inputConfig", "deviceGUID", config->getDeviceGUIDString().c_str());
+		if(!configNode)
+			configNode = root.find_child_by_attribute(
+				"inputConfig", "deviceName", config->getDeviceName().c_str());
+
+		return static_cast<bool>(configNode);
+	}
+
+	bool hasRetroPieInputConfigurationAction()
+	{
+		const std::string path = InputManager::getConfigPath();
+		if(!Utils::FileSystem::exists(path))
+			return false;
+
+		pugi::xml_document doc;
+		if(!doc.load_file(path.c_str()))
+			return false;
+
+		pugi::xml_node root = doc.child("inputList");
+		if(!root)
+			return false;
+
+		pugi::xml_node action = root.find_child_by_attribute("inputAction", "type", "onfinish");
+		if(!action)
+			return false;
+
+		for(pugi::xml_node command = action.child("command"); command;
+			command = command.next_sibling("command"))
+		{
+			const std::string commandText = command.text().get();
+			if(commandText.find("inputconfiguration.sh") != std::string::npos)
+				return true;
+		}
+
+		return false;
+	}
+
+	bool isRetroPieAutoConfigComplete(InputConfig* config)
+	{
+		static const char* requiredInputs[] = {
+			"Up", "Down", "Left", "Right", "A", "B", "Start", "Select"
+		};
+
+		Input check;
+		for(const char* name : requiredInputs)
+		{
+			if(!config->getInputByName(name, &check))
+				return false;
+		}
+
+		return true;
+	}
+
+	bool writeAutoConfigThroughRetroPie(InputConfig* config)
+	{
+		if(!hasRetroPieInputConfigurationAction())
+			return false;
+
+		// Match RetroPie's own inputconfiguration.sh gate. When its automatic
+		// configuration is disabled, keep the SDL mapping in memory for ES-X only.
+		if(retropieInputAutoConfigurationDisabled())
+			return false;
+
+		if(!isRetroPieAutoConfigComplete(config))
+		{
+			LOG(LogInfo) << "SDL auto-mapping for '" << config->getDeviceName()
+			             << "' is sufficient for ES-X navigation but not complete enough "
+			             << "for RetroPie auto-configuration.";
+			return false;
+		}
+
+		// The runtime InputConfig already honors RetroPie's es_swap_a_b setting so
+		// ES-X behaves correctly immediately. RetroPie's onfinish script applies the
+		// same option again when rebuilding es_input.cfg, however, so feed it the
+		// canonical A=east / B=south mapping to avoid a double swap. The same
+		// canonical names are also what RetroArch's config script expects.
+		InputConfig retroPieConfig(*config);
+		if(retropieSwapABEnabled())
+		{
+			Input aInput;
+			Input bInput;
+			if(retroPieConfig.getInputByName("A", &aInput) &&
+			   retroPieConfig.getInputByName("B", &bInput))
+			{
+				retroPieConfig.mapInput("A", bInput);
+				retroPieConfig.mapInput("B", aInput);
+			}
+		}
+
+		InputManager::getInstance()->writeDeviceConfig(&retroPieConfig);
+
+		if(hasSavedInputConfig(config))
+		{
+			LOG(LogInfo) << "RetroPie auto-configuration completed for SDL-mapped joystick '"
+			             << config->getDeviceName() << "'.";
+			return true;
+		}
+
+		LOG(LogWarning) << "RetroPie input onfinish ran for SDL-mapped joystick '"
+		                << config->getDeviceName()
+		                << "', but no persistent ES input configuration was created.";
+		return false;
+	}
+
 	bool parseNonNegativeInt(const std::string& text, int& value)
 	{
 		if(text.empty())
@@ -466,6 +612,19 @@ void InputManager::init()
 	CECInput::init();
 	mCECInputConfig = new InputConfig(DEVICE_CEC, "CEC", CEC_GUID_STRING);
 	loadInputConfig(mCECInputConfig);
+
+#if SDL_VERSION_ATLEAST(2,0,9)
+	// Initial joystick scanning happens before InputManager is fully initialized,
+	// so defer RetroPie's onfinish integration until all input subsystems are ready.
+	// A configured in-memory joystick with no saved entry can only be an SDL
+	// auto-mapped device at this point; unknown devices remain unconfigured.
+	for(auto it = mInputConfigs.begin(); it != mInputConfigs.end(); ++it)
+	{
+		InputConfig* config = it->second;
+		if(config->isConfigured() && !hasSavedInputConfig(config))
+			writeAutoConfigThroughRetroPie(config);
+	}
+#endif
 }
 
 void InputManager::addJoystickByDeviceIndex(int id)
@@ -505,9 +664,9 @@ void InputManager::addJoystickByDeviceIndex(int id)
 	mInputConfigs[joyId]->setVendorId(SDL_JoystickGetVendor(joy));
 	mInputConfigs[joyId]->setProductId(SDL_JoystickGetProduct(joy));
 
+	bool autoConfigured = false;
 	if(!loadInputConfig(mInputConfigs[joyId]))
 	{
-		bool autoConfigured = false;
 #if SDL_VERSION_ATLEAST(2,0,9)
 		autoConfigured = autoConfigureFromSDLGameController(id, joyId, mInputConfigs[joyId]);
 #endif
@@ -535,6 +694,14 @@ void InputManager::addJoystickByDeviceIndex(int id)
 	int numAxes = SDL_JoystickNumAxes(joy);
 	mPrevAxisValues[joyId] = new int[numAxes];
 	std::fill(mPrevAxisValues[joyId], mPrevAxisValues[joyId] + numAxes, 0); // initialize array to 0
+
+#if SDL_VERSION_ATLEAST(2,0,9)
+	// Hotplugged devices arrive after init(), so they can use RetroPie's
+	// configuration pipeline immediately. Initial-scan devices are handled at
+	// the end of init() once writeDeviceConfig() is safe to call.
+	if(autoConfigured && initialized())
+		writeAutoConfigThroughRetroPie(mInputConfigs[joyId]);
+#endif
 }
 
 void InputManager::removeJoystickByJoystickID(SDL_JoystickID joyId)
