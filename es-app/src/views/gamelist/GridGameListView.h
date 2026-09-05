@@ -5,7 +5,7 @@
 #include "components/DateTimeComponent.h"
 #include "components/RatingComponent.h"
 #include "components/ScrollableContainer.h"
-#include "components/ImageGridComponent.h"
+#include "components/ModernGridComponent.h"
 #include "components/VideoComponent.h"
 #include "views/gamelist/ISimpleGameListView.h"
 
@@ -41,7 +41,7 @@ protected:
 	virtual void remove(FileData* game, bool deleteFile, bool refreshView = true) override;
 	virtual void addPlaceholder();
 
-	ImageGridComponent<FileData*> mGrid;
+	ModernGridComponent<FileData*> mGrid;
 
 private:
 	void updateInfoPanel();
