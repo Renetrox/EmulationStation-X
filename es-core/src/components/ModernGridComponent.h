@@ -34,16 +34,15 @@ struct ModernGridData
 
 // ES-X modern grid.
 //
-// Goals:
-//  * deterministic 2D navigation
-//  * a real viewport instead of camera/EXTRAITEMS bookkeeping
-//  * a small visible tile pool with explicit rebinding
-//  * no "hide every tile" fast-scroll shortcut
-//  * keep legacy imagegrid/gridtile theming compatible
+// This intentionally does not inherit the old ImageGrid camera/EXTRAITEMS model.
+// Logical selection, viewport and visual tiles are separate states:
 //
-// The first implementation intentionally uses instant row/column viewport changes.
-// Once behavior is stable, a visual-only scroll offset can be layered on top without
-// changing cursor or tile identity.
+//   mCursor               -> selected game
+//   mFirstVisiblePrimary  -> first visible row/column
+//   mTiles                -> visible render pool only
+//
+// A tile is fully reset every time it is rebound to another entry, so selection,
+// animation, visibility and frame state cannot leak from a previous game.
 template<typename T>
 class ModernGridComponent : public IList<ModernGridData, T>
 {
@@ -52,18 +51,15 @@ protected:
 	using List::mEntries;
 	using List::mCursor;
 	using List::mScrollTier;
+	using List::mScrollVelocity;
 	using List::mSize;
-	using List::listInput;
-	using List::listUpdate;
-	using List::listRenderTitleOverlay;
 	using List::getTransform;
+	using List::listRenderTitleOverlay;
 
 public:
 	using List::getSelected;
-	using List::isScrolling;
 	using List::setCursor;
 	using List::size;
-	using List::stopScrolling;
 
 	ModernGridComponent(Window* window);
 
@@ -86,18 +82,26 @@ public:
 	}
 
 	ImageSource getImageSource() const { return mImageSource; }
+	bool isScrolling() const { return mRepeating; }
+	void stopScrolling();
 
 protected:
 	void onCursorChanged(const CursorState& state) override;
 
 private:
 	bool isVertical() const { return mScrollDirection == SCROLL_VERTICALLY; }
+
 	void calculateLayout();
 	void rebuildTiles();
 	void updateViewport();
 	void bindVisibleTiles();
 	int logicalIndexForCell(int localRow, int localCol) const;
-	bool moveCursor(int deltaRow, int deltaCol);
+
+	void beginDirection(int deltaRow, int deltaCol);
+	void endDirection();
+	bool stepCursor(int deltaRow, int deltaCol);
+	int wrapIndex(int index) const;
+
 	int visiblePrimaryCount() const;
 	int visibleSecondaryCount() const;
 	int totalPrimaryCount() const;
@@ -126,12 +130,23 @@ private:
 	bool mScrollLoop;
 	bool mAnimate;
 
+	// Directional repeat is owned by the grid. The inherited IList repeat logic
+	// is linear and can cross 2D row/column boundaries unexpectedly.
+	int mHeldRow;
+	int mHeldCol;
+	int mHoldTime;
+	int mRepeatTime;
+	bool mRepeating;
+
+	static const int REPEAT_START_DELAY = 500;
+	static const int REPEAT_STEP_DELAY = 160;
+
 	std::function<void(CursorState state)> mCursorChangedCallback;
 };
 
 template<typename T>
 ModernGridComponent<T>::ModernGridComponent(Window* window)
-	: IList<ModernGridData, T>(window, LIST_SCROLL_STYLE_QUICK, LIST_ALWAYS_LOOP)
+	: IList<ModernGridData, T>(window)
 {
 	Vector2f screen((float)Renderer::getScreenWidth(), (float)Renderer::getScreenHeight());
 
@@ -154,6 +169,14 @@ ModernGridComponent<T>::ModernGridComponent(Window* window)
 	mScrollLoop = false;
 	mAnimate = false;
 
+	mHeldRow = 0;
+	mHeldCol = 0;
+	mHoldTime = 0;
+	mRepeatTime = 0;
+	mRepeating = false;
+	mScrollVelocity = 0;
+	mScrollTier = 0;
+
 	mSize = screen * 0.80f;
 }
 
@@ -173,7 +196,9 @@ void ModernGridComponent<T>::add(const std::string& name,
 template<typename T>
 void ModernGridComponent<T>::clear()
 {
-	List::clear();
+	endDirection();
+	mEntries.clear();
+	mCursor = 0;
 	mFirstVisiblePrimary = 0;
 	mEntriesDirty = true;
 	bindVisibleTiles();
@@ -182,14 +207,31 @@ void ModernGridComponent<T>::clear()
 template<typename T>
 bool ModernGridComponent<T>::remove(const T& obj)
 {
-	bool removed = List::remove(obj);
-	if (removed)
+	for (auto it = mEntries.begin(); it != mEntries.end(); ++it)
 	{
+		if (it->object != obj)
+			continue;
+
+		const int removedIndex = (int)std::distance(mEntries.begin(), it);
+		mEntries.erase(it);
+
+		if (mEntries.empty())
+			mCursor = 0;
+		else if (mCursor >= (int)mEntries.size())
+			mCursor = (int)mEntries.size() - 1;
+		else if (removedIndex < mCursor)
+			--mCursor;
+
 		mEntriesDirty = true;
 		updateViewport();
 		bindVisibleTiles();
+
+		if (mCursorChangedCallback)
+			mCursorChangedCallback(CURSOR_STOPPED);
+		return true;
 	}
-	return removed;
+
+	return false;
 }
 
 template<typename T>
@@ -201,20 +243,32 @@ bool ModernGridComponent<T>::input(InputConfig* config, Input input)
 	if (input.value != 0)
 	{
 		if (config->isMappedLike("up", input))
-			return moveCursor(-1, 0);
+		{
+			beginDirection(-1, 0);
+			return true;
+		}
 		if (config->isMappedLike("down", input))
-			return moveCursor(1, 0);
+		{
+			beginDirection(1, 0);
+			return true;
+		}
 		if (config->isMappedLike("left", input))
-			return moveCursor(0, -1);
+		{
+			beginDirection(0, -1);
+			return true;
+		}
 		if (config->isMappedLike("right", input))
-			return moveCursor(0, 1);
+		{
+			beginDirection(0, 1);
+			return true;
+		}
 	}
 	else if (config->isMappedLike("up", input) ||
 	         config->isMappedLike("down", input) ||
 	         config->isMappedLike("left", input) ||
 	         config->isMappedLike("right", input))
 	{
-		stopScrolling();
+		endDirection();
 		return true;
 	}
 
@@ -222,70 +276,131 @@ bool ModernGridComponent<T>::input(InputConfig* config, Input input)
 }
 
 template<typename T>
-bool ModernGridComponent<T>::moveCursor(int deltaRow, int deltaCol)
+void ModernGridComponent<T>::beginDirection(int deltaRow, int deltaCol)
+{
+	mHeldRow = deltaRow;
+	mHeldCol = deltaCol;
+	mHoldTime = 0;
+	mRepeatTime = 0;
+	mRepeating = false;
+	mScrollTier = 0;
+
+	if (deltaRow != 0)
+		mScrollVelocity = deltaRow;
+	else
+		mScrollVelocity = deltaCol;
+
+	stepCursor(deltaRow, deltaCol);
+}
+
+template<typename T>
+void ModernGridComponent<T>::endDirection()
+{
+	const bool wasRepeating = mRepeating;
+
+	mHeldRow = 0;
+	mHeldCol = 0;
+	mHoldTime = 0;
+	mRepeatTime = 0;
+	mRepeating = false;
+	mScrollVelocity = 0;
+	mScrollTier = 0;
+
+	if (wasRepeating && mCursorChangedCallback)
+		mCursorChangedCallback(CURSOR_STOPPED);
+}
+
+template<typename T>
+void ModernGridComponent<T>::stopScrolling()
+{
+	endDirection();
+}
+
+template<typename T>
+bool ModernGridComponent<T>::stepCursor(int deltaRow, int deltaCol)
 {
 	if (mEntries.empty())
 		return false;
 
 	const int columns = std::max(1, mGridDimension.x());
 	const int rows = std::max(1, mGridDimension.y());
-	int velocity = 0;
+	int target = mCursor;
 
 	if (isVertical())
 	{
-		if (deltaCol != 0)
-		{
-			const int currentCol = mCursor % columns;
-			const int targetCol = currentCol + deltaCol;
-			if (!canLoop() && (targetCol < 0 || targetCol >= columns))
-				return true;
-			velocity = deltaCol;
-		}
-		else if (deltaRow != 0)
-		{
-			const int target = mCursor + (deltaRow * columns);
-			if (!canLoop())
-			{
-				if (target < 0 || target >= size())
-					return true;
-			}
-			velocity = deltaRow * columns;
-		}
+		if (deltaRow != 0)
+			target += deltaRow * columns;
+		else
+			target += deltaCol;
 	}
 	else
 	{
-		if (deltaRow != 0)
-		{
-			const int currentRow = mCursor % rows;
-			const int targetRow = currentRow + deltaRow;
-			if (!canLoop() && (targetRow < 0 || targetRow >= rows))
-				return true;
-			velocity = deltaRow;
-		}
-		else if (deltaCol != 0)
-		{
-			const int target = mCursor + (deltaCol * rows);
-			if (!canLoop())
-			{
-				if (target < 0 || target >= size())
-					return true;
-			}
-			velocity = deltaCol * rows;
-		}
+		if (deltaCol != 0)
+			target += deltaCol * rows;
+		else
+			target += deltaRow;
 	}
 
-	if (velocity == 0)
-		return true;
+	if (target < 0 || target >= size())
+	{
+		if (!canLoop())
+			return false;
+		target = wrapIndex(target);
+	}
 
-	listInput(velocity);
+	if (target == mCursor)
+		return false;
+
+	mCursor = target;
+	onCursorChanged(mRepeating ? CURSOR_SCROLLING : CURSOR_STOPPED);
 	return true;
+}
+
+template<typename T>
+int ModernGridComponent<T>::wrapIndex(int index) const
+{
+	if (mEntries.empty())
+		return 0;
+
+	const int count = (int)mEntries.size();
+	while (index < 0)
+		index += count;
+	while (index >= count)
+		index -= count;
+	return index;
 }
 
 template<typename T>
 void ModernGridComponent<T>::update(int deltaTime)
 {
 	GuiComponent::update(deltaTime);
-	listUpdate(deltaTime);
+
+	if (mHeldRow != 0 || mHeldCol != 0)
+	{
+		mHoldTime += deltaTime;
+
+		if (mHoldTime >= REPEAT_START_DELAY)
+		{
+			if (!mRepeating)
+			{
+				mRepeating = true;
+				mScrollTier = 1;
+				mRepeatTime = REPEAT_STEP_DELAY;
+			}
+			else
+			{
+				mRepeatTime += deltaTime;
+			}
+
+			// Deliberately perform at most one logical move per rendered frame.
+			// Slow texture loading must not make the cursor skip several games.
+			if (mRepeatTime >= REPEAT_STEP_DELAY)
+			{
+				mRepeatTime %= REPEAT_STEP_DELAY;
+				stepCursor(mHeldRow, mHeldCol);
+			}
+		}
+	}
 
 	if (mEntriesDirty)
 	{
@@ -325,6 +440,7 @@ void ModernGridComponent<T>::render(const Transform4x4f& parentTrans)
 	{
 		if (!tile->isVisible())
 			continue;
+
 		if (tile->isSelected())
 			selectedTile = tile;
 		else
@@ -333,7 +449,8 @@ void ModernGridComponent<T>::render(const Transform4x4f& parentTrans)
 
 	Renderer::popClipRect();
 
-	// Keep legacy behavior: selected zoom/frame may extend outside the clipping area.
+	// Legacy-compatible selected layer: zoom/frame is allowed to extend beyond
+	// the viewport while all non-selected entries remain clipped.
 	if (selectedTile)
 		selectedTile->render(trans);
 
@@ -360,7 +477,8 @@ void ModernGridComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme,
 		if (elem->has("margin"))
 			mMargin = elem->get<Vector2f>("margin") * screen;
 		if (elem->has("padding"))
-			mPadding = elem->get<Vector4f>("padding") * Vector4f(screen.x(), screen.y(), screen.x(), screen.y());
+			mPadding = elem->get<Vector4f>("padding") *
+				Vector4f(screen.x(), screen.y(), screen.x(), screen.y());
 		if (elem->has("autoLayout"))
 			mAutoLayout = elem->get<Vector2f>("autoLayout");
 		if (elem->has("autoLayoutSelectedZoom"))
@@ -444,8 +562,11 @@ void ModernGridComponent<T>::calculateLayout()
 		columns = std::max(1, (int)Math::round(mAutoLayout.x()));
 		rows = std::max(1, (int)Math::round(mAutoLayout.y()));
 
-		const float tileW = (available.x() - (mMargin.x() * (columns - 1))) / columns;
-		const float tileH = (available.y() - (mMargin.y() * (rows - 1))) / rows;
+		const float tileW =
+			(available.x() - (mMargin.x() * (columns - 1))) / (float)columns;
+		const float tileH =
+			(available.y() - (mMargin.y() * (rows - 1))) / (float)rows;
+
 		mTileSize = Vector2f(std::max(1.0f, tileW), std::max(1.0f, tileH));
 	}
 	else
@@ -455,11 +576,18 @@ void ModernGridComponent<T>::calculateLayout()
 		const float fitX = (available.x() + mMargin.x()) / stepX;
 		const float fitY = (available.y() + mMargin.y()) / stepY;
 
-		columns = std::max(1, (int)std::floor(fitX));
-		rows = std::max(1, (int)(isVertical() ? std::ceil(fitY) : std::floor(fitY)));
-
-		if (!isVertical())
+		// Match legacy visual behavior: the scrolling axis may expose a partial
+		// final line, while the secondary axis only contains complete cells.
+		if (isVertical())
+		{
+			columns = std::max(1, (int)std::floor(fitX));
+			rows = std::max(1, (int)std::ceil(fitY));
+		}
+		else
+		{
 			columns = std::max(1, (int)std::ceil(fitX));
+			rows = std::max(1, (int)std::floor(fitY));
+		}
 	}
 
 	mGridDimension = Vector2i(columns, rows);
@@ -484,7 +612,9 @@ void ModernGridComponent<T>::rebuildTiles()
 		for (int col = 0; col < columns; ++col)
 		{
 			auto tile = std::make_shared<GridTileComponent>(this->mWindow);
-			tile->setPosition(start.x() + (col * step.x()), start.y() + (row * step.y()));
+			tile->setPosition(
+				start.x() + (col * step.x()),
+				start.y() + (row * step.y()));
 			tile->setOrigin(0.5f, 0.5f);
 			tile->setImage("");
 
@@ -552,8 +682,8 @@ void ModernGridComponent<T>::bindVisibleTiles()
 			auto& tile = mTiles.at(tilePos);
 			const int index = logicalIndexForCell(row, col);
 
-			// A recycled tile must never carry animation/selection/visibility from
-			// the entry it represented previously.
+			// Rebinding is atomic from the visual point of view: old entry state
+			// is destroyed before new image/frame/selection state is applied.
 			tile->cancelAllAnimations();
 			tile->setSelected(false, false, nullptr, true);
 			tile->setVisible(false);
@@ -562,13 +692,19 @@ void ModernGridComponent<T>::bindVisibleTiles()
 			if (index < 0 || index >= size())
 				continue;
 
-			std::string imagePath = mEntries.at(index).data.texturePath;
+			const std::string imagePath = mEntries.at(index).data.texturePath;
 			if (!imagePath.empty() && ResourceManager::getInstance()->fileExists(imagePath))
+			{
 				tile->setImage(imagePath);
+			}
 			else if (mEntries.at(index).object->getType() == 2)
+			{
 				tile->setImage(mDefaultFolderTexture);
+			}
 			else
+			{
 				tile->setImage(mDefaultGameTexture);
+			}
 
 			tile->setSelected(index == mCursor, false, nullptr, true);
 			tile->setVisible(true);
@@ -595,13 +731,15 @@ int ModernGridComponent<T>::logicalIndexForCell(int localRow, int localCol) cons
 template<typename T>
 int ModernGridComponent<T>::visiblePrimaryCount() const
 {
-	return isVertical() ? std::max(1, mGridDimension.y()) : std::max(1, mGridDimension.x());
+	return isVertical() ?
+		std::max(1, mGridDimension.y()) : std::max(1, mGridDimension.x());
 }
 
 template<typename T>
 int ModernGridComponent<T>::visibleSecondaryCount() const
 {
-	return isVertical() ? std::max(1, mGridDimension.x()) : std::max(1, mGridDimension.y());
+	return isVertical() ?
+		std::max(1, mGridDimension.x()) : std::max(1, mGridDimension.y());
 }
 
 template<typename T>
@@ -609,6 +747,7 @@ int ModernGridComponent<T>::totalPrimaryCount() const
 {
 	if (mEntries.empty())
 		return 0;
+
 	const int secondary = visibleSecondaryCount();
 	return (size() + secondary - 1) / secondary;
 }
@@ -618,6 +757,7 @@ bool ModernGridComponent<T>::canLoop() const
 {
 	if (!mScrollLoop)
 		return false;
+
 	return size() >= (visiblePrimaryCount() * visibleSecondaryCount());
 }
 
