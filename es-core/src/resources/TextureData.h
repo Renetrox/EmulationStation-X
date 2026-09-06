@@ -71,6 +71,12 @@ private:
 	bool			mScalable;
 	bool			mReloadable;
 
+	// ES-X SVG rasterization bookkeeping.
+	// The first explicit raster size may shrink an SVG to the size actually needed.
+	// After that, scalable textures only grow; smaller requests reuse the existing
+	// raster instead of releasing/re-rasterizing it every time a component zooms.
+	bool			mRasterSizeSet;
+
 	// ES-X OptimizeVRAM bookkeeping:
 	// mBaseSize is the original decoded image size.
 	// mPackedSize is the optimized/resized texture size. Zero means no resize was done.
