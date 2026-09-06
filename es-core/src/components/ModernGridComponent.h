@@ -6,6 +6,7 @@
 #include "components/GridTileComponent.h"
 #include "components/IList.h"
 #include "resources/ResourceManager.h"
+#include "resources/TextureResource.h"
 
 #include <algorithm>
 #include <cmath>
@@ -34,15 +35,16 @@ struct ModernGridData
 
 // ES-X modern grid.
 //
-// This intentionally does not inherit the old ImageGrid camera/EXTRAITEMS model.
 // Logical selection, viewport and visual tiles are separate states:
 //
 //   mCursor               -> selected game
 //   mFirstVisiblePrimary  -> first visible row/column
 //   mTiles                -> visible render pool only
+//   mTileBindings         -> logical entry currently owned by each visual tile
 //
-// A tile is fully reset every time it is rebound to another entry, so selection,
-// animation, visibility and frame state cannot leak from a previous game.
+// Like HelpComponent, stable visual content is retained until a real replacement
+// is needed. Cursor-only movement updates selection and does not blank/rebind the
+// visible tile pool.
 template<typename T>
 class ModernGridComponent : public IList<ModernGridData, T>
 {
@@ -95,6 +97,8 @@ private:
 	void rebuildTiles();
 	void updateViewport();
 	void bindVisibleTiles();
+	void updateTileSelection();
+	void refreshFallbackTextures();
 	int logicalIndexForCell(int localRow, int localCol) const;
 
 	void beginDirection(int deltaRow, int deltaCol);
@@ -111,6 +115,7 @@ private:
 	std::string mThemeView;
 
 	std::vector<std::shared_ptr<GridTileComponent>> mTiles;
+	std::vector<int> mTileBindings;
 	Vector2f mTileSize;
 	Vector2f mMargin;
 	Vector4f mPadding;
@@ -122,8 +127,13 @@ private:
 	bool mLayoutValid;
 	bool mEntriesDirty;
 
+	// Built-in fallbacks follow the same resources/<component>/ convention used
+	// by HelpComponent. Themes can still override them through legacy gameImage /
+	// folderImage, preserving existing theme compatibility.
 	std::string mDefaultGameTexture;
 	std::string mDefaultFolderTexture;
+	std::shared_ptr<TextureResource> mGameFallbackTexture;
+	std::shared_ptr<TextureResource> mFolderFallbackTexture;
 	ScrollDirection mScrollDirection;
 	ImageSource mImageSource;
 	bool mCenterSelection;
@@ -161,8 +171,8 @@ ModernGridComponent<T>::ModernGridComponent(Window* window)
 	mLayoutValid = false;
 	mEntriesDirty = true;
 
-	mDefaultGameTexture = ":/cartridge.png";
-	mDefaultFolderTexture = ":/folder.png";
+	mDefaultGameTexture = ":/grid/cartridge.png";
+	mDefaultFolderTexture = ":/grid/folder.png";
 	mScrollDirection = SCROLL_VERTICALLY;
 	mImageSource = THUMBNAIL;
 	mCenterSelection = false;
@@ -178,6 +188,7 @@ ModernGridComponent<T>::ModernGridComponent(Window* window)
 	mScrollTier = 0;
 
 	mSize = screen * 0.80f;
+	refreshFallbackTextures();
 }
 
 template<typename T>
@@ -222,6 +233,8 @@ bool ModernGridComponent<T>::remove(const T& obj)
 		else if (removedIndex < mCursor)
 			--mCursor;
 
+		// Entry indices after the removed item may now refer to different objects.
+		std::fill(mTileBindings.begin(), mTileBindings.end(), -1);
 		mEntriesDirty = true;
 		updateViewport();
 		bindVisibleTiles();
@@ -459,6 +472,19 @@ void ModernGridComponent<T>::render(const Transform4x4f& parentTrans)
 }
 
 template<typename T>
+void ModernGridComponent<T>::refreshFallbackTextures()
+{
+	mGameFallbackTexture.reset();
+	mFolderFallbackTexture.reset();
+
+	auto& resources = ResourceManager::getInstance();
+	if (!mDefaultGameTexture.empty() && resources->fileExists(mDefaultGameTexture))
+		mGameFallbackTexture = TextureResource::get(mDefaultGameTexture);
+	if (!mDefaultFolderTexture.empty() && resources->fileExists(mDefaultFolderTexture))
+		mFolderFallbackTexture = TextureResource::get(mDefaultFolderTexture);
+}
+
+template<typename T>
 void ModernGridComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme,
                                         const std::string& view,
                                         const std::string& element,
@@ -471,6 +497,10 @@ void ModernGridComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme,
 
 	Vector2f screen((float)Renderer::getScreenWidth(), (float)Renderer::getScreenHeight());
 	const ThemeData::ThemeElement* elem = theme->getElement(view, element, "imagegrid");
+
+	// Reset to the built-in PNG resource set before applying theme overrides.
+	mDefaultGameTexture = ":/grid/cartridge.png";
+	mDefaultFolderTexture = ":/grid/folder.png";
 
 	if (elem)
 	{
@@ -509,11 +539,14 @@ void ModernGridComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme,
 		if (elem->has("animate"))
 			mAnimate = elem->get<bool>("animate");
 
+		// Existing theme properties remain valid overrides for compatibility.
 		if (elem->has("gameImage"))
 			mDefaultGameTexture = elem->get<std::string>("gameImage");
 		if (elem->has("folderImage"))
 			mDefaultFolderTexture = elem->get<std::string>("folderImage");
 	}
+
+	refreshFallbackTextures();
 
 	const ThemeData::ThemeElement* tileElem = theme->getElement(view, "default", "gridtile");
 	mTileSize = (tileElem && tileElem->has("size")) ?
@@ -540,8 +573,15 @@ void ModernGridComponent<T>::onSizeChanged()
 template<typename T>
 void ModernGridComponent<T>::onCursorChanged(const CursorState& state)
 {
+	const int previousFirstVisible = mFirstVisiblePrimary;
 	updateViewport();
-	bindVisibleTiles();
+
+	// Same viewport: preserve all images/textures and change selection only.
+	// A viewport move really changes tile ownership, so only then do a rebind.
+	if (previousFirstVisible == mFirstVisiblePrimary)
+		updateTileSelection();
+	else
+		bindVisibleTiles();
 
 	if (mCursorChangedCallback)
 		mCursorChangedCallback(state);
@@ -576,8 +616,6 @@ void ModernGridComponent<T>::calculateLayout()
 		const float fitX = (available.x() + mMargin.x()) / stepX;
 		const float fitY = (available.y() + mMargin.y()) / stepY;
 
-		// Match legacy visual behavior: the scrolling axis may expose a partial
-		// final line, while the secondary axis only contains complete cells.
 		if (isVertical())
 		{
 			columns = std::max(1, (int)std::floor(fitX));
@@ -599,6 +637,7 @@ template<typename T>
 void ModernGridComponent<T>::rebuildTiles()
 {
 	mTiles.clear();
+	mTileBindings.clear();
 
 	const int columns = std::max(1, mGridDimension.x());
 	const int rows = std::max(1, mGridDimension.y());
@@ -617,6 +656,7 @@ void ModernGridComponent<T>::rebuildTiles()
 				start.y() + (row * step.y()));
 			tile->setOrigin(0.5f, 0.5f);
 			tile->setImage("");
+			tile->setVisible(false);
 
 			if (mTheme)
 				tile->applyTheme(mTheme, mThemeView, "gridtile", ThemeFlags::ALL);
@@ -625,6 +665,7 @@ void ModernGridComponent<T>::rebuildTiles()
 				tile->forceSize(mTileSize, mAutoLayoutZoom);
 
 			mTiles.push_back(tile);
+			mTileBindings.push_back(-1);
 		}
 	}
 }
@@ -668,6 +709,9 @@ void ModernGridComponent<T>::bindVisibleTiles()
 	if (!mLayoutValid || mTiles.empty())
 		return;
 
+	if (mTileBindings.size() != mTiles.size())
+		mTileBindings.assign(mTiles.size(), -1);
+
 	const int columns = std::max(1, mGridDimension.x());
 	const int rows = std::max(1, mGridDimension.y());
 
@@ -682,33 +726,63 @@ void ModernGridComponent<T>::bindVisibleTiles()
 			auto& tile = mTiles.at(tilePos);
 			const int index = logicalIndexForCell(row, col);
 
-			// Rebinding is atomic from the visual point of view: old entry state
-			// is destroyed before new image/frame/selection state is applied.
-			tile->cancelAllAnimations();
-			tile->setSelected(false, false, nullptr, true);
-			tile->setVisible(false);
-			tile->reset();
-
 			if (index < 0 || index >= size())
+			{
+				if (mTileBindings.at(tilePos) != -1)
+				{
+					tile->cancelAllAnimations();
+					tile->setSelected(false, false, nullptr, true);
+					tile->setVisible(false);
+					mTileBindings.at(tilePos) = -1;
+				}
 				continue;
-
-			const std::string imagePath = mEntries.at(index).data.texturePath;
-			if (!imagePath.empty() && ResourceManager::getInstance()->fileExists(imagePath))
-			{
-				tile->setImage(imagePath);
-			}
-			else if (mEntries.at(index).object->getType() == 2)
-			{
-				tile->setImage(mDefaultFolderTexture);
-			}
-			else
-			{
-				tile->setImage(mDefaultGameTexture);
 			}
 
-			tile->setSelected(index == mCursor, false, nullptr, true);
-			tile->setVisible(true);
-		}
+			// Keep a tile untouched while it still represents the same entry.
+			if (mTileBindings.at(tilePos) != index)
+			{
+				tile->cancelAllAnimations();
+				tile->setSelected(false, false, nullptr, true);
+
+				const std::string imagePath = mEntries.at(index).data.texturePath;
+				if (!imagePath.empty() && ResourceManager::getInstance()->fileExists(imagePath))
+				{
+					tile->setImage(imagePath);
+				}
+				else if (mEntries.at(index).object->getType() == 2)
+				{
+					if (mFolderFallbackTexture)
+						tile->setImage(mFolderFallbackTexture);
+					else
+						tile->setImage(mDefaultFolderTexture);
+				}
+				else
+				{
+					if (mGameFallbackTexture)
+						tile->setImage(mGameFallbackTexture);
+					else
+						tile->setImage(mDefaultGameTexture);
+				}
+
+				mTileBindings.at(tilePos) = index;
+				tile->setVisible(true);
+			}
+
+			tile->setSelected(index == mCursor, false);
+	}
+	}
+}
+
+template<typename T>
+void ModernGridComponent<T>::updateTileSelection()
+{
+	for (size_t i = 0; i < mTiles.size() && i < mTileBindings.size(); ++i)
+	{
+		const int index = mTileBindings.at(i);
+		if (index < 0 || index >= size())
+			continue;
+
+		mTiles.at(i)->setSelected(index == mCursor, false);
 	}
 }
 
