@@ -33,7 +33,6 @@ TextureData::TextureData(bool tile) :
 	mSourceWidth(0.0f),
 	mSourceHeight(0.0f),
 	mReloadable(false),
-	mRasterSizeSet(false),
 	mBaseSize(0, 0),
 	mPackedSize(0, 0),
 	mMaxSize()
@@ -374,30 +373,16 @@ float TextureData::sourceHeight()
 
 void TextureData::setSourceSize(float width, float height)
 {
-	if (!mScalable || width <= 0.0f || height <= 0.0f)
-		return;
-
-	// NanoSVG rasterization in ES-X is height-driven (initSVGFromMemory preserves
-	// the SVG aspect ratio from mSourceHeight). Let the first explicit request
-	// choose the useful raster size, even if it is smaller than the SVG's intrinsic
-	// dimensions. After that, only grow the raster. A smaller request can be drawn
-	// by ImageComponent from the already resident larger texture without destroying
-	// and rebuilding VRAM/RAM every time a tile or help icon changes scale.
-	if (mRasterSizeSet && height <= mSourceHeight)
-		return;
-
-	// Exact-size repeats before/after the first explicit request are also no-ops.
-	if ((mSourceWidth == width) && (mSourceHeight == height))
+	if (mScalable)
 	{
-		mRasterSizeSet = true;
-		return;
+		if ((mSourceWidth != width) || (mSourceHeight != height))
+		{
+			mSourceWidth = width;
+			mSourceHeight = height;
+			releaseVRAM();
+			releaseRAM();
+		}
 	}
-
-	mRasterSizeSet = true;
-	mSourceWidth = width;
-	mSourceHeight = height;
-	releaseVRAM();
-	releaseRAM();
 }
 
 size_t TextureData::getVRAMUsage()
