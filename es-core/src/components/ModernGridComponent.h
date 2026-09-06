@@ -162,7 +162,7 @@ ModernGridComponent<T>::ModernGridComponent(Window* window)
 	mEntriesDirty = true;
 
 	mDefaultGameTexture = ":/cartridge.png";
-	mDefaultFolderTexture = ":/folder.svg";
+	mDefaultFolderTexture = ":/folder.png";
 	mScrollDirection = SCROLL_VERTICALLY;
 	mImageSource = THUMBNAIL;
 	mCenterSelection = false;
