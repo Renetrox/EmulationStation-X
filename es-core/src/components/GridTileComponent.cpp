@@ -28,9 +28,9 @@ static unsigned int mixColors(unsigned int first, unsigned int second, float per
 	unsigned char red1   = second & 0xFF;
 
 	unsigned char alpha = (unsigned char)(alpha0 * (1.0f - percent) + alpha1 * percent);
-	unsigned char blue  = (unsigned char)(blue0  * (1.0f - percent) + blue1  * percent);
+	unsigned char blue  = (unsigned char)(blue0  * (1.0f - percent) + blue1 * percent);
 	unsigned char green = (unsigned char)(green0 * (1.0f - percent) + green1 * percent);
-	unsigned char red   = (unsigned char)(red0   * (1.0f - percent) + red1   * percent);
+	unsigned char red   = (unsigned char)(red0   * (1.0f - percent) + red1 * percent);
 
 	return (alpha << 24) | (blue << 16) | (green << 8) | red;
 }
@@ -254,17 +254,26 @@ bool GridTileComponent::isSelected() const
 
 void GridTileComponent::reset()
 {
-	setImage("");
+	// Keep the currently bound texture resident. Both grid implementations hide
+	// a tile before rebinding it, so clearing the texture here only creates a
+	// needless release/reacquire cycle and can make dynamic/default artwork blink.
 }
 
 void GridTileComponent::setImage(const std::string& path)
 {
+	if (path == mImagePath)
+		return;
+
+	mImagePath = path;
 	mImage->setImage(path);
 	resize(); // prevent flickering
 }
 
 void GridTileComponent::setImage(const std::shared_ptr<TextureResource>& texture)
 {
+	// A raw texture binding has no stable path identity, so invalidate the
+	// path cache to ensure a later path-based binding is not skipped.
+	mImagePath.clear();
 	mImage->setImage(texture);
 	resize(); // prevent flickering
 }
