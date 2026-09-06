@@ -86,6 +86,11 @@ private:
 
 	std::shared_ptr<ImageComponent> mImage;
 
+	// Keep the currently bound path so repeated cursor updates do not
+	// drop/reacquire the same texture. This is especially important for
+	// dynamically loaded SVG/default artwork on low-power SBCs.
+	std::string mImagePath;
+
 	bool mSelected = false;
 	bool mVisible = true;
 
