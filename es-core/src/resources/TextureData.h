@@ -36,6 +36,7 @@ public:
 	bool load();
 
 	bool isLoaded();
+	bool isPendingRasterization() const { return mPendingRasterization; }
 
 	// Upload the texture to VRAM if necessary and bind. Returns true if bound ok or
 	// false if either not loaded
@@ -69,6 +70,7 @@ private:
 	float			mSourceWidth;
 	float			mSourceHeight;
 	bool			mScalable;
+	bool			mPendingRasterization;
 	bool			mReloadable;
 
 	// ES-X OptimizeVRAM bookkeeping:
