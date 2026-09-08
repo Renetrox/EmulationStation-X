@@ -9,6 +9,8 @@
 #include <plutosvg.h>
 #include <limits.h>
 #include <string.h>
+#include <string>
+#include <vector>
 
 // ES-X: ON by default for the OPi-friendly build.
 // Set to false here if you want to compare behavior with the classic path.
@@ -18,6 +20,371 @@ static bool isOptimizeImageVRAMEnabled()
 {
 	return TextureData::OPTIMIZEVRAM &&
 		Settings::getInstance()->getBool("OptimizeImageVRAM");
+}
+
+namespace
+{
+	struct SvgClassRule
+	{
+		std::string className;
+		std::string declarations;
+	};
+
+	static bool isSvgCssSpace(char c)
+	{
+		return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+	}
+
+	static void trimSvgCss(std::string& value)
+	{
+		size_t start = 0;
+		while (start < value.size() && isSvgCssSpace(value[start]))
+			++start;
+
+		size_t end = value.size();
+		while (end > start && isSvgCssSpace(value[end - 1]))
+			--end;
+
+		value = value.substr(start, end - start);
+	}
+
+	static void replaceAll(std::string& value, const std::string& from, const std::string& to)
+	{
+		if (from.empty())
+			return;
+
+		size_t pos = 0;
+		while ((pos = value.find(from, pos)) != std::string::npos)
+		{
+			value.replace(pos, from.size(), to);
+			pos += to.size();
+		}
+	}
+
+	static std::string normalizeSvgCss(std::string css)
+	{
+		// Illustrator commonly writes indentation in <style> as XML numeric
+		// character references. Decode the whitespace references we care about
+		// before looking for simple class selectors.
+		replaceAll(css, "&#x9;", " ");
+		replaceAll(css, "&#X9;", " ");
+		replaceAll(css, "&#9;", " ");
+		replaceAll(css, "&#xA;", " ");
+		replaceAll(css, "&#xa;", " ");
+		replaceAll(css, "&#10;", " ");
+		replaceAll(css, "&#xD;", " ");
+		replaceAll(css, "&#xd;", " ");
+		replaceAll(css, "&#13;", " ");
+
+		// Strip CSS comments so they cannot become part of a selector.
+		size_t pos = 0;
+		while ((pos = css.find("/*", pos)) != std::string::npos)
+		{
+			const size_t end = css.find("*/", pos + 2);
+			if (end == std::string::npos)
+			{
+				css.erase(pos);
+				break;
+			}
+			css.erase(pos, end + 2 - pos);
+		}
+
+		return css;
+	}
+
+	static bool isSimpleClassSelector(std::string selector, std::string& className)
+	{
+		trimSvgCss(selector);
+		if (selector.size() < 2 || selector[0] != '.')
+			return false;
+
+		for (size_t i = 1; i < selector.size(); ++i)
+		{
+			const char c = selector[i];
+			const bool valid =
+				(c >= 'a' && c <= 'z') ||
+				(c >= 'A' && c <= 'Z') ||
+				(c >= '0' && c <= '9') ||
+				c == '_' || c == '-';
+
+			if (!valid)
+				return false;
+		}
+
+		className = selector.substr(1);
+		return true;
+	}
+
+	static void collectSimpleSvgClassRules(const std::string& cssText, std::vector<SvgClassRule>& rules)
+	{
+		const std::string css = normalizeSvgCss(cssText);
+		size_t pos = 0;
+
+		while (pos < css.size())
+		{
+			const size_t open = css.find('{', pos);
+			if (open == std::string::npos)
+				break;
+
+			const size_t close = css.find('}', open + 1);
+			if (close == std::string::npos)
+				break;
+
+			std::string selectors = css.substr(pos, open - pos);
+			std::string declarations = css.substr(open + 1, close - open - 1);
+			trimSvgCss(declarations);
+
+			if (!declarations.empty())
+			{
+				size_t selectorPos = 0;
+				while (selectorPos <= selectors.size())
+				{
+					const size_t comma = selectors.find(',', selectorPos);
+					const size_t selectorEnd = comma == std::string::npos ? selectors.size() : comma;
+					std::string selector = selectors.substr(selectorPos, selectorEnd - selectorPos);
+					std::string className;
+
+					if (isSimpleClassSelector(selector, className))
+					{
+						SvgClassRule rule;
+						rule.className = className;
+						rule.declarations = declarations;
+						rules.push_back(rule);
+					}
+
+					if (comma == std::string::npos)
+						break;
+					selectorPos = comma + 1;
+				}
+			}
+
+			pos = close + 1;
+		}
+	}
+
+	static bool bufferContains(const unsigned char* data, size_t length, const char* needle)
+	{
+		const size_t needleLength = strlen(needle);
+		if (!data || needleLength == 0 || needleLength > length)
+			return false;
+
+		for (size_t i = 0; i + needleLength <= length; ++i)
+		{
+			if (memcmp(data + i, needle, needleLength) == 0)
+				return true;
+		}
+		return false;
+	}
+
+	static bool classListContains(const std::string& classList, const std::string& className)
+	{
+		size_t pos = 0;
+		while (pos < classList.size())
+		{
+			while (pos < classList.size() && isSvgCssSpace(classList[pos]))
+				++pos;
+
+			const size_t start = pos;
+			while (pos < classList.size() && !isSvgCssSpace(classList[pos]))
+				++pos;
+
+			if (pos > start && classList.compare(start, pos - start, className) == 0)
+				return true;
+		}
+		return false;
+	}
+
+	static bool findQuotedAttribute(const std::string& tag, const char* attribute,
+		size_t& valueStart, size_t& valueEnd, char& quote)
+	{
+		const size_t attributeLength = strlen(attribute);
+		size_t pos = 0;
+
+		while ((pos = tag.find(attribute, pos)) != std::string::npos)
+		{
+			const bool validStart = pos > 0 && (isSvgCssSpace(tag[pos - 1]) || tag[pos - 1] == '<');
+			if (!validStart)
+			{
+				pos += attributeLength;
+				continue;
+			}
+
+			size_t cursor = pos + attributeLength;
+			while (cursor < tag.size() && isSvgCssSpace(tag[cursor]))
+				++cursor;
+
+			if (cursor >= tag.size() || tag[cursor] != '=')
+			{
+				pos += attributeLength;
+				continue;
+			}
+
+			++cursor;
+			while (cursor < tag.size() && isSvgCssSpace(tag[cursor]))
+				++cursor;
+
+			if (cursor >= tag.size() || (tag[cursor] != '"' && tag[cursor] != '\''))
+			{
+				pos += attributeLength;
+				continue;
+			}
+
+			quote = tag[cursor];
+			valueStart = cursor + 1;
+			valueEnd = tag.find(quote, valueStart);
+			return valueEnd != std::string::npos;
+		}
+
+		return false;
+	}
+
+	static size_t findSvgTagEnd(const std::string& svg, size_t start)
+	{
+		char quote = 0;
+		for (size_t i = start + 1; i < svg.size(); ++i)
+		{
+			const char c = svg[i];
+			if (quote != 0)
+			{
+				if (c == quote)
+					quote = 0;
+				continue;
+			}
+
+			if (c == '"' || c == '\'')
+				quote = c;
+			else if (c == '>')
+				return i;
+		}
+		return std::string::npos;
+	}
+
+	static std::string escapeSvgStyleForQuote(std::string value, char quote)
+	{
+		if (quote == '"')
+			replaceAll(value, "\"", "&quot;");
+		else if (quote == '\'')
+			replaceAll(value, "'", "&apos;");
+		return value;
+	}
+
+	static std::string inlineSimpleSvgCssClasses(const unsigned char* fileData, size_t length)
+	{
+		// Most SVGs do not use stylesheet classes. Avoid copying large SVGs
+		// (especially base64-image Help icons) unless this compatibility path
+		// is actually needed.
+		if (!bufferContains(fileData, length, "<style") ||
+			!bufferContains(fileData, length, "class="))
+		{
+			return std::string();
+		}
+
+		std::string svg(reinterpret_cast<const char*>(fileData), length);
+		std::vector<SvgClassRule> rules;
+
+		// PlutoSVG understands inline style="..." properties but not stylesheet
+		// class selectors. Collect simple .class{...} rules and remove <style>
+		// blocks only from this temporary in-memory copy.
+		size_t stylePos = 0;
+		while ((stylePos = svg.find("<style", stylePos)) != std::string::npos)
+		{
+			const size_t openEnd = svg.find('>', stylePos);
+			if (openEnd == std::string::npos)
+				break;
+
+			const size_t close = svg.find("</style>", openEnd + 1);
+			if (close == std::string::npos)
+				break;
+
+			collectSimpleSvgClassRules(svg.substr(openEnd + 1, close - openEnd - 1), rules);
+			svg.erase(stylePos, close + 8 - stylePos);
+		}
+
+		if (rules.empty())
+			return std::string();
+
+		bool changed = false;
+		size_t pos = 0;
+
+		while ((pos = svg.find('<', pos)) != std::string::npos)
+		{
+			if (pos + 1 >= svg.size())
+				break;
+
+			const char next = svg[pos + 1];
+			if (next == '/' || next == '!' || next == '?')
+			{
+				const size_t end = findSvgTagEnd(svg, pos);
+				if (end == std::string::npos)
+					break;
+				pos = end + 1;
+				continue;
+			}
+
+			const size_t end = findSvgTagEnd(svg, pos);
+			if (end == std::string::npos)
+				break;
+
+			std::string tag = svg.substr(pos, end - pos + 1);
+			size_t classStart = 0;
+			size_t classEnd = 0;
+			char classQuote = 0;
+
+			if (!findQuotedAttribute(tag, "class", classStart, classEnd, classQuote))
+			{
+				pos = end + 1;
+				continue;
+			}
+
+			const std::string classList = tag.substr(classStart, classEnd - classStart);
+			std::string classDeclarations;
+
+			// Preserve stylesheet source order when more than one class rule matches.
+			for (const auto& rule : rules)
+			{
+				if (!classListContains(classList, rule.className))
+					continue;
+
+				if (!classDeclarations.empty() && classDeclarations[classDeclarations.size() - 1] != ';')
+					classDeclarations += ';';
+				classDeclarations += rule.declarations;
+			}
+
+			if (classDeclarations.empty())
+			{
+				pos = end + 1;
+				continue;
+			}
+
+			size_t styleStart = 0;
+			size_t styleEnd = 0;
+			char styleQuote = 0;
+
+			if (findQuotedAttribute(tag, "style", styleStart, styleEnd, styleQuote))
+			{
+				std::string merged = classDeclarations;
+				if (!merged.empty() && merged[merged.size() - 1] != ';')
+					merged += ';';
+				merged += tag.substr(styleStart, styleEnd - styleStart);
+				merged = escapeSvgStyleForQuote(merged, styleQuote);
+				tag.replace(styleStart, styleEnd - styleStart, merged);
+			}
+			else
+			{
+				const std::string escaped = escapeSvgStyleForQuote(classDeclarations, '"');
+				size_t insertPos = tag.size() - 1;
+				if (insertPos > 0 && tag[insertPos - 1] == '/')
+					--insertPos;
+				tag.insert(insertPos, " style=\"" + escaped + "\"");
+			}
+
+			svg.replace(pos, end - pos + 1, tag);
+			pos += tag.size();
+			changed = true;
+		}
+
+		return changed ? svg : std::string();
+	}
 }
 
 TextureData::TextureData(bool tile) :
@@ -65,12 +432,31 @@ bool TextureData::initSVGFromMemory(const unsigned char* fileData, size_t length
 		return false;
 	}
 
+	// PlutoSVG does not apply stylesheet class selectors such as
+	// <style>.st0{fill:#fff}</style> + class="st0". Convert only those simple
+	// class rules to inline style attributes in a temporary in-memory copy.
+	std::string svgCssInlined = inlineSimpleSvgCssClasses(fileData, length);
+	const char* svgData = reinterpret_cast<const char*>(fileData);
+	int svgLength = (int)length;
+
+	if (!svgCssInlined.empty())
+	{
+		if (svgCssInlined.size() > (size_t)INT_MAX)
+		{
+			LOG(LogError) << "Error parsing SVG image: preprocessed input is too large.";
+			return false;
+		}
+
+		svgData = svgCssInlined.data();
+		svgLength = (int)svgCssInlined.size();
+	}
+
 	// PlutoSVG keeps references into the input buffer for the lifetime of the
-	// document. ResourceData remains alive for this call, and the document is
-	// always destroyed before returning from this function.
+	// document. Both ResourceData and svgCssInlined remain alive for this call,
+	// and the document is always destroyed before returning from this function.
 	plutosvg_document_t* svgImage = plutosvg_document_load_from_data(
-		reinterpret_cast<const char*>(fileData),
-		(int)length,
+		svgData,
+		svgLength,
 		-1.0f,
 		-1.0f,
 		nullptr,
