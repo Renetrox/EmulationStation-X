@@ -12,7 +12,6 @@
 #include <vector>
 
 class ComponentGrid;
-class TextureResource;
 
 class HelpComponent : public GuiComponent
 {
@@ -30,7 +29,7 @@ public:
 private:
 	void updateGrid();
 
-	std::shared_ptr<TextureResource> getIconTexture(const char* logicalName);
+	std::string getIconPath(const char* logicalName);
 
 	static std::string normalizeKey(const std::string& key);
 	static std::string getSettingSafe(const std::string& key, const std::string& def);
@@ -45,8 +44,8 @@ private:
 	bool styleEqual(const HelpStyle& a, const HelpStyle& b) const;
 
 private:
-	// Cache (invalida cuando cambia el set)
-	std::map<std::string, std::shared_ptr<TextureResource>> mIconCache;
+	// Cache only the resolved path. ImageComponent owns resolution-specific texture acquisition.
+	std::map<std::string, std::string> mIconPathCache;
 	std::string mCachedIconSet;
 
 	std::shared_ptr<ComponentGrid> mGrid;
