@@ -4,7 +4,6 @@
 #include "components/ImageComponent.h"
 #include "components/TextComponent.h"
 
-#include "resources/TextureResource.h"
 #include "resources/ResourceManager.h"
 #include "resources/Font.h"
 
@@ -220,19 +219,19 @@ std::vector<std::string> HelpComponent::buildCandidateRelativeFiles(const std::s
 	return rel;
 }
 
-std::shared_ptr<TextureResource> HelpComponent::getIconTexture(const char* logicalName)
+std::string HelpComponent::getIconPath(const char* logicalName)
 {
 	const std::string key(logicalName);
 
 	const std::string currentSet = getSettingSafe("HelpIconSet", "default");
 	if (mCachedIconSet != currentSet)
 	{
-		mIconCache.clear();
+		mIconPathCache.clear();
 		mCachedIconSet = currentSet;
 	}
 
-	auto it = mIconCache.find(key);
-	if (it != mIconCache.cend())
+	auto it = mIconPathCache.find(key);
+	if (it != mIconPathCache.cend())
 		return it->second;
 
 	const std::vector<std::string> relFiles = buildCandidateRelativeFiles(key);
@@ -245,16 +244,15 @@ std::shared_ptr<TextureResource> HelpComponent::getIconTexture(const char* logic
 			const std::string full = joinPath(base, rel);
 			if (existsAny(full))
 			{
-				auto tex = TextureResource::get(full);
-				mIconCache[key] = tex;
-				return tex;
+				mIconPathCache[key] = full;
+				return full;
 			}
 		}
 	}
 
 	LOG(LogWarning) << "HelpComponent: missing icon for \"" << key << "\"";
-	mIconCache[key] = nullptr;
-	return nullptr;
+	mIconPathCache[key] = "";
+	return "";
 }
 
 void HelpComponent::updateGrid()
@@ -298,9 +296,13 @@ void HelpComponent::updateGrid()
 	for (auto it = mPrompts.cbegin(); it != mPrompts.cend(); ++it)
 	{
 		auto icon = std::make_shared<ImageComponent>(mWindow);
-		icon->setImage(getIconTexture(it->first.c_str()));
-		icon->setColorShift(mStyle.iconColor);
+
+		// Give ImageComponent the final target before resolving the image. This is
+		// required by the ES-DE style SVG path: it reads SVG dimensions first and
+		// then requests a resolution-specific cached texture.
 		icon->setResize(0, height);
+		icon->setImage(getIconPath(it->first.c_str()));
+		icon->setColorShift(mStyle.iconColor);
 		icons.push_back(icon);
 
 		std::string normalizedKey = normalizeKey(it->second);
