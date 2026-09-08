@@ -6,12 +6,9 @@
 #include "ImageIO.h"
 #include "Settings.h"
 #include "Log.h"
-#include <nanosvg/nanosvg.h>
-#include <nanosvg/nanosvgrast.h>
-#include <assert.h>
+#include <plutosvg.h>
+#include <limits.h>
 #include <string.h>
-
-#define DPI 96
 
 // ES-X: ON by default for the OPi-friendly build.
 // Set to false here if you want to compare behavior with the classic path.
@@ -62,23 +59,38 @@ bool TextureData::initSVGFromMemory(const unsigned char* fileData, size_t length
 	if (mDataRGBA && !mPendingRasterization)
 		return true;
 
-	// nsvgParse expects a modifiable, null-terminated string.
-	char* copy = (char*)malloc(length + 1);
-	assert(copy != NULL);
-	memcpy(copy, fileData, length);
-	copy[length] = '\0';
-
-	NSVGimage* svgImage = nsvgParse(copy, "px", DPI);
-	free(copy);
-	if (!svgImage || (svgImage->width == 0) || (svgImage->height == 0))
+	if (!fileData || length == 0 || length > (size_t)INT_MAX)
 	{
-		LOG(LogError) << "Error parsing SVG image.";
-		nsvgDelete(svgImage);
+		LOG(LogError) << "Error parsing SVG image: invalid input buffer.";
 		return false;
 	}
 
-	const float svgWidth = svgImage->width;
-	const float svgHeight = svgImage->height;
+	// PlutoSVG keeps references into the input buffer for the lifetime of the
+	// document. ResourceData remains alive for this call, and the document is
+	// always destroyed before returning from this function.
+	plutosvg_document_t* svgImage = plutosvg_document_load_from_data(
+		reinterpret_cast<const char*>(fileData),
+		(int)length,
+		-1.0f,
+		-1.0f,
+		nullptr,
+		nullptr);
+
+	if (!svgImage)
+	{
+		LOG(LogError) << "Error parsing SVG image with PlutoSVG.";
+		return false;
+	}
+
+	const float svgWidth = plutosvg_document_get_width(svgImage);
+	const float svgHeight = plutosvg_document_get_height(svgImage);
+
+	if (svgWidth <= 0.0f || svgHeight <= 0.0f)
+	{
+		LOG(LogError) << "Error parsing SVG image: invalid intrinsic size.";
+		plutosvg_document_destroy(svgImage);
+		return false;
+	}
 
 	// ES-DE style first pass: if the component has not told us the final raster
 	// size yet, expose a small aspect-correct temporary size but do not rasterize.
@@ -92,7 +104,7 @@ bool TextureData::initSVGFromMemory(const unsigned char* fileData, size_t length
 		mBaseSize = Vector2i((int)Math::round(svgWidth), (int)Math::round(svgHeight));
 		mPackedSize = Vector2i::Zero();
 		mPendingRasterization = true;
-		nsvgDelete(svgImage);
+		plutosvg_document_destroy(svgImage);
 		return true;
 	}
 
@@ -105,10 +117,10 @@ bool TextureData::initSVGFromMemory(const unsigned char* fileData, size_t length
 	mWidth = (size_t)Math::round(mSourceWidth);
 	mHeight = (size_t)Math::round(mSourceHeight);
 
-	if (mWidth == 0 || mHeight == 0)
+	if (mWidth == 0 || mHeight == 0 || mWidth > (size_t)INT_MAX || mHeight > (size_t)INT_MAX)
 	{
-		LOG(LogError) << "Error rasterizing SVG image at zero size.";
-		nsvgDelete(svgImage);
+		LOG(LogError) << "Error rasterizing SVG image at invalid size.";
+		plutosvg_document_destroy(svgImage);
 		return false;
 	}
 
@@ -133,21 +145,58 @@ bool TextureData::initSVGFromMemory(const unsigned char* fileData, size_t length
 		}
 	}
 
-	unsigned char* dataRGBA = new unsigned char[mWidth * mHeight * 4];
+	plutovg_surface_t* surface = plutosvg_document_render_to_surface(
+		svgImage,
+		nullptr,
+		(int)mWidth,
+		(int)mHeight,
+		nullptr,
+		nullptr,
+		nullptr);
 
-	NSVGrasterizer* rast = nsvgCreateRasterizer();
-	if (!rast)
+	if (!surface)
 	{
-		delete[] dataRGBA;
-		nsvgDelete(svgImage);
-		LOG(LogError) << "Error creating SVG rasterizer.";
+		LOG(LogError) << "Error rasterizing SVG image with PlutoSVG.";
+		plutosvg_document_destroy(svgImage);
 		return false;
 	}
 
-	float scale = Math::min(mHeight / svgHeight, mWidth / svgWidth);
-	nsvgRasterize(rast, svgImage, 0, 0, scale, dataRGBA, (int)mWidth, (int)mHeight, (int)mWidth * 4);
-	nsvgDeleteRasterizer(rast);
-	nsvgDelete(svgImage);
+	const int surfaceWidth = plutovg_surface_get_width(surface);
+	const int surfaceHeight = plutovg_surface_get_height(surface);
+	const int surfaceStride = plutovg_surface_get_stride(surface);
+	unsigned char* surfaceData = plutovg_surface_get_data(surface);
+
+	if (!surfaceData || surfaceWidth != (int)mWidth || surfaceHeight != (int)mHeight ||
+		surfaceStride < surfaceWidth * 4)
+	{
+		LOG(LogError) << "Error rasterizing SVG image: unexpected PlutoVG surface layout.";
+		plutovg_surface_destroy(surface);
+		plutosvg_document_destroy(svgImage);
+		return false;
+	}
+
+	// PlutoVG stores premultiplied native-endian ARGB. ES-X's renderer expects
+	// non-premultiplied RGBA, so convert in place before copying to our compact
+	// texture buffer. The conversion API explicitly supports overlapping buffers.
+	plutovg_convert_argb_to_rgba(
+		surfaceData,
+		surfaceData,
+		surfaceWidth,
+		surfaceHeight,
+		surfaceStride);
+
+	unsigned char* dataRGBA = new unsigned char[mWidth * mHeight * 4];
+	const size_t rowBytes = mWidth * 4;
+	for (size_t y = 0; y < mHeight; ++y)
+	{
+		memcpy(
+			dataRGBA + y * rowBytes,
+			surfaceData + y * (size_t)surfaceStride,
+			rowBytes);
+	}
+
+	plutovg_surface_destroy(surface);
+	plutosvg_document_destroy(svgImage);
 
 	ImageIO::flipPixelsVert(dataRGBA, mWidth, mHeight);
 
