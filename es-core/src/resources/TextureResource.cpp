@@ -141,7 +141,9 @@ std::shared_ptr<TextureResource> TextureResource::get(
 	bool tile,
 	bool forceLoad,
 	bool dynamic,
-	MaxSizeInfo maxSize)
+	MaxSizeInfo maxSize,
+	size_t rasterWidth,
+	size_t rasterHeight)
 {
 	std::shared_ptr<ResourceManager>& rm = ResourceManager::getInstance();
 
@@ -153,7 +155,10 @@ std::shared_ptr<TextureResource> TextureResource::get(
 		return tex;
 	}
 
-	TextureKeyType key(canonicalPath, tile);
+	const bool isScalable = canonicalPath.size() >= 4 &&
+		canonicalPath.substr(canonicalPath.size() - 4, std::string::npos) == ".svg";
+
+	TextureKeyType key(canonicalPath, tile, isScalable, rasterWidth, rasterHeight);
 	auto foundTexture = sTextureMap.find(key);
 	if(foundTexture != sTextureMap.cend())
 	{
@@ -162,10 +167,10 @@ std::shared_ptr<TextureResource> TextureResource::get(
 			std::shared_ptr<TextureResource> tex = foundTexture->second.lock();
 
 			// ES-X OptimizeVRAM:
-			// Keep one cached texture per image path, but allow it to grow.
-			// If the cached texture was previously loaded smaller and this request needs
-			// a larger version, reload it using the larger MaxSizeInfo.
-			if (TextureData::OPTIMIZEVRAM && !maxSize.empty())
+			// Keep one cached texture per raster image path, but allow it to grow.
+			// SVG cache entries are already resolution-specific and should not be
+			// silently repacked to represent another raster resolution.
+			if (!isScalable && TextureData::OPTIMIZEVRAM && !maxSize.empty())
 			{
 				std::shared_ptr<TextureData> data;
 
@@ -200,15 +205,21 @@ std::shared_ptr<TextureResource> TextureResource::get(
 
 	// need to create it
 	std::shared_ptr<TextureResource> tex;
-	tex = std::shared_ptr<TextureResource>(new TextureResource(key.first, tile, dynamic, maxSize));
+	tex = std::shared_ptr<TextureResource>(new TextureResource(canonicalPath, tile, dynamic, maxSize));
 	std::shared_ptr<TextureData> data = sTextureDataManager.get(tex.get());
 
-	// is it an SVG?
-	if(key.first.substr(key.first.size() - 4, std::string::npos) != ".svg")
+	// ES-DE style behavior: an SVG with an unknown raster size remains uncached.
+	// Once a concrete raster resolution is requested, make that resolution part
+	// of the cache identity so multiple sizes can coexist without fighting over
+	// one TextureData instance.
+	if (isScalable && rasterWidth > 0 && rasterHeight > 0)
 	{
-		// Probably not. Add it to our map. We don't add SVGs because 2 svgs might be rasterized at different sizes
-		sTextureMap[key] = std::weak_ptr<TextureResource>(tex);
+		tex->rasterizeAt(rasterWidth, rasterHeight);
+		tex->ensureLoaded();
 	}
+
+	if (!isScalable || (rasterWidth > 0 && rasterHeight > 0))
+		sTextureMap[key] = std::weak_ptr<TextureResource>(tex);
 
 	// Add it to the reloadable list
 	rm->addReloadable(tex);
