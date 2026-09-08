@@ -268,6 +268,137 @@ namespace
 		return value;
 	}
 
+
+	static bool isPlutoSvgStyleProperty(const std::string& name)
+	{
+		static const char* supported[] =
+		{
+			"clip-path",
+			"clip-rule",
+			"color",
+			"display",
+			"fill",
+			"fill-opacity",
+			"fill-rule",
+			"opacity",
+			"stop-color",
+			"stop-opacity",
+			"stroke",
+			"stroke-dasharray",
+			"stroke-dashoffset",
+			"stroke-linecap",
+			"stroke-linejoin",
+			"stroke-miterlimit",
+			"stroke-opacity",
+			"stroke-width",
+			"visibility"
+		};
+
+		for (size_t i = 0; i < sizeof(supported) / sizeof(supported[0]); ++i)
+		{
+			if (name == supported[i])
+				return true;
+		}
+
+		return false;
+	}
+
+	static std::string filterPlutoSvgStyle(const std::string& style)
+	{
+		std::string result;
+		size_t pos = 0;
+
+		while (pos <= style.size())
+		{
+			const size_t semi = style.find(';', pos);
+			const size_t end = semi == std::string::npos ? style.size() : semi;
+
+			std::string declaration = style.substr(pos, end - pos);
+			const size_t colon = declaration.find(':');
+
+			if (colon != std::string::npos)
+			{
+				std::string name = declaration.substr(0, colon);
+				std::string value = declaration.substr(colon + 1);
+
+				trimSvgCss(name);
+				trimSvgCss(value);
+
+				if (!name.empty() && !value.empty() &&
+					isPlutoSvgStyleProperty(name))
+				{
+					if (!result.empty())
+						result += ';';
+
+					result += name;
+					result += ':';
+					result += value;
+				}
+			}
+
+			if (semi == std::string::npos)
+				break;
+
+			pos = semi + 1;
+		}
+
+		return result;
+	}
+
+	static bool sanitizeInlineSvgStyles(std::string& svg)
+	{
+		bool changed = false;
+		size_t pos = 0;
+
+		while ((pos = svg.find('<', pos)) != std::string::npos)
+		{
+			if (pos + 1 >= svg.size())
+				break;
+
+			const size_t end = findSvgTagEnd(svg, pos);
+			if (end == std::string::npos)
+				break;
+
+			const char next = svg[pos + 1];
+			if (next == '/' || next == '!' || next == '?')
+			{
+				pos = end + 1;
+				continue;
+			}
+
+			std::string tag = svg.substr(pos, end - pos + 1);
+
+			size_t styleStart = 0;
+			size_t styleEnd = 0;
+			char styleQuote = 0;
+
+			if (!findQuotedAttribute(tag, "style",
+				styleStart, styleEnd, styleQuote))
+			{
+				pos = end + 1;
+				continue;
+			}
+
+			const std::string original =
+				tag.substr(styleStart, styleEnd - styleStart);
+
+			std::string filtered = filterPlutoSvgStyle(original);
+
+			if (filtered != original)
+			{
+				filtered = escapeSvgStyleForQuote(filtered, styleQuote);
+				tag.replace(styleStart, styleEnd - styleStart, filtered);
+
+				svg.replace(pos, end - pos + 1, tag);
+				changed = true;
+			}
+
+			pos += tag.size();
+		}
+
+		return changed;
+	}
+
 	static std::string inlineSimpleSvgCssClasses(const unsigned char* fileData, size_t length)
 	{
 		// Most SVGs do not use stylesheet classes. Avoid copying large SVGs
@@ -432,10 +563,18 @@ bool TextureData::initSVGFromMemory(const unsigned char* fileData, size_t length
 		return false;
 	}
 
-	// PlutoSVG does not apply stylesheet class selectors such as
-	// <style>.st0{fill:#fff}</style> + class="st0". Convert only those simple
-	// class rules to inline style attributes in a temporary in-memory copy.
+	// PlutoSVG compatibility pass:
+	// 1. Convert simple stylesheet classes to inline styles.
+	// 2. Strip unsupported Inkscape/Illustrator CSS properties from inline
+	//    styles while preserving the graphical properties PlutoSVG understands.
 	std::string svgCssInlined = inlineSimpleSvgCssClasses(fileData, length);
+
+	if (svgCssInlined.empty() && bufferContains(fileData, length, "style"))
+		svgCssInlined.assign(reinterpret_cast<const char*>(fileData), length);
+
+	if (!svgCssInlined.empty())
+		sanitizeInlineSvgStyles(svgCssInlined);
+
 	const char* svgData = reinterpret_cast<const char*>(fileData);
 	int svgLength = (int)length;
 
