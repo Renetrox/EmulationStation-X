@@ -112,7 +112,8 @@ private:
 	bool mTargetIsMin;
 
 	// Calculates the correct mSize from our resizing information.
-	void resize();
+	// rasterize=false is used by the first SVG pass to calculate visual size only.
+	void resize(bool rasterize = true);
 
 	// ES-X: derive a texture decode limit from the current visual target.
 	MaxSizeInfo getCurrentMaxSizeInfo(MaxSizeInfo requested = MaxSizeInfo()) const;
