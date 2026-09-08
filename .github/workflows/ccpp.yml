@@ -2,6 +2,9 @@ name: C/C++ CI
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - svg-modern
 
 jobs:
   build:
