@@ -55,7 +55,12 @@ void resetFrameAnimation();
 	// Never breaks the aspect ratio.
 	// setMaxSize() and setResize() are mutually exclusive.
 	void setMaxSize(float width, float height);
+	void setMaxSize(float width, float height, bool rasterize);
 	inline void setMaxSize(const Vector2f& size) { setMaxSize(size.x(), size.y()); }
+	inline void setMaxSize(const Vector2f& size, bool rasterize)
+	{
+		setMaxSize(size.x(), size.y(), rasterize);
+	}
 
 	void setMinSize(float width, float height);
 	inline void setMinSize(const Vector2f& size) { setMinSize(size.x(), size.y()); }
