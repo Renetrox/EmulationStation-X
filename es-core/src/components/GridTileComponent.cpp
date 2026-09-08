@@ -15,6 +15,31 @@ static inline Vector2f lerpVec2(const Vector2f& a, const Vector2f& b, float t)
 	return a * (1.0f - t) + b * t;
 }
 
+static Vector2f getGridImageBox(const GridTileProperties& properties)
+{
+	Vector2f box = properties.mSize - properties.mPadding * 2.0f;
+
+	if (box.x() < 0.0f)
+		box.x() = 0.0f;
+
+	if (box.y() < 0.0f)
+		box.y() = 0.0f;
+
+	return box;
+}
+
+static Vector2f getGridMaxImageBox(
+	const GridTileProperties& normal,
+	const GridTileProperties& selected)
+{
+	const Vector2f normalBox = getGridImageBox(normal);
+	const Vector2f selectedBox = getGridImageBox(selected);
+
+	return Vector2f(
+		Math::max(normalBox.x(), selectedBox.x()),
+		Math::max(normalBox.y(), selectedBox.y()));
+}
+
 static unsigned int mixColors(unsigned int first, unsigned int second, float percent)
 {
 	unsigned char alpha0 = (first >> 24) & 0xFF;
@@ -265,8 +290,16 @@ void GridTileComponent::setImage(const std::string& path)
 		return;
 
 	mImagePath = path;
+
+	// Rasterize once at the largest size this tile can require. Selection
+	// animation can then resize visually without rebuilding an SVG every frame.
+	const Vector2f rasterBox =
+		getGridMaxImageBox(mDefaultProperties, mSelectedProperties);
+
+	mImage->setMaxSize(rasterBox, false);
 	mImage->setImage(path);
-	resize(); // prevent flickering
+
+	resize(); // visual size for the current selection state
 }
 
 void GridTileComponent::setImage(const std::shared_ptr<TextureResource>& texture)
@@ -357,8 +390,9 @@ void GridTileComponent::resize()
 {
 	calcCurrentProperties();
 
-	// Image always keeps aspect within tile
-	mImage->setMaxSize(mCurrentProperties.mSize - mCurrentProperties.mPadding * 2);
+	// The Grid image was already rasterized at its maximum required size when
+	// bound. During selection zoom only update its visual geometry.
+	mImage->setMaxSize(getGridImageBox(mCurrentProperties), false);
 
 	const bool useFrameImage = !mCurrentProperties.mFrameImage.empty();
 

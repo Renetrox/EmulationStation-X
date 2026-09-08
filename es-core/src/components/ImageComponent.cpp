@@ -311,10 +311,20 @@ void ImageComponent::setResize(float width, float height)
 
 void ImageComponent::setMaxSize(float width, float height)
 {
+	setMaxSize(width, height, true);
+}
+
+void ImageComponent::setMaxSize(float width, float height, bool rasterize)
+{
 	mTargetSize = Vector2f(width, height);
 	mTargetIsMax = true;
 	mTargetIsMin = false;
-	resize();
+	resize(rasterize);
+
+	// Visual-only resizing is used by animated Grid tiles. The texture keeps
+	// its existing raster resolution, but the vertices still need updating.
+	if (!rasterize)
+		onSizeChanged();
 }
 
 void ImageComponent::setMinSize(float width, float height)
