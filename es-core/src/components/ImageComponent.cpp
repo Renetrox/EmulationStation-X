@@ -7,6 +7,12 @@
 
 #include <cmath>
 
+static bool isSvgPath(const std::string& path)
+{
+	return path.size() >= 4 &&
+		path.substr(path.size() - 4, std::string::npos) == ".svg";
+}
+
 Vector2i ImageComponent::getTextureSize() const
 {
 	if (mTexture)
@@ -73,7 +79,7 @@ MaxSizeInfo ImageComponent::getCurrentMaxSizeInfo(MaxSizeInfo requested) const
 	return MaxSizeInfo();
 }
 
-void ImageComponent::resize()
+void ImageComponent::resize(bool rasterize)
 {
 	if (!mTexture)
 		return;
@@ -182,11 +188,14 @@ void ImageComponent::resize()
 	mSize[0] = Math::round(mSize.x());
 	mSize[1] = Math::round(mSize.y());
 
-	mTexture->rasterizeAt(
-		(size_t)mSize.x(),
-		(size_t)mSize.y());
+	if (rasterize)
+	{
+		mTexture->rasterizeAt(
+			(size_t)mSize.x(),
+			(size_t)mSize.y());
 
-	onSizeChanged();
+		onSizeChanged();
+	}
 }
 
 void ImageComponent::onSizeChanged()
@@ -202,36 +211,74 @@ void ImageComponent::setDefaultImage(std::string path)
 void ImageComponent::setImage(std::string path, bool tile, MaxSizeInfo maxSize)
 {
 	MaxSizeInfo textureMaxSize = getCurrentMaxSizeInfo(maxSize);
+	std::string resolvedPath = path;
 
-	if (path.empty() ||
-		!ResourceManager::getInstance()->fileExists(path))
+	if (resolvedPath.empty() ||
+		!ResourceManager::getInstance()->fileExists(resolvedPath))
 	{
 		if (mDefaultPath.empty() ||
 			!ResourceManager::getInstance()->fileExists(mDefaultPath))
 		{
 			mTexture.reset();
+			return;
 		}
-		else
+
+		resolvedPath = mDefaultPath;
+	}
+
+	if (isSvgPath(resolvedPath))
+	{
+		// ES-DE style SVG flow:
+		// 1) Load metadata only (pending rasterization).
+		// 2) Calculate the final visual size.
+		// 3) Re-acquire a resolution-specific cached texture.
+		mTexture = TextureResource::get(
+			resolvedPath,
+			tile,
+			mForceLoad,
+			mDynamic,
+			textureMaxSize,
+			0,
+			0);
+
+		resize(false);
+
+		if (!mTexture || mSize.x() <= 0.0f || mSize.y() <= 0.0f)
 		{
-			mTexture = TextureResource::get(
-				mDefaultPath,
-				tile,
-				mForceLoad,
-				mDynamic,
-				textureMaxSize);
+			mTexture.reset();
+			return;
+		}
+
+		const size_t rasterWidth = (size_t)Math::max(1.0f, Math::round(mSize.x()));
+		const size_t rasterHeight = (size_t)Math::max(1.0f, Math::round(mSize.y()));
+
+		mTexture.reset();
+		mTexture = TextureResource::get(
+			resolvedPath,
+			tile,
+			mForceLoad,
+			mDynamic,
+			textureMaxSize,
+			rasterWidth,
+			rasterHeight);
+
+		if (mTexture)
+		{
+			mTexture->ensureLoaded();
+			onSizeChanged();
 		}
 	}
 	else
 	{
 		mTexture = TextureResource::get(
-			path,
+			resolvedPath,
 			tile,
 			mForceLoad,
 			mDynamic,
 			textureMaxSize);
-	}
 
-	resize();
+		resize();
+	}
 }
 
 void ImageComponent::setImage(
