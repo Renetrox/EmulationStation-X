@@ -28,6 +28,7 @@ TextureData::TextureData(bool tile) :
 	mTextureID(0),
 	mDataRGBA(nullptr),
 	mScalable(false),
+	mPendingRasterization(false),
 	mWidth(0),
 	mHeight(0),
 	mSourceWidth(0.0f),
@@ -55,12 +56,13 @@ void TextureData::initFromPath(const std::string& path)
 
 bool TextureData::initSVGFromMemory(const unsigned char* fileData, size_t length)
 {
-	// If already initialised then don't read again
 	std::unique_lock<std::mutex> lock(mMutex);
-	if (mDataRGBA)
+
+	// If this SVG has already been rasterized at the requested size, keep it.
+	if (mDataRGBA && !mPendingRasterization)
 		return true;
 
-	// nsvgParse excepts a modifiable, null-terminated string
+	// nsvgParse expects a modifiable, null-terminated string.
 	char* copy = (char*)malloc(length + 1);
 	assert(copy != NULL);
 	memcpy(copy, fileData, length);
@@ -75,17 +77,42 @@ bool TextureData::initSVGFromMemory(const unsigned char* fileData, size_t length
 		return false;
 	}
 
-	// We want to rasterise this texture at a specific resolution. If the source size
-	// variables are set then use them otherwise set them from the parsed file
-	if (mSourceHeight == 0.0f)
-		mSourceHeight = svgImage->height;
+	const float svgWidth = svgImage->width;
+	const float svgHeight = svgImage->height;
 
-	mSourceWidth = (mSourceHeight * svgImage->width) / svgImage->height;
+	// ES-DE style first pass: if the component has not told us the final raster
+	// size yet, expose a small aspect-correct temporary size but do not rasterize.
+	// ImageComponent can use this to calculate its final visual dimensions first.
+	if (mSourceWidth == 0.0f && mSourceHeight == 0.0f)
+	{
+		mSourceWidth = 64.0f;
+		mSourceHeight = 64.0f * (svgHeight / svgWidth);
+		mWidth = (size_t)Math::round(mSourceWidth);
+		mHeight = (size_t)Math::round(mSourceHeight);
+		mBaseSize = Vector2i((int)Math::round(svgWidth), (int)Math::round(svgHeight));
+		mPackedSize = Vector2i::Zero();
+		mPendingRasterization = true;
+		nsvgDelete(svgImage);
+		return true;
+	}
+
+	// A zero axis means "preserve aspect ratio".
+	if (mSourceWidth == 0.0f)
+		mSourceWidth = (mSourceHeight / svgHeight) * svgWidth;
+	else if (mSourceHeight == 0.0f)
+		mSourceHeight = (mSourceWidth / svgWidth) * svgHeight;
 
 	mWidth = (size_t)Math::round(mSourceWidth);
 	mHeight = (size_t)Math::round(mSourceHeight);
 
-	mBaseSize = Vector2i((int)mWidth, (int)mHeight);
+	if (mWidth == 0 || mHeight == 0)
+	{
+		LOG(LogError) << "Error rasterizing SVG image at zero size.";
+		nsvgDelete(svgImage);
+		return false;
+	}
+
+	mBaseSize = Vector2i((int)Math::round(svgWidth), (int)Math::round(svgHeight));
 	mPackedSize = Vector2i::Zero();
 
 	if (isOptimizeImageVRAMEnabled() && !mMaxSize.empty() &&
@@ -109,7 +136,15 @@ bool TextureData::initSVGFromMemory(const unsigned char* fileData, size_t length
 	unsigned char* dataRGBA = new unsigned char[mWidth * mHeight * 4];
 
 	NSVGrasterizer* rast = nsvgCreateRasterizer();
-	float scale = Math::min(mHeight / svgImage->height, mWidth / svgImage->width);
+	if (!rast)
+	{
+		delete[] dataRGBA;
+		nsvgDelete(svgImage);
+		LOG(LogError) << "Error creating SVG rasterizer.";
+		return false;
+	}
+
+	float scale = Math::min(mHeight / svgHeight, mWidth / svgWidth);
 	nsvgRasterize(rast, svgImage, 0, 0, scale, dataRGBA, (int)mWidth, (int)mHeight, (int)mWidth * 4);
 	nsvgDeleteRasterizer(rast);
 	nsvgDelete(svgImage);
@@ -117,6 +152,7 @@ bool TextureData::initSVGFromMemory(const unsigned char* fileData, size_t length
 	ImageIO::flipPixelsVert(dataRGBA, mWidth, mHeight);
 
 	mDataRGBA = dataRGBA;
+	mPendingRasterization = false;
 
 	return true;
 }
@@ -253,6 +289,7 @@ bool TextureData::initImageFromMemory(const unsigned char* fileData, size_t leng
 	mSourceWidth = (float)width;
 	mSourceHeight = (float)height;
 	mScalable = false;
+	mPendingRasterization = false;
 
 	return initFromRGBA(imageRGBA.data(), width, height);
 }
@@ -269,6 +306,7 @@ bool TextureData::initFromRGBA(const unsigned char* dataRGBA, size_t width, size
 	memcpy(mDataRGBA, dataRGBA, width * height * 4);
 	mWidth = width;
 	mHeight = height;
+	mPendingRasterization = false;
 	return true;
 }
 
@@ -282,7 +320,7 @@ bool TextureData::load()
 		std::shared_ptr<ResourceManager>& rm = ResourceManager::getInstance();
 		const ResourceData& data = rm->getFileData(mPath);
 		// is it an SVG?
-		if (mPath.substr(mPath.size() - 4, std::string::npos) == ".svg")
+		if (mPath.size() >= 4 && mPath.substr(mPath.size() - 4, std::string::npos) == ".svg")
 		{
 			mScalable = true;
 			retval = initSVGFromMemory((const unsigned char*)data.ptr.get(), data.length);
@@ -296,7 +334,7 @@ bool TextureData::load()
 bool TextureData::isLoaded()
 {
 	std::unique_lock<std::mutex> lock(mMutex);
-	if (mDataRGBA || (mTextureID != 0))
+	if (mDataRGBA || (mTextureID != 0) || mPendingRasterization)
 		return true;
 	return false;
 }
@@ -311,11 +349,14 @@ bool TextureData::uploadAndBind()
 	}
 	else
 	{
+		// A first-pass SVG intentionally has no raster data yet.
+		if (mPendingRasterization)
+			return false;
+
 		// Load it if necessary
 		if (!mDataRGBA)
-		{
 			return false;
-		}
+
 		// Make sure we're ready to upload
 		if ((mWidth == 0) || (mHeight == 0) || (mDataRGBA == nullptr))
 			return false;
@@ -375,10 +416,15 @@ void TextureData::setSourceSize(float width, float height)
 {
 	if (mScalable)
 	{
-		if ((mSourceWidth != width) || (mSourceHeight != height))
+		// A pending SVG must be promoted to a real raster even if the requested
+		// size happens to match the temporary first-pass dimensions.
+		if (mPendingRasterization || (mSourceWidth != width) || (mSourceHeight != height))
 		{
 			mSourceWidth = width;
 			mSourceHeight = height;
+
+			// Mark it as needing real data so TextureDataManager will queue/reload it.
+			mPendingRasterization = false;
 			releaseVRAM();
 			releaseRAM();
 		}
