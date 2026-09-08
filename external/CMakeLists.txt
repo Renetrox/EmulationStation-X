@@ -75,6 +75,12 @@ if(PLUTOSVG_MATH_LIBRARY)
     target_link_libraries(plutosvg PRIVATE ${PLUTOSVG_MATH_LIBRARY})
 endif()
 
+# The historical ES-X root link list still links the nanosvg target. During the
+# experimental migration make PlutoSVG a public dependency of that target, so
+# es-core receives PlutoSVG's headers/libraries without changing global build
+# plumbing. Once the backend is accepted we can remove this bridge and NanoSVG.
+target_link_libraries(nanosvg PUBLIC plutosvg)
+
 find_package(pugixml)
 
 if(NOT pugixml_FOUND)
