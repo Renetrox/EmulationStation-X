@@ -11,6 +11,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <tuple>
 
 class TextureData;
 
@@ -24,7 +25,9 @@ public:
 		bool tile = false,
 		bool forceLoad = false,
 		bool dynamic = true,
-		MaxSizeInfo maxSize = MaxSizeInfo());
+		MaxSizeInfo maxSize = MaxSizeInfo(),
+		size_t rasterWidth = 0,
+		size_t rasterHeight = 0);
 
 	void initFromPixels(const unsigned char* dataRGBA, size_t width, size_t height);
 	virtual void initFromMemory(const char* file, size_t length);
@@ -70,7 +73,10 @@ private:
 	Vector2f					mSourceSize;
 	bool							mForceLoad;
 
-	typedef std::pair<std::string, bool> TextureKeyType;
+	// ES-DE style SVG cache key: the raster resolution is part of the identity.
+	// Raster images keep rasterWidth/rasterHeight at zero, so existing cache behavior
+	// remains unchanged. SVGs are only cached once a concrete resolution is known.
+	typedef std::tuple<std::string, bool, bool, size_t, size_t> TextureKeyType;
 	static std::map< TextureKeyType, std::weak_ptr<TextureResource> > sTextureMap; // map of textures, used to prevent duplicate textures
 	static std::set<TextureResource*> 	sAllTextures;	// Set of all textures, used for memory management
 };
