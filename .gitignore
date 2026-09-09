@@ -16,3 +16,5 @@ cmake_install.cmake
 # Build products
 *.a
 /emulationstation
+
+/build-svg/
