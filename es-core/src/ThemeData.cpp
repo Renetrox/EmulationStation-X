@@ -198,6 +198,10 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "carouselItemColor", COLOR },
 	{ "carouselSelectedItemColor", COLOR },
 	{ "carouselTextMaxLines", FLOAT },
+	// ES-X: transformación opcional de rueda para cada ítem del gamelist.
+	// La orientación existente decide si la rueda es vertical u horizontal.
+	{ "carouselItemRotation", FLOAT },
+	{ "carouselItemRotationOrigin", NORMALIZED_PAIR },
 
 	{ "horizontalMargin", RESOLUTION_FLOAT },
 	{ "forceUppercase", BOOLEAN },

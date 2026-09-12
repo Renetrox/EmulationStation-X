@@ -261,6 +261,12 @@ private:
 	bool mCarouselShowText;
 	int mCarouselTextMaxLines;
 
+	// ES-X: rueda opcional. Reutiliza el mismo modelo de SystemView:
+	// rotación por distancia al cursor alrededor de un origen normalizado,
+	// que puede quedar fuera de la tarjeta (por ejemplo 4.0 0.5).
+	float mCarouselItemRotation;
+	Vector2f mCarouselItemRotationOrigin;
+
 	// ES-X: imagen interna de tarjeta en modo carrusel.
 	bool mCarouselImage;
 	std::string mCarouselImageType;
@@ -351,6 +357,8 @@ TextListComponent<T>::TextListComponent(Window* window) :
 	mCarouselSelectedItemColor = 0x101020CC;
 	mCarouselShowText = true;
 	mCarouselTextMaxLines = 2;
+	mCarouselItemRotation = 0.0f;
+	mCarouselItemRotationOrigin = Vector2f(0.5f, 0.5f);
 
 	mCarouselImage = false;
 	mCarouselImageType = "auto";
@@ -764,10 +772,29 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 		const bool visuallyCentered = (absDistance < 0.5f);
 
+		// Misma transformación usada por la rueda de SystemView, aplicada aquí
+		// al ítem completo para que tarjeta, texto, arte y marco giren juntos.
+		Transform4x4f itemTrans = trans;
+		const float itemRotation = mCarouselItemRotation * distance;
+
+		if (std::fabs(itemRotation) > 0.001f)
+		{
+			const float xOff =
+				(0.5f - mCarouselItemRotationOrigin.x()) * outerW;
+			const float yOff =
+				(0.5f - mCarouselItemRotationOrigin.y()) * outerH;
+
+			itemTrans.translate(Vector3f(itemAnchorX, itemAnchorY, 0.0f));
+			itemTrans.translate(Vector3f(-xOff, -yOff, 0.0f));
+			itemTrans.rotateZ((float)ES_DEG_TO_RAD(itemRotation));
+			itemTrans.translate(Vector3f(xOff, yOff, 0.0f));
+			itemTrans.translate(Vector3f(-itemAnchorX, -itemAnchorY, 0.0f));
+		}
+
 		unsigned int bgColor = visuallyCentered ? mCarouselSelectedItemColor : mCarouselItemColor;
 		bgColor = applyOpacity(bgColor, opacity01);
 
-		Renderer::setMatrix(trans);
+		Renderer::setMatrix(itemTrans);
 
 		// ES-X:
 		// La tarjeta/fondo del carrusel queda fija.
@@ -826,7 +853,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_RIGHT || mAlignment == ALIGN_RIGHT)
 					textX = (itemWidth * 0.5f) - cache->metrics.size.x() - (itemWidth * 0.06f);
 
-				Transform4x4f drawTrans = trans;
+				Transform4x4f drawTrans = itemTrans;
 
 				drawTrans.translate(Vector3f(
 					drawX + (scaledW * 0.5f),
@@ -936,14 +963,19 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			entry.data.carouselImage->setPosition(imagePosX, imagePosY, 0.0f);
 			entry.data.carouselImage->setOpacity((unsigned char)(opacity01 * 255.0f));
 
-			Transform4x4f imageTrans = trans;
+			Transform4x4f imageTrans = itemTrans;
 
 			// ES-X:
 			// En modo cover, setMinSize() garantiza que la imagen cubra toda
 			// la caja, pero la textura puede sobresalir por el eje excedente.
 			// Recortamos solo el render de la imagen a su caja visual; el marco
 			// se dibuja después y queda fuera de este clip.
-			const bool clipCoverImage = !hasFallbackImage && mCarouselImageFit == "cover";
+			// pushClipRect() es axis-aligned; al rotar cortaría la imagen usando
+			// una caja incorrecta. La rueda prioriza una transformación íntegra y
+			// conserva el recorte habitual cuando la rotación efectiva es cero.
+			const bool clipCoverImage =
+				!hasFallbackImage && mCarouselImageFit == "cover" &&
+				std::fabs(itemRotation) <= 0.001f;
 
 			if (clipCoverImage)
 			{
@@ -1768,6 +1800,16 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	mCarouselTextMaxLines = 2;
 	if (elem->has("carouselTextMaxLines"))
 		mCarouselTextMaxLines = (int)std::round(elem->get<float>("carouselTextMaxLines"));
+
+	mCarouselItemRotation = 0.0f;
+	mCarouselItemRotationOrigin = Vector2f(0.5f, 0.5f);
+
+	if (elem->has("carouselItemRotation"))
+		mCarouselItemRotation = elem->get<float>("carouselItemRotation");
+
+	if (elem->has("carouselItemRotationOrigin"))
+		mCarouselItemRotationOrigin =
+			elem->get<Vector2f>("carouselItemRotationOrigin");
 
 	if (mCarouselTextMaxLines < 1)
 		mCarouselTextMaxLines = 1;

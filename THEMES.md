@@ -430,6 +430,25 @@ This separation allows carousel alignment to change without incorrectly shifting
 </textlist>
 ```
 
+### Wheel transformation
+
+The optional wheel transformation uses the carousel orientation and rotates every item according
+to its distance from the selected item. An origin outside the tile creates the curved wheel path.
+
+```xml
+<textlist name="gamelist">
+  <orientation>vertical</orientation>
+  <carouselMode>true</carouselMode>
+
+  <carouselItemRotation>-7</carouselItemRotation>
+  <carouselItemRotationOrigin>4.03 0.5</carouselItemRotationOrigin>
+</textlist>
+```
+
+Set `carouselItemRotation` to `0` (the default) to retain the regular straight carousel. The same
+properties also work with horizontal orientation. `contain` is recommended for wheel artwork;
+axis-aligned `cover` clipping is disabled on rotated items so it cannot cut them incorrectly.
+
 ### Carousel property reference
 
 | Property | Description |
@@ -456,6 +475,8 @@ This separation allows carousel alignment to change without incorrectly shifting
 | `carouselSelectedItemColor` | Background color for the selected tile. |
 | `carouselShowText` | Shows or hides game names inside carousel items. |
 | `carouselTextMaxLines` | Maximum title lines; supported range is 1–3. |
+| `carouselItemRotation` | Rotation in degrees per item of distance from the selected item; `0` disables the wheel transformation. |
+| `carouselItemRotationOrigin` | Normalized rotation origin; values outside `0–1` place the wheel pivot outside the tile. |
 
 ### Carousel artwork properties
 
