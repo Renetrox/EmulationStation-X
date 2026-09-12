@@ -6,6 +6,7 @@
 #include "components/ImageComponent.h"
 #include "animations/LambdaAnimation.h"
 #include "math/Misc.h"
+#include "utils/FileSystemUtil.h"
 #include "utils/StringUtil.h"
 #include "Log.h"
 #include "Settings.h"
@@ -795,7 +796,8 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			{
 				hasRealImage = true;
 			}
-			else if (!mCarouselFallbackImage.empty())
+			else if (!mCarouselFallbackImage.empty() &&
+				Utils::FileSystem::exists(mCarouselFallbackImage))
 			{
 				imagePath = mCarouselFallbackImage;
 				hasFallbackImage = true;
