@@ -808,7 +808,30 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			bgColor,
 			bgColor);
 
-		if (mCarouselShowText)
+		// Resuelve primero la imagen para que el texto actúe únicamente
+		// como último recurso cuando no haya arte ni fallback del tema.
+		std::string imagePath;
+		bool hasRealImage = false;
+		bool hasFallbackImage = false;
+
+		if (mCarouselImage)
+		{
+			imagePath = TextListCarouselArt::getImagePath(entry.object, mCarouselImageType);
+
+			if (!imagePath.empty())
+			{
+				hasRealImage = true;
+			}
+			else if (!mCarouselFallbackImage.empty())
+			{
+				imagePath = mCarouselFallbackImage;
+				hasFallbackImage = true;
+			}
+		}
+
+		const bool hasAnyCarouselImage = hasRealImage || hasFallbackImage;
+
+		if (mCarouselShowText && !hasAnyCarouselImage)
 		{
 			unsigned int textColor;
 			if (visuallyCentered && mSelectedColor)
@@ -870,27 +893,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				y += baseTextHeight + lineGap;
 			}
 		}
-
-		std::string imagePath;
-		bool hasRealImage = false;
-		bool hasFallbackImage = false;
-
-		if (mCarouselImage)
-		{
-			imagePath = TextListCarouselArt::getImagePath(entry.object, mCarouselImageType);
-
-			if (!imagePath.empty())
-			{
-				hasRealImage = true;
-			}
-			else if (!mCarouselFallbackImage.empty())
-			{
-				imagePath = mCarouselFallbackImage;
-				hasFallbackImage = true;
-			}
-		}
-
-		const bool hasAnyCarouselImage = hasRealImage || hasFallbackImage;
 
 		if (mCarouselImage && hasAnyCarouselImage && !imagePath.empty())
 		{
