@@ -112,6 +112,16 @@ static const InputConfigStructure GUI_INPUT_CONFIG_LIST[inputCount] =
 
 #define HOLD_TO_SKIP_MS 1000
 
+// Directional AXIS/HAT inputs already identify their direction on activation.
+// Assigning these rows immediately avoids depending on a later center/release
+// event, which is not reported consistently by every controller.
+static bool isImmediateDirectionalRow(int inputId)
+{
+	return inputId == 0  || inputId == 1  || inputId == 2  || inputId == 3  ||
+	       inputId == 16 || inputId == 17 || inputId == 18 || inputId == 19 ||
+	       inputId == 20 || inputId == 21 || inputId == 22 || inputId == 23;
+}
+
 GuiInputConfig::GuiInputConfig(Window* window, InputConfig* target, bool reconfigureAll, const std::function<void()>& okCallback) : GuiComponent(window),
 	mBackground(window, getFramePath()), mGrid(window, Vector2i(1, 7)),
 	mTargetConfig(target), mHoldingInput(false), mSkipAxis(false), mBusyAnim(window)
@@ -198,6 +208,19 @@ GuiInputConfig::GuiInputConfig(Window* window, InputConfig* target, bool reconfi
 
 			if(filterTrigger(input, config, i))
 				return true;
+
+			// D-pad and analog direction rows can be represented as HAT or AXIS.
+			// The direction is known as soon as the input becomes active, so map it
+			// immediately instead of waiting for a matching release/center event.
+			if(isImmediateDirectionalRow(i) &&
+			   (input.type == TYPE_AXIS || input.type == TYPE_HAT) &&
+			   input.value != 0)
+			{
+				if(assign(input, i))
+					rowDone();
+
+				return true;
+			}
 
 			if(input.value != 0)
 			{
