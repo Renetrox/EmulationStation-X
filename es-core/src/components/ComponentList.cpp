@@ -80,8 +80,10 @@ bool ComponentList::input(InputConfig* config, Input input)
     // cortamos la repetición ANTES de pasarlo al hijo.
     if (input.value == 0 && (navUp || navDown || pageUp || pageDown))
 {
+    // Stop any pending list repeat first, but do not consume the release.
+    // Row input handlers such as GuiInputConfig still need the matching
+    // release event to finish the current mapping and advance to the next row.
     stopScrolling();
-    return true;
 }
 
     // ES-DE corta el scroll pendiente al entrar en acciones.
