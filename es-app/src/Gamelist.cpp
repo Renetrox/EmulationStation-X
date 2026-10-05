@@ -151,6 +151,13 @@ namespace
 
 	using GameInfoCache = std::map<std::string, GameInfoSignature>;
 
+	struct GameInfoCacheData
+	{
+		GameInfoCache files;
+		std::set<std::string> launchers;
+		bool hasLauncherSnapshot = false;
+	};
+
 	bool sameSignature(const GameInfoSignature& left, const GameInfoSignature& right)
 	{
 		return left.size == right.size && left.mtime == right.mtime;
@@ -179,9 +186,9 @@ namespace
 			"/.emulationstation/cache/portmaster-gameinfo.cache";
 	}
 
-	GameInfoCache loadPortMasterGameInfoCache()
+	GameInfoCacheData loadPortMasterGameInfoCache()
 	{
-		GameInfoCache cache;
+		GameInfoCacheData cache;
 		std::ifstream stream(getPortMasterGameInfoCachePath().c_str());
 		std::string line;
 
@@ -190,6 +197,33 @@ namespace
 			if(line.empty() || line[0] == '#')
 				continue;
 
+			// v2: launcher snapshot, used for a zero-scan fast path.
+			if(line.compare(0, 2, "L\t") == 0)
+			{
+				cache.launchers.insert(line.substr(2));
+				cache.hasLauncherSnapshot = true;
+				continue;
+			}
+
+			// v2: cached gameinfo.xml signature.
+			if(line.compare(0, 2, "G\t") == 0)
+			{
+				const size_t firstTab = line.find('\t', 2);
+				const size_t secondTab = firstTab == std::string::npos ?
+					std::string::npos : line.find('\t', firstTab + 1);
+
+				if(firstTab == std::string::npos || secondTab == std::string::npos)
+					continue;
+
+				GameInfoSignature signature;
+				signature.mtime = std::atoll(line.substr(2, firstTab - 2).c_str());
+				signature.size = std::atoll(line.substr(firstTab + 1, secondTab - firstTab - 1).c_str());
+				cache.files[line.substr(secondTab + 1)] = signature;
+				continue;
+			}
+
+			// Backward compatibility with the v1 cache format:
+			// mtime<TAB>size<TAB>path
 			const size_t firstTab = line.find('\t');
 			const size_t secondTab = firstTab == std::string::npos ?
 				std::string::npos : line.find('\t', firstTab + 1);
@@ -200,13 +234,13 @@ namespace
 			GameInfoSignature signature;
 			signature.mtime = std::atoll(line.substr(0, firstTab).c_str());
 			signature.size = std::atoll(line.substr(firstTab + 1, secondTab - firstTab - 1).c_str());
-			cache[line.substr(secondTab + 1)] = signature;
+			cache.files[line.substr(secondTab + 1)] = signature;
 		}
 
 		return cache;
 	}
 
-	void savePortMasterGameInfoCache(const GameInfoCache& cache)
+	void savePortMasterGameInfoCache(const GameInfoCacheData& cache)
 	{
 		const std::string cachePath = getPortMasterGameInfoCachePath();
 		Utils::FileSystem::createDirectory(Utils::FileSystem::getParent(cachePath));
@@ -218,9 +252,33 @@ namespace
 			return;
 		}
 
-		stream << "# ES-X PortMaster gameinfo cache v1\n";
-		for(const auto& entry : cache)
-			stream << entry.second.mtime << '\t' << entry.second.size << '\t' << entry.first << '\n';
+		stream << "# ES-X PortMaster gameinfo cache v2\n";
+		for(const std::string& launcher : cache.launchers)
+			stream << "L\t" << launcher << '\n';
+
+		for(const auto& entry : cache.files)
+			stream << "G\t" << entry.second.mtime << '\t' << entry.second.size << '\t'
+				<< entry.first << '\n';
+	}
+
+	std::set<std::string> getCurrentPortLaunchers(SystemData* system)
+	{
+		std::set<std::string> launchers;
+		FileData* root = system->getRootFolder();
+		if(!root)
+			return launchers;
+
+		const std::vector<FileData*>& children = root->getChildren();
+		for(FileData* child : children)
+		{
+			if(child->getType() != GAME)
+				continue;
+
+			if(Utils::FileSystem::getExtension(child->getPath()) == ".sh")
+				launchers.insert(child->getPath());
+		}
+
+		return launchers;
 	}
 
 	const char* PORTMASTER_METADATA_KEYS[] = {
@@ -314,8 +372,16 @@ void parsePortMasterGameInfo(SystemData* system)
 	if(!Utils::FileSystem::isDirectory(relativeTo))
 		return;
 
-	GameInfoCache cache = loadPortMasterGameInfoCache();
+	GameInfoCacheData cache = loadPortMasterGameInfoCache();
 	const bool gamelistExists = Utils::FileSystem::exists(system->getGamelistPath(false));
+	const std::set<std::string> currentLaunchers = getCurrentPortLaunchers(system);
+
+	// True one-time fast path: if the set of root .sh launchers did not change,
+	// all previously imported metadata already lives in gamelist.xml. Avoid even
+	// enumerating PortMaster directories or stat()ing gameinfo.xml files.
+	if(gamelistExists && cache.hasLauncherSnapshot && currentLaunchers == cache.launchers)
+		return;
+
 	const Utils::FileSystem::stringList entries = Utils::FileSystem::getDirContent(relativeTo);
 	std::vector<PendingGameInfo> pending;
 
@@ -333,8 +399,8 @@ void parsePortMasterGameInfo(SystemData* system)
 
 		if(gamelistExists)
 		{
-			auto cached = cache.find(xmlpath);
-			if(cached != cache.end() && sameSignature(cached->second, signature))
+			auto cached = cache.files.find(xmlpath);
+			if(cached != cache.files.end() && sameSignature(cached->second, signature))
 				continue;
 		}
 
@@ -427,7 +493,7 @@ void parsePortMasterGameInfo(SystemData* system)
 		// merge. On subsequent boots they only cost a stat(), not an XML parse.
 		if(cacheable)
 		{
-			cache[xmlpath] = pendingInfo.signature;
+			cache.files[xmlpath] = pendingInfo.signature;
 			cacheChanged = true;
 		}
 	}
@@ -443,6 +509,13 @@ void parsePortMasterGameInfo(SystemData* system)
 
 		LOG(LogInfo) << "PortMaster gameinfo: persisted metadata for "
 			<< importedFiles.size() << " game(s) into gamelist.xml";
+	}
+
+	if(!cache.hasLauncherSnapshot || cache.launchers != currentLaunchers)
+	{
+		cache.launchers = currentLaunchers;
+		cache.hasLauncherSnapshot = true;
+		cacheChanged = true;
 	}
 
 	if(cacheChanged)
