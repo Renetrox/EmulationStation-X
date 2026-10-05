@@ -66,7 +66,10 @@ SystemData::SystemData(const std::string& name, const std::string& fullName, Sys
 			populateFolder(mRootFolder);
 
 		if(!Settings::getInstance()->getBool("IgnoreGamelist"))
+		{
 			parseGamelist(this);
+			parsePortMasterGameInfo(this);
+		}
 
 		mRootFolder->sort(FileSorts::SortTypes.at(0));
 
