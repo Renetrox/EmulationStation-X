@@ -1,8 +1,11 @@
 #include "Gamelist.h"
 
 #include <chrono>
+#include <cstdlib>
+#include <fstream>
 #include <map>
 #include <set>
+#include <sys/stat.h>
 
 #include "utils/FileSystemUtil.h"
 #include "FileData.h"
@@ -134,6 +137,92 @@ namespace
 {
 	using ExplicitMetadataMap = std::map<std::string, std::set<std::string>>;
 
+	struct GameInfoSignature
+	{
+		long long size = 0;
+		long long mtime = 0;
+	};
+
+	struct PendingGameInfo
+	{
+		std::string path;
+		GameInfoSignature signature;
+	};
+
+	using GameInfoCache = std::map<std::string, GameInfoSignature>;
+
+	bool sameSignature(const GameInfoSignature& left, const GameInfoSignature& right)
+	{
+		return left.size == right.size && left.mtime == right.mtime;
+	}
+
+	bool getGameInfoSignature(const std::string& path, GameInfoSignature& signature)
+	{
+#ifdef WIN32
+		struct _stat64 info;
+		if(_stat64(path.c_str(), &info) != 0)
+			return false;
+#else
+		struct stat info;
+		if(stat(path.c_str(), &info) != 0)
+			return false;
+#endif
+
+		signature.size = static_cast<long long>(info.st_size);
+		signature.mtime = static_cast<long long>(info.st_mtime);
+		return true;
+	}
+
+	std::string getPortMasterGameInfoCachePath()
+	{
+		return Utils::FileSystem::getHomePath() +
+			"/.emulationstation/cache/portmaster-gameinfo.cache";
+	}
+
+	GameInfoCache loadPortMasterGameInfoCache()
+	{
+		GameInfoCache cache;
+		std::ifstream stream(getPortMasterGameInfoCachePath().c_str());
+		std::string line;
+
+		while(std::getline(stream, line))
+		{
+			if(line.empty() || line[0] == '#')
+				continue;
+
+			const size_t firstTab = line.find('\t');
+			const size_t secondTab = firstTab == std::string::npos ?
+				std::string::npos : line.find('\t', firstTab + 1);
+
+			if(firstTab == std::string::npos || secondTab == std::string::npos)
+				continue;
+
+			GameInfoSignature signature;
+			signature.mtime = std::atoll(line.substr(0, firstTab).c_str());
+			signature.size = std::atoll(line.substr(firstTab + 1, secondTab - firstTab - 1).c_str());
+			cache[line.substr(secondTab + 1)] = signature;
+		}
+
+		return cache;
+	}
+
+	void savePortMasterGameInfoCache(const GameInfoCache& cache)
+	{
+		const std::string cachePath = getPortMasterGameInfoCachePath();
+		Utils::FileSystem::createDirectory(Utils::FileSystem::getParent(cachePath));
+
+		std::ofstream stream(cachePath.c_str(), std::ios::out | std::ios::trunc);
+		if(!stream)
+		{
+			LOG(LogWarning) << "PortMaster gameinfo: unable to write cache \"" << cachePath << "\"";
+			return;
+		}
+
+		stream << "# ES-X PortMaster gameinfo cache v1\n";
+		for(const auto& entry : cache)
+			stream << entry.second.mtime << '\t' << entry.second.size << '\t' << entry.first << '\n';
+	}
+
 	const char* PORTMASTER_METADATA_KEYS[] = {
 		"name",
 		"desc",
@@ -218,7 +307,6 @@ void parsePortMasterGameInfo(SystemData* system)
 {
 	// PortMaster installs launchers in the root of the "ports" system and keeps
 	// supplemental metadata in first-level port directories as gameinfo.xml.
-	// Keep this scoped to ports so unrelated systems are not recursively scanned.
 	if(system->getName() != "ports")
 		return;
 
@@ -226,18 +314,49 @@ void parsePortMasterGameInfo(SystemData* system)
 	if(!Utils::FileSystem::isDirectory(relativeTo))
 		return;
 
-	const ExplicitMetadataMap explicitMetadata = getExplicitGamelistMetadata(system);
+	GameInfoCache cache = loadPortMasterGameInfoCache();
+	const bool gamelistExists = Utils::FileSystem::exists(system->getGamelistPath(false));
 	const Utils::FileSystem::stringList entries = Utils::FileSystem::getDirContent(relativeTo);
-	std::set<FileData*> importedFiles;
+	std::vector<PendingGameInfo> pending;
 
+	// Fast path: only stat gameinfo.xml files. If size + mtime match the cache,
+	// do not open the XML and do not re-read gamelist.xml.
 	for(const std::string& portDir : entries)
 	{
 		if(!Utils::FileSystem::isDirectory(portDir))
 			continue;
 
 		const std::string xmlpath = portDir + "/gameinfo.xml";
-		if(!Utils::FileSystem::exists(xmlpath))
+		GameInfoSignature signature;
+		if(!getGameInfoSignature(xmlpath, signature))
 			continue;
+
+		if(gamelistExists)
+		{
+			auto cached = cache.find(xmlpath);
+			if(cached != cache.end() && sameSignature(cached->second, signature))
+				continue;
+		}
+
+		PendingGameInfo item;
+		item.path = xmlpath;
+		item.signature = signature;
+		pending.push_back(item);
+	}
+
+	if(pending.empty())
+		return;
+
+	// Only parse gamelist.xml when at least one PortMaster metadata file is new
+	// or changed. Explicit gamelist fields always win over supplemental data.
+	const ExplicitMetadataMap explicitMetadata = getExplicitGamelistMetadata(system);
+	std::set<FileData*> importedFiles;
+	bool cacheChanged = false;
+
+	for(const PendingGameInfo& pendingInfo : pending)
+	{
+		const std::string& xmlpath = pendingInfo.path;
+		bool cacheable = true;
 
 		pugi::xml_document doc;
 		pugi::xml_parse_result result = doc.load_file(xmlpath.c_str());
@@ -259,17 +378,26 @@ void parsePortMasterGameInfo(SystemData* system)
 		{
 			pugi::xml_node pathNode = gameNode.child("path");
 			if(!pathNode)
+			{
+				cacheable = false;
 				continue;
+			}
 
 			const std::string path =
 				Utils::FileSystem::resolveRelativePath(pathNode.text().get(), relativeTo, false, true);
 
 			if(!Utils::FileSystem::exists(path))
+			{
+				cacheable = false;
 				continue;
+			}
 
 			FileData* file = findOrCreateFile(system, path, GAME);
 			if(!file || file->isArcadeAsset())
+			{
+				cacheable = false;
 				continue;
+			}
 
 			MetaDataList incoming =
 				MetaDataList::createFromXML(GAME_METADATA, gameNode, relativeTo);
@@ -294,22 +422,31 @@ void parsePortMasterGameInfo(SystemData* system)
 				LOG(LogDebug) << "PortMaster gameinfo: imported metadata for \"" << path << "\"";
 			}
 		}
+
+		// Cache valid, fully-resolved files even when there was nothing new to
+		// merge. On subsequent boots they only cost a stat(), not an XML parse.
+		if(cacheable)
+		{
+			cache[xmlpath] = pendingInfo.signature;
+			cacheChanged = true;
+		}
 	}
 
-	// Persist imported metadata immediately. This turns gameinfo.xml into a
-	// one-time import source: afterwards the normal gamelist.xml contains the
-	// merged values and remains authoritative.
+	// Persist imported metadata immediately. Afterwards gamelist.xml is the
+	// authoritative source and gameinfo.xml is only revisited if it changes.
 	if(!importedFiles.empty())
 	{
 		updateGamelist(system);
 
-		// updateGamelist() does not clear the dirty flags itself.
 		for(FileData* file : importedFiles)
 			file->metadata.resetChangedFlag();
 
 		LOG(LogInfo) << "PortMaster gameinfo: persisted metadata for "
 			<< importedFiles.size() << " game(s) into gamelist.xml";
 	}
+
+	if(cacheChanged)
+		savePortMasterGameInfoCache(cache);
 }
 
 void parseGamelist(SystemData* system)
