@@ -228,6 +228,7 @@ void parsePortMasterGameInfo(SystemData* system)
 
 	const ExplicitMetadataMap explicitMetadata = getExplicitGamelistMetadata(system);
 	const Utils::FileSystem::stringList entries = Utils::FileSystem::getDirContent(relativeTo);
+	std::set<FileData*> importedFiles;
 
 	for(const std::string& portDir : entries)
 	{
@@ -287,14 +288,27 @@ void parsePortMasterGameInfo(SystemData* system)
 				merged = true;
 			}
 
-			// PortMaster metadata is inherited runtime metadata, not a user edit.
-			// Do not cause updateGamelist() to persist it automatically.
 			if(merged)
 			{
-				file->metadata.resetChangedFlag();
-				LOG(LogDebug) << "PortMaster gameinfo: merged metadata for \"" << path << "\"";
+				importedFiles.insert(file);
+				LOG(LogDebug) << "PortMaster gameinfo: imported metadata for \"" << path << "\"";
 			}
 		}
+	}
+
+	// Persist imported metadata immediately. This turns gameinfo.xml into a
+	// one-time import source: afterwards the normal gamelist.xml contains the
+	// merged values and remains authoritative.
+	if(!importedFiles.empty())
+	{
+		updateGamelist(system);
+
+		// updateGamelist() does not clear the dirty flags itself.
+		for(FileData* file : importedFiles)
+			file->metadata.resetChangedFlag();
+
+		LOG(LogInfo) << "PortMaster gameinfo: persisted metadata for "
+			<< importedFiles.size() << " game(s) into gamelist.xml";
 	}
 }
 
