@@ -1,6 +1,8 @@
 #include "Gamelist.h"
 
 #include <chrono>
+#include <map>
+#include <set>
 
 #include "utils/FileSystemUtil.h"
 #include "FileData.h"
@@ -125,6 +127,175 @@ FileData* findOrCreateFile(SystemData* system, const std::string& path, FileType
 	}
 
 	return NULL;
+}
+
+
+namespace
+{
+	using ExplicitMetadataMap = std::map<std::string, std::set<std::string>>;
+
+	const char* PORTMASTER_METADATA_KEYS[] = {
+		"name",
+		"desc",
+		"image",
+		"releasedate",
+		"developer",
+		"publisher",
+		"genre",
+		"players"
+	};
+
+	ExplicitMetadataMap getExplicitGamelistMetadata(SystemData* system)
+	{
+		ExplicitMetadataMap explicitMetadata;
+		const std::string xmlpath = system->getGamelistPath(false);
+
+		if(!Utils::FileSystem::exists(xmlpath))
+			return explicitMetadata;
+
+		pugi::xml_document doc;
+		if(!doc.load_file(xmlpath.c_str()))
+			return explicitMetadata;
+
+		pugi::xml_node root = doc.child("gameList");
+		if(!root)
+			return explicitMetadata;
+
+		const std::string relativeTo = system->getStartPath();
+
+		for(pugi::xml_node fileNode = root.child("game"); fileNode; fileNode = fileNode.next_sibling("game"))
+		{
+			pugi::xml_node pathNode = fileNode.child("path");
+			if(!pathNode)
+				continue;
+
+			const std::string path =
+				Utils::FileSystem::resolveRelativePath(pathNode.text().get(), relativeTo, false, true);
+
+			for(const char* key : PORTMASTER_METADATA_KEYS)
+			{
+				if(fileNode.child(key))
+					explicitMetadata[path].insert(key);
+			}
+		}
+
+		return explicitMetadata;
+	}
+
+	bool isDefaultMetadataValue(const MetaDataList& metadata, const std::string& key)
+	{
+		const std::string& value = metadata.get(key);
+		if(value.empty())
+			return true;
+
+		const std::vector<MetaDataDecl>& declarations = getMDDByType(metadata.getType());
+		for(const MetaDataDecl& declaration : declarations)
+		{
+			if(declaration.key == key)
+				return value == declaration.defaultValue;
+		}
+
+		return false;
+	}
+
+	bool shouldUseSupplementalMetadata(FileData* file,
+		const ExplicitMetadataMap& explicitMetadata,
+		const std::string& key)
+	{
+		auto fileEntry = explicitMetadata.find(file->getPath());
+		if(fileEntry != explicitMetadata.end() && fileEntry->second.count(key) != 0)
+			return false;
+
+		if(key == "name")
+			return file->metadata.get("name").empty() ||
+				file->metadata.get("name") == file->getDisplayName();
+
+		return isDefaultMetadataValue(file->metadata, key);
+	}
+}
+
+void parsePortMasterGameInfo(SystemData* system)
+{
+	// PortMaster installs launchers in the root of the "ports" system and keeps
+	// supplemental metadata in first-level port directories as gameinfo.xml.
+	// Keep this scoped to ports so unrelated systems are not recursively scanned.
+	if(system->getName() != "ports")
+		return;
+
+	const std::string relativeTo = system->getStartPath();
+	if(!Utils::FileSystem::isDirectory(relativeTo))
+		return;
+
+	const ExplicitMetadataMap explicitMetadata = getExplicitGamelistMetadata(system);
+	const Utils::FileSystem::stringList entries = Utils::FileSystem::getDirContent(relativeTo);
+
+	for(const std::string& portDir : entries)
+	{
+		if(!Utils::FileSystem::isDirectory(portDir))
+			continue;
+
+		const std::string xmlpath = portDir + "/gameinfo.xml";
+		if(!Utils::FileSystem::exists(xmlpath))
+			continue;
+
+		pugi::xml_document doc;
+		pugi::xml_parse_result result = doc.load_file(xmlpath.c_str());
+		if(!result)
+		{
+			LOG(LogWarning) << "PortMaster gameinfo: error parsing \"" << xmlpath
+				<< "\": " << result.description();
+			continue;
+		}
+
+		pugi::xml_node root = doc.child("gameList");
+		if(!root)
+		{
+			LOG(LogWarning) << "PortMaster gameinfo: no <gameList> node in \"" << xmlpath << "\"";
+			continue;
+		}
+
+		for(pugi::xml_node gameNode = root.child("game"); gameNode; gameNode = gameNode.next_sibling("game"))
+		{
+			pugi::xml_node pathNode = gameNode.child("path");
+			if(!pathNode)
+				continue;
+
+			const std::string path =
+				Utils::FileSystem::resolveRelativePath(pathNode.text().get(), relativeTo, false, true);
+
+			if(!Utils::FileSystem::exists(path))
+				continue;
+
+			FileData* file = findOrCreateFile(system, path, GAME);
+			if(!file || file->isArcadeAsset())
+				continue;
+
+			MetaDataList incoming =
+				MetaDataList::createFromXML(GAME_METADATA, gameNode, relativeTo);
+
+			bool merged = false;
+			for(const char* key : PORTMASTER_METADATA_KEYS)
+			{
+				pugi::xml_node sourceNode = gameNode.child(key);
+				if(!sourceNode || sourceNode.text().get()[0] == '\0')
+					continue;
+
+				if(!shouldUseSupplementalMetadata(file, explicitMetadata, key))
+					continue;
+
+				file->metadata.set(key, incoming.get(key));
+				merged = true;
+			}
+
+			// PortMaster metadata is inherited runtime metadata, not a user edit.
+			// Do not cause updateGamelist() to persist it automatically.
+			if(merged)
+			{
+				file->metadata.resetChangedFlag();
+				LOG(LogDebug) << "PortMaster gameinfo: merged metadata for \"" << path << "\"";
+			}
+		}
+	}
 }
 
 void parseGamelist(SystemData* system)
