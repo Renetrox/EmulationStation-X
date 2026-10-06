@@ -137,6 +137,7 @@ namespace
 {
 	using ExplicitMetadataMap = std::map<std::string, std::set<std::string>>;
 	using ImportedMetadataMap = std::map<std::string, std::map<std::string, unsigned long long>>;
+	using GameInfoSourceMap = std::map<std::string, std::set<std::string>>;
 
 	struct GameInfoSignature
 	{
@@ -156,9 +157,11 @@ namespace
 	{
 		GameInfoCache files;
 		ImportedMetadataMap importedMetadata;
+		GameInfoSourceMap sourceGames;
 		std::set<std::string> launchers;
 		bool hasLauncherSnapshot = false;
 		bool hasImportedMetadataSnapshot = false;
+		bool hasSourceGameSnapshot = false;
 	};
 
 	bool sameSignature(const GameInfoSignature& left, const GameInfoSignature& right)
@@ -210,6 +213,14 @@ namespace
 
 		while(std::getline(stream, line))
 		{
+			if(line == "# ES-X PortMaster gameinfo cache v4")
+			{
+				cache.hasImportedMetadataSnapshot = true;
+	cache.hasSourceGameSnapshot = true;
+				cache.hasSourceGameSnapshot = true;
+				continue;
+			}
+
 			if(line == "# ES-X PortMaster gameinfo cache v3")
 			{
 				cache.hasImportedMetadataSnapshot = true;
@@ -263,6 +274,21 @@ namespace
 				continue;
 			}
 
+			// v4: game paths associated with each gameinfo.xml source. This lets a
+			// changed metadata file withdraw an entire <game> record cleanly.
+			if(line.compare(0, 2, "S\t") == 0)
+			{
+				const size_t tab = line.find('\t', 2);
+				if(tab == std::string::npos)
+					continue;
+
+				const std::string source = line.substr(2, tab - 2);
+				const std::string path = line.substr(tab + 1);
+				if(!source.empty() && !path.empty())
+					cache.sourceGames[source].insert(path);
+				continue;
+			}
+
 			// Backward compatibility with the v1 cache format:
 			// mtime<TAB>size<TAB>path
 			const size_t firstTab = line.find('\t');
@@ -293,7 +319,7 @@ namespace
 			return;
 		}
 
-		stream << "# ES-X PortMaster gameinfo cache v3\n";
+		stream << "# ES-X PortMaster gameinfo cache v4\n";
 		for(const std::string& launcher : cache.launchers)
 			stream << "L\t" << launcher << '\n';
 
@@ -306,6 +332,12 @@ namespace
 			for(const auto& fieldEntry : fileEntry.second)
 				stream << "M\t" << fieldEntry.second << '\t' << fileEntry.first << '\t'
 					<< fieldEntry.first << '\n';
+		}
+
+		for(const auto& sourceEntry : cache.sourceGames)
+		{
+			for(const std::string& path : sourceEntry.second)
+				stream << "S\t" << sourceEntry.first << '\t' << path << '\n';
 		}
 	}
 
@@ -424,6 +456,21 @@ namespace
 			importedField->second == metadataValueHash(file->metadata.get(key));
 	}
 
+	FileData* findExistingPortGame(SystemData* system, const std::string& path)
+	{
+		FileData* root = system->getRootFolder();
+		if(!root)
+			return NULL;
+
+		for(FileData* child : root->getChildren())
+		{
+			if(child->getType() == GAME && child->getPath() == path)
+				return child;
+		}
+
+		return NULL;
+	}
+
 	bool shouldUseSupplementalMetadata(FileData* file,
 		const ExplicitMetadataMap& explicitMetadata,
 		const std::string& key)
@@ -459,7 +506,8 @@ void parsePortMasterGameInfo(SystemData* system)
 
 	// Validate every cached metadata source before taking the launcher fast path.
 	// A PortMaster update can replace gameinfo.xml without changing its .sh launcher.
-	bool cachedSignaturesMatch = cache.hasImportedMetadataSnapshot;
+	bool cachedSignaturesMatch =
+		cache.hasImportedMetadataSnapshot && cache.hasSourceGameSnapshot;
 	if(cachedSignaturesMatch)
 	{
 		for(const auto& entry : cache.files)
@@ -493,7 +541,7 @@ void parsePortMasterGameInfo(SystemData* system)
 		if(!getGameInfoSignature(xmlpath, signature))
 			continue;
 
-		if(gamelistExists && cache.hasImportedMetadataSnapshot)
+		if(gamelistExists && cache.hasImportedMetadataSnapshot && cache.hasSourceGameSnapshot)
 		{
 			auto cached = cache.files.find(xmlpath);
 			if(cached != cache.files.end() && sameSignature(cached->second, signature))
@@ -521,6 +569,7 @@ void parsePortMasterGameInfo(SystemData* system)
 	{
 		const std::string& xmlpath = pendingInfo.path;
 		bool cacheable = true;
+		std::set<std::string> currentSourceGames;
 
 		pugi::xml_document doc;
 		pugi::xml_parse_result result = doc.load_file(xmlpath.c_str());
@@ -563,6 +612,8 @@ void parsePortMasterGameInfo(SystemData* system)
 				continue;
 			}
 
+			currentSourceGames.insert(path);
+
 			MetaDataList incoming =
 				MetaDataList::createFromXML(GAME_METADATA, gameNode, relativeTo);
 
@@ -573,25 +624,27 @@ void parsePortMasterGameInfo(SystemData* system)
 					isImportedMetadataValue(file, cache.importedMetadata, key);
 				pugi::xml_node sourceNode = gameNode.child(key);
 
-				// If PortMaster removes a field that ES-X still owns, restore the
-				// metadata default and drop the ownership hash. User-edited values
-				// do not match the cached hash and are therefore left untouched.
+				// A withdrawn source field is no longer owned by PortMaster. Always
+				// drop its ownership hash; only reset the visible value when the
+				// current metadata still matches the value ES-X imported previously.
 				if(!sourceNode || sourceNode.text().get()[0] == '\0')
 				{
-					if(importedValue)
+					auto importedFile = cache.importedMetadata.find(path);
+					if(importedFile != cache.importedMetadata.end() &&
+						importedFile->second.find(key) != importedFile->second.end())
 					{
-						file->metadata.set(key, getDefaultMetadataValue(file->metadata, key));
-
-						auto importedFile = cache.importedMetadata.find(path);
-						if(importedFile != cache.importedMetadata.end())
+						if(importedValue)
 						{
-							importedFile->second.erase(key);
-							if(importedFile->second.empty())
-								cache.importedMetadata.erase(importedFile);
+							file->metadata.set(key, key == "name" ?
+								file->getDisplayName() :
+								getDefaultMetadataValue(file->metadata, key));
+							merged = true;
 						}
 
+						importedFile->second.erase(key);
+						if(importedFile->second.empty())
+							cache.importedMetadata.erase(importedFile);
 						cacheChanged = true;
-						merged = true;
 					}
 					continue;
 				}
@@ -640,10 +693,63 @@ void parsePortMasterGameInfo(SystemData* system)
 			}
 		}
 
-		// Cache valid, fully-resolved files even when there was nothing new to
-		// merge. On subsequent boots they only cost a stat(), not an XML parse.
 		if(cacheable)
+		{
+			// If a changed gameinfo.xml removed an entire <game> record, clear
+			// metadata only where the cached hash still proves PortMaster ownership.
+			// User/scraper edits survive, but their obsolete ownership hashes do not.
+			if(cache.hasSourceGameSnapshot)
+			{
+				auto previousSource = cache.sourceGames.find(xmlpath);
+				if(previousSource != cache.sourceGames.end())
+				{
+					for(const std::string& oldPath : previousSource->second)
+					{
+						if(currentSourceGames.count(oldPath) != 0)
+							continue;
+
+						auto importedFile = cache.importedMetadata.find(oldPath);
+						if(importedFile == cache.importedMetadata.end())
+							continue;
+
+						FileData* oldFile = findExistingPortGame(system, oldPath);
+						if(oldFile)
+						{
+							for(const auto& fieldEntry : importedFile->second)
+							{
+								if(fieldEntry.second !=
+									metadataValueHash(oldFile->metadata.get(fieldEntry.first)))
+									continue;
+
+								oldFile->metadata.set(fieldEntry.first,
+									fieldEntry.first == "name" ?
+										oldFile->getDisplayName() :
+										getDefaultMetadataValue(oldFile->metadata, fieldEntry.first));
+								importedFiles.insert(oldFile);
+							}
+						}
+
+						cache.importedMetadata.erase(importedFile);
+						cacheChanged = true;
+					}
+				}
+			}
+
+			auto previousSource = cache.sourceGames.find(xmlpath);
+			if(previousSource == cache.sourceGames.end() ||
+				previousSource->second != currentSourceGames)
+			{
+				if(currentSourceGames.empty())
+					cache.sourceGames.erase(xmlpath);
+				else
+					cache.sourceGames[xmlpath] = currentSourceGames;
+				cacheChanged = true;
+			}
+
+			// Cache valid, fully-resolved files even when there was nothing new to
+			// merge. On subsequent boots they only cost a stat(), not an XML parse.
 			processedFiles[xmlpath] = pendingInfo.signature;
+		}
 	}
 
 	// Persist imported metadata immediately. Afterwards gamelist.xml is the
