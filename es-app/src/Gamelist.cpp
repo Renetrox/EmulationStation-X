@@ -390,20 +390,38 @@ namespace
 		return explicitMetadata;
 	}
 
+	std::string getDefaultMetadataValue(const MetaDataList& metadata, const std::string& key)
+	{
+		const std::vector<MetaDataDecl>& declarations = getMDDByType(metadata.getType());
+		for(const MetaDataDecl& declaration : declarations)
+		{
+			if(declaration.key == key)
+				return declaration.defaultValue;
+		}
+
+		return std::string();
+	}
+
 	bool isDefaultMetadataValue(const MetaDataList& metadata, const std::string& key)
 	{
 		const std::string& value = metadata.get(key);
 		if(value.empty())
 			return true;
 
-		const std::vector<MetaDataDecl>& declarations = getMDDByType(metadata.getType());
-		for(const MetaDataDecl& declaration : declarations)
-		{
-			if(declaration.key == key)
-				return value == declaration.defaultValue;
-		}
+		return value == getDefaultMetadataValue(metadata, key);
+	}
 
-		return false;
+	bool isImportedMetadataValue(FileData* file,
+		const ImportedMetadataMap& importedMetadata,
+		const std::string& key)
+	{
+		auto importedFile = importedMetadata.find(file->getPath());
+		if(importedFile == importedMetadata.end())
+			return false;
+
+		auto importedField = importedFile->second.find(key);
+		return importedField != importedFile->second.end() &&
+			importedField->second == metadataValueHash(file->metadata.get(key));
 	}
 
 	bool shouldUseSupplementalMetadata(FileData* file,
@@ -551,12 +569,40 @@ void parsePortMasterGameInfo(SystemData* system)
 			bool merged = false;
 			for(const char* key : PORTMASTER_METADATA_KEYS)
 			{
+				const bool importedValue =
+					isImportedMetadataValue(file, cache.importedMetadata, key);
 				pugi::xml_node sourceNode = gameNode.child(key);
+
+				// If PortMaster removes a field that ES-X still owns, restore the
+				// metadata default and drop the ownership hash. User-edited values
+				// do not match the cached hash and are therefore left untouched.
 				if(!sourceNode || sourceNode.text().get()[0] == '\0')
+				{
+					if(importedValue)
+					{
+						file->metadata.set(key, getDefaultMetadataValue(file->metadata, key));
+
+						auto importedFile = cache.importedMetadata.find(path);
+						if(importedFile != cache.importedMetadata.end())
+						{
+							importedFile->second.erase(key);
+							if(importedFile->second.empty())
+								cache.importedMetadata.erase(importedFile);
+						}
+
+						cacheChanged = true;
+						merged = true;
+					}
 					continue;
+				}
 
 				const std::string& incomingValue = incoming.get(key);
-				if(!shouldUseSupplementalMetadata(file, explicitMetadata, key))
+
+				// A hash-matched value is still PortMaster-owned, so a changed
+				// gameinfo.xml value must replace it even though the persisted
+				// gamelist value is non-default.
+				if(!importedValue &&
+					!shouldUseSupplementalMetadata(file, explicitMetadata, key))
 				{
 					// Migrate values imported by v2 when the persisted value still
 					// matches its source. Differing values remain user-owned.
