@@ -216,7 +216,6 @@ namespace
 			if(line == "# ES-X PortMaster gameinfo cache v4")
 			{
 				cache.hasImportedMetadataSnapshot = true;
-	cache.hasSourceGameSnapshot = true;
 				cache.hasSourceGameSnapshot = true;
 				continue;
 			}
@@ -780,6 +779,7 @@ void parsePortMasterGameInfo(SystemData* system)
 	}
 
 	cache.hasImportedMetadataSnapshot = true;
+	cache.hasSourceGameSnapshot = true;
 
 	if(!cache.hasLauncherSnapshot || cache.launchers != currentLaunchers)
 	{
