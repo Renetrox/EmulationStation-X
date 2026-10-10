@@ -597,9 +597,9 @@ void Window::input(InputConfig* config, Input input)
 	if (input.value != 0 && cancelScreenSaver())
 		return;
 
-	// ES-X: allow L2/R2 to control frontend volume on the main view.
-	// Menus keep their normal trigger behavior for sliders and navigation.
-	if (mGuiStack.size() <= 1 && handleFrontendVolumeButton(config, input))
+	// ES-X: frontend volume shortcut. Keep pageup/pagedown (L1/R1)
+	// untouched, but allow mapped right analog or trigger inputs to adjust volume.
+	if (handleFrontendVolumeButton(config, input))
 		return;
 
 	bool dbg_keyboard_key_press = Settings::getInstance()->getBool("Debug") && config->getDeviceId() == DEVICE_KEYBOARD && input.value;
