@@ -701,6 +701,30 @@ void GuiMenu::openUISettings()
 	transitions.push_back("instant");
 
 	{
+		auto system_transition_style = std::make_shared<OptionListComponent<std::string>>(mWindow, _("SYSTEM CAROUSEL TRANSITION").c_str(), false);
+		std::string currentSystemTransition = Settings::getInstance()->getString("SystemTransitionStyle");
+		if (currentSystemTransition.empty())
+			currentSystemTransition = Settings::getInstance()->getString("TransitionStyle");
+		if (currentSystemTransition != "fade" && currentSystemTransition != "slide" && currentSystemTransition != "instant")
+			currentSystemTransition = "fade";
+
+		for (auto it = transitions.cbegin(); it != transitions.cend(); ++it)
+			system_transition_style->add(*it, *it, currentSystemTransition == *it);
+
+		s->addWithLabel(_("SYSTEM CAROUSEL TRANSITION").c_str(), system_transition_style);
+		s->addSaveFunc([system_transition_style] {
+			const std::string selected = system_transition_style->getSelected();
+			const std::string previous = Settings::getInstance()->getString("SystemTransitionStyle");
+			if (selected != "instant" && previous == "instant" && PowerSaver::getMode() == PowerSaver::INSTANT)
+			{
+				Settings::getInstance()->setString("PowerSaverMode", "default");
+				PowerSaver::init();
+			}
+			Settings::getInstance()->setString("SystemTransitionStyle", selected);
+		});
+	}
+
+	{
 		auto list_transition_style = std::make_shared<OptionListComponent<std::string>>(mWindow, _("LIST TRANSITION STYLE").c_str(), false);
 
 		std::string currentListTransition = Settings::getInstance()->getString("ListTransitionStyle");
