@@ -20,6 +20,7 @@ class ImageComponent;
 class InputConfig;
 class TextCache;
 class Transform4x4f;
+class VolumeInfoComponent;
 struct HelpStyle;
 
 class Window
@@ -162,6 +163,7 @@ private:
 
 	std::string mBluetoothPath = ":/icons/bluetooth.png";
 	std::unique_ptr<ImageComponent> mBluetoothIcon;
+	std::shared_ptr<VolumeInfoComponent> mVolumeInfo;
 };
 
 #endif
