@@ -6,6 +6,7 @@
 #include "resources/Font.h"
 #include "resources/TextureResource.h"
 #include "ThemeData.h"
+#include "VolumeControl.h"
 #include "Log.h"
 #include "Scripting.h"
 
@@ -167,6 +168,31 @@ static bool hasActiveBluetoothConnection()
 	return false;
 }
 #endif
+
+static bool handleFrontendVolumeButton(InputConfig* config, Input input)
+{
+	if (!input.value)
+		return false;
+
+	int delta = 0;
+	if (config->isMappedTo("LeftTrigger", input) || config->isMappedTo("lefttrigger", input))
+		delta = -5;
+	else if (config->isMappedTo("RightTrigger", input) || config->isMappedTo("righttrigger", input))
+		delta = 5;
+	else
+		return false;
+
+	std::shared_ptr<VolumeControl>& volumeControl = VolumeControl::getInstance();
+	int volume = volumeControl->getVolume() + delta;
+
+	if (volume < 0)
+		volume = 0;
+	else if (volume > 100)
+		volume = 100;
+
+	volumeControl->setVolume(volume);
+	return true;
+}
 
 Window::Window()
 	: mNormalizeNextUpdate(false)
@@ -531,6 +557,11 @@ void Window::input(InputConfig* config, Input input)
 	mTimeSinceLastInput = 0;
 
 	if (input.value != 0 && cancelScreenSaver())
+		return;
+
+	// ES-X: allow L2/R2 to control frontend volume on the main view.
+	// Menus keep their normal trigger behavior for sliders and navigation.
+	if (mGuiStack.size() == 1 && handleFrontendVolumeButton(config, input))
 		return;
 
 	bool dbg_keyboard_key_press = Settings::getInstance()->getBool("Debug") && config->getDeviceId() == DEVICE_KEYBOARD && input.value;
