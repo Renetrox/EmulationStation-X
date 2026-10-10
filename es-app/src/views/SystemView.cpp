@@ -1009,7 +1009,11 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 	cancelAnimation(1);
 	cancelAnimation(2);
 
-	std::string transition_style = Settings::getInstance()->getString("TransitionStyle");
+	std::string transition_style = Settings::getInstance()->getString("SystemTransitionStyle");
+	if (transition_style.empty())
+		transition_style = Settings::getInstance()->getString("TransitionStyle");
+	if (transition_style != "fade" && transition_style != "slide" && transition_style != "instant")
+		transition_style = "fade";
 	bool goFast                  = transition_style == "instant";
 
 	SystemInfoExtras& infoExtras = getInfoExtras(this);
@@ -1092,7 +1096,12 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 	setAnimation(infoFadeIn, goFast ? 0 : 2000, nullptr, false, 2);
 
 	if(endPos == mCamOffset && endPos == mExtrasCamOffset)
+	{
+		// An interrupted fade must not leave a permanent dark overlay.
+		cancelAnimation(0);
+		mExtrasFadeOpacity = 0.0f;
 		return;
+	}
 
 	Animation* anim;
 	bool move_carousel = Settings::getInstance()->getBool("MoveCarousel");
@@ -1114,7 +1123,7 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 
 				t += 1;
 				if(t < 0.3f)
-					this->mExtrasFadeOpacity = Math::lerp(0.0f, 1.0f, t / 0.3f + startExtrasFade);
+					this->mExtrasFadeOpacity = Math::lerp(startExtrasFade, 1.0f, t / 0.3f);
 				else if(t < 0.7f)
 					this->mExtrasFadeOpacity = 1.0f;
 				else
@@ -1160,6 +1169,8 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 			move_carousel ? 500 : 1);
 	}
 
+	// Keep this slot without a completion callback: replacing an animation
+	// destroys its controller and runs that callback even when interrupted.
 	setAnimation(anim, 0, nullptr, false, 0);
 }
 
