@@ -282,9 +282,16 @@ void GuiMenu::openSoundSettings()
 
 	auto volume = std::make_shared<SliderComponent>(mWindow, 0.f, 100.f, 1.f, "%");
 	volume->setValue((float)VolumeControl::getInstance()->getVolume());
+	volume->setOnValueChanged([](const float& newVal) {
+		VolumeControl::getInstance()->setVolume((int)Math::round(newVal));
+	});
 	s->addWithLabel(_("SYSTEM VOLUME").c_str(), volume);
-	s->addSaveFunc([volume] {
-		VolumeControl::getInstance()->setVolume((int)Math::round(volume->getValue()));
+
+	auto volume_popup = std::make_shared<SwitchComponent>(mWindow);
+	volume_popup->setState(Settings::getInstance()->getBool("VolumePopup"));
+	s->addWithLabel(_("SHOW OVERLAY WHEN VOLUME CHANGES").c_str(), volume_popup);
+	s->addSaveFunc([volume_popup] {
+		Settings::getInstance()->setBool("VolumePopup", volume_popup->getState());
 	});
 
 	if (UIModeController::getInstance()->isUIModeFull())
