@@ -175,12 +175,28 @@ static bool handleFrontendVolumeButton(InputConfig* config, Input input)
 		return false;
 
 	int delta = 0;
-	if (config->isMappedTo("LeftTrigger", input) || config->isMappedTo("lefttrigger", input))
+	if (config->isMappedTo("LeftTrigger", input) ||
+		config->isMappedTo("lefttrigger", input) ||
+		config->isMappedTo("L2", input) ||
+		config->isMappedTo("l2", input) ||
+		config->isMappedTo("LeftShoulder", input) ||
+		config->isMappedTo("leftshoulder", input))
+	{
 		delta = -5;
-	else if (config->isMappedTo("RightTrigger", input) || config->isMappedTo("righttrigger", input))
+	}
+	else if (config->isMappedTo("RightTrigger", input) ||
+		config->isMappedTo("righttrigger", input) ||
+		config->isMappedTo("R2", input) ||
+		config->isMappedTo("r2", input) ||
+		config->isMappedTo("RightShoulder", input) ||
+		config->isMappedTo("rightshoulder", input))
+	{
 		delta = 5;
+	}
 	else
+	{
 		return false;
+	}
 
 	std::shared_ptr<VolumeControl>& volumeControl = VolumeControl::getInstance();
 	int volume = volumeControl->getVolume() + delta;
@@ -190,6 +206,8 @@ static bool handleFrontendVolumeButton(InputConfig* config, Input input)
 	else if (volume > 100)
 		volume = 100;
 
+	LOG(LogInfo) << "Frontend volume button: " << input.string()
+	             << " -> " << volume << "%";
 	volumeControl->setVolume(volume);
 	return true;
 }
@@ -561,7 +579,7 @@ void Window::input(InputConfig* config, Input input)
 
 	// ES-X: allow L2/R2 to control frontend volume on the main view.
 	// Menus keep their normal trigger behavior for sliders and navigation.
-	if (mGuiStack.size() == 1 && handleFrontendVolumeButton(config, input))
+	if (mGuiStack.size() <= 1 && handleFrontendVolumeButton(config, input))
 		return;
 
 	bool dbg_keyboard_key_press = Settings::getInstance()->getBool("Debug") && config->getDeviceId() == DEVICE_KEYBOARD && input.value;
