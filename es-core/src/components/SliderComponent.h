@@ -43,6 +43,7 @@ private:
 	std::string mSuffix;
 	std::shared_ptr<Font> mFont;
 	std::shared_ptr<TextCache> mValueCache;
+	std::function<void(const float&)> mOnValueChanged;
 };
 
 #endif // ES_CORE_COMPONENTS_SLIDER_COMPONENT_H
