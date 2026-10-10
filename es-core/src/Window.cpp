@@ -176,12 +176,14 @@ static bool handleFrontendVolumeButton(InputConfig* config, Input input)
 
 	int delta = 0;
 	if (config->isMappedTo("rightanalogup", input) ||
-		config->isMappedTo("RightAnalogUp", input))
+		config->isMappedTo("RightAnalogUp", input) ||
+		(input.type == TYPE_AXIS && (input.id == 3 || input.id == 4) && input.value < 0))
 	{
 		delta = 5;
 	}
 	else if (config->isMappedTo("rightanalogdown", input) ||
-		config->isMappedTo("RightAnalogDown", input))
+		config->isMappedTo("RightAnalogDown", input) ||
+		(input.type == TYPE_AXIS && (input.id == 3 || input.id == 4) && input.value > 0))
 	{
 		delta = -5;
 	}
@@ -224,7 +226,7 @@ static bool handleFrontendVolumeButton(InputConfig* config, Input input)
 	else if (volume > 100)
 		volume = 100;
 
-	LOG(LogInfo) << "Frontend volume button: " << input.string()
+	LOG(LogInfo) << "Frontend volume shortcut: " << input.string()
 	             << " -> " << volume << "%";
 	volumeControl->setVolume(volume);
 	return true;
