@@ -178,18 +178,14 @@ static bool handleFrontendVolumeButton(InputConfig* config, Input input)
 	if (config->isMappedTo("LeftTrigger", input) ||
 		config->isMappedTo("lefttrigger", input) ||
 		config->isMappedTo("L2", input) ||
-		config->isMappedTo("l2", input) ||
-		config->isMappedTo("LeftShoulder", input) ||
-		config->isMappedTo("leftshoulder", input))
+		config->isMappedTo("l2", input))
 	{
 		delta = -5;
 	}
 	else if (config->isMappedTo("RightTrigger", input) ||
 		config->isMappedTo("righttrigger", input) ||
 		config->isMappedTo("R2", input) ||
-		config->isMappedTo("r2", input) ||
-		config->isMappedTo("RightShoulder", input) ||
-		config->isMappedTo("rightshoulder", input))
+		config->isMappedTo("r2", input))
 	{
 		delta = 5;
 	}
