@@ -1165,13 +1165,9 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 			move_carousel ? 500 : 1);
 	}
 
-	setAnimation(anim, 0, [this, endPos, posMax]()
-	{
-		// Always finish the visual state even if the last animation frame is skipped.
-		mCamOffset = std::fmod(endPos + posMax, posMax);
-		mExtrasCamOffset = mCamOffset;
-		mExtrasFadeOpacity = 0.0f;
-	}, false, 0);
+	// Keep this slot without a completion callback: replacing an animation
+	// destroys its controller and runs that callback even when interrupted.
+	setAnimation(anim, 0, nullptr, false, 0);
 }
 
 void SystemView::render(const Transform4x4f& parentTrans)
