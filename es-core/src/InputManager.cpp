@@ -52,9 +52,9 @@ namespace
 		const int currentVolume = volumeControl->getVolume();
 		int newVolume = currentVolume;
 
-		if(key == SDLK_VOLUMEUP)
+		if(key == SDLK_VOLUMEUP || key == SDLK_o)
 			newVolume += 5;
-		else if(key == SDLK_VOLUMEDOWN)
+		else if(key == SDLK_VOLUMEDOWN || key == SDLK_l)
 			newVolume -= 5;
 		else if(key == SDLK_AUDIOMUTE)
 			newVolume = 0;
@@ -65,6 +65,9 @@ namespace
 			newVolume = 0;
 		else if(newVolume > 100)
 			newVolume = 100;
+
+		LOG(LogInfo) << "Keyboard volume shortcut: "
+		             << SDL_GetKeyName(key) << " -> " << newVolume << "%";
 
 		if(newVolume != currentVolume)
 			volumeControl->setVolume(newVolume);
