@@ -131,6 +131,7 @@ public:
 	{
 		GuiComponent* component;
 		bool hideWhenSingleGame;
+		std::string name;
 
 		ThemeExtra() :
 			component(nullptr),
@@ -138,9 +139,10 @@ public:
 		{
 		}
 
-		ThemeExtra(GuiComponent* comp, bool hideSingle) :
+		ThemeExtra(GuiComponent* comp, bool hideSingle, const std::string& elementName = "") :
 			component(comp),
-			hideWhenSingleGame(hideSingle)
+			hideWhenSingleGame(hideSingle),
+			name(elementName)
 		{
 		}
 	};
