@@ -903,7 +903,10 @@ bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 		return true;
 
 	case SDL_KEYUP:
-		if(handleVolumeKey(ev.key.keysym.sym))
+		// Release events must not change volume a second time.
+		if(ev.key.keysym.sym == SDLK_VOLUMEUP ||
+		   ev.key.keysym.sym == SDLK_VOLUMEDOWN ||
+		   ev.key.keysym.sym == SDLK_AUDIOMUTE)
 			return true;
 
 		window->input(getInputConfigByDevice(DEVICE_KEYBOARD),
