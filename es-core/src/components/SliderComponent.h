@@ -5,6 +5,8 @@
 #include "components/ImageComponent.h"
 #include "GuiComponent.h"
 
+#include <functional>
+
 class Font;
 class TextCache;
 
@@ -17,6 +19,7 @@ public:
 
 	void setValue(float val);
 	float getValue();
+	void setOnValueChanged(const std::function<void(const float&)>& callback) { mOnValueChanged = callback; }
 
 	bool input(InputConfig* config, Input input) override;
 	void update(int deltaTime) override;
