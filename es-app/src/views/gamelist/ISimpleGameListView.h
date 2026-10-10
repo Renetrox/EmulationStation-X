@@ -8,6 +8,7 @@
 #include "ThemeData.h"
 
 #include <stack>
+#include <string>
 #include <vector>
 
 class ISimpleGameListView : public IGameListView
@@ -40,6 +41,7 @@ protected:
 	virtual void populateList(const std::vector<FileData*>& files) = 0;
 
 	bool isSingleGameList();
+	std::string resolveCollectionOverlay(FileData* game) const;
 	void updateThemeExtrasVisibility();
 
 	TextComponent mHeaderText;
