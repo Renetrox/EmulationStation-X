@@ -96,6 +96,7 @@ void Settings::setDefaults()
 	mBoolMap["ShowClock"] = true;
 	mStringMap["ClockFormat"] = "24H";
 	mBoolMap["ShowNetworkIcon"] = true;
+	mBoolMap["VolumePopup"] = true;
 
 	// Música de fondo ES-X
 	mBoolMap["BackgroundMusic"] = true;
@@ -421,6 +422,9 @@ void Settings::processBackwardCompatibility()
 
 	if (mBoolMap.find("ShowBluetoothIcon") == mBoolMap.end())
 		mBoolMap["ShowBluetoothIcon"] = true;
+
+	if (mBoolMap.find("VolumePopup") == mBoolMap.end())
+		mBoolMap["VolumePopup"] = true;
 
 	if (mBoolMap.find("BackgroundMusic") == mBoolMap.end())
 		mBoolMap["BackgroundMusic"] = true;
