@@ -135,7 +135,7 @@ void ISimpleGameListView::updateGameOverlays()
 {
 	mLastOverlayCursor = getCursor();
 	if (mGameOverlays.empty()) return;
-	const FileData* file = mLastOverlayCursor;
+	FileData* file = mLastOverlayCursor;
 	const std::string title = (file && !file->isPlaceHolder())
 		? overlayKey(file->getName()) : "";
 	const std::string rom = (file && !file->isPlaceHolder())
