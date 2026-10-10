@@ -175,7 +175,17 @@ static bool handleFrontendVolumeButton(InputConfig* config, Input input)
 		return false;
 
 	int delta = 0;
-	if (config->isMappedTo("LeftTrigger", input) ||
+	if (config->isMappedTo("rightanalogup", input) ||
+		config->isMappedTo("RightAnalogUp", input))
+	{
+		delta = 5;
+	}
+	else if (config->isMappedTo("rightanalogdown", input) ||
+		config->isMappedTo("RightAnalogDown", input))
+	{
+		delta = -5;
+	}
+	else if (config->isMappedTo("LeftTrigger", input) ||
 		config->isMappedTo("lefttrigger", input) ||
 		config->isMappedTo("L2", input) ||
 		config->isMappedTo("l2", input))
