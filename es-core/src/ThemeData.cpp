@@ -1142,7 +1142,7 @@ std::vector<ThemeData::ThemeExtra> ThemeData::makeExtrasWithMetadata(const std::
 		const bool hideWhenSingle =
 			elem.has("hideWhenSingleGame") && elem.get<bool>("hideWhenSingleGame");
 
-		comps.push_back(ThemeExtra(comp, hideWhenSingle));
+		comps.push_back(ThemeExtra(comp, hideWhenSingle, *it));
 	}
 
 	return comps;
