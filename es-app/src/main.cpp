@@ -448,6 +448,15 @@ int main(int argc, char* argv[])
 	};
 
 	auto volumeInput = [&](const SDL_Event& ev) -> bool {
+		if (ev.type == SDL_JOYDEVICEREMOVED) {
+			for (auto it = heldVolumeTriggers.begin(); it != heldVolumeTriggers.end(); ) {
+				if (it->first.first == ev.jdevice.which)
+					it = heldVolumeTriggers.erase(it);
+				else
+					++it;
+			}
+			return false;
+		}
 		// Never intercept buttons while configuring a controller.
 		if (dynamic_cast<GuiInputConfig*>(window.peekGui()))
 			return false;
