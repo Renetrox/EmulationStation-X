@@ -189,6 +189,18 @@ static bool handleFrontendVolumeButton(InputConfig* config, Input input)
 	{
 		delta = 5;
 	}
+	else if (input.type == TYPE_BUTTON && input.id == 6)
+	{
+		// Common RetroPie/SDL physical mapping for L2 when triggers are not
+		// persisted in es_input.cfg. Keep buttons 4/5 for pageup/pagedown.
+		delta = -5;
+	}
+	else if (input.type == TYPE_BUTTON && input.id == 7)
+	{
+		// Common RetroPie/SDL physical mapping for R2 when triggers are not
+		// persisted in es_input.cfg. Keep buttons 4/5 for pageup/pagedown.
+		delta = 5;
+	}
 	else
 	{
 		return false;
