@@ -30,6 +30,7 @@ public:
 	virtual void setViewportTop(int index) override = 0;
 
 	virtual bool input(InputConfig* config, Input input) override;
+	virtual void update(int deltaTime) override;
 	virtual void launch(FileData* game) override = 0;
 
 protected:
@@ -47,6 +48,13 @@ protected:
 	ImageComponent mBackground;
 
 	std::vector<ThemeData::ThemeExtra> mThemeExtras;
+	struct GameOverlayEntry {
+		ImageComponent* image;
+		std::vector<std::pair<std::string, std::string>> files;
+	};
+	std::vector<GameOverlayEntry> mGameOverlays;
+	FileData* mLastOverlayCursor = nullptr;
+	void updateGameOverlays();
 
 	std::stack<FileData*> mCursorStack;
 };

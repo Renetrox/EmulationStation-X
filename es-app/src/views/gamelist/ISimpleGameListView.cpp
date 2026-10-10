@@ -9,6 +9,25 @@
 #include "SystemData.h"
 #include "LocaleES.h"
 #include "NavigationSounds.h"
+#include "utils/FileSystemUtil.h"
+#include <algorithm>
+#include <cctype>
+
+namespace {
+std::string overlayKey(const std::string& name) {
+	std::string key;
+	for (unsigned char c : name)
+		if (c < 128 && std::isalnum(c)) key += static_cast<char>(std::tolower(c));
+	return key;
+}
+
+bool matchesOverlay(const std::string& title, const std::string& key) {
+	if (key.empty() || key.find("auto") == 0) return false;
+	if (key.size() < 4) return title == key;
+	return title.find(key) != std::string::npos;
+}
+}
+
 
 ISimpleGameListView::ISimpleGameListView(Window* window, FileData* root)
 	: IGameListView(window, root),
@@ -47,6 +66,7 @@ ISimpleGameListView::~ISimpleGameListView()
 	}
 
 	mThemeExtras.clear();
+	mGameOverlays.clear();
 }
 
 void ISimpleGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
@@ -66,6 +86,8 @@ void ISimpleGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme
 		}
 	}
 	mThemeExtras.clear();
+	mGameOverlays.clear();
+	mLastOverlayCursor = nullptr;
 
 	mThemeExtras = ThemeData::makeExtrasWithMetadata(theme, getName(), mWindow);
 	for (auto& extra : mThemeExtras)
@@ -74,7 +96,27 @@ void ISimpleGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme
 			addChild(extra.component);
 	}
 
+	// Resolve opt-in extras once per theme load, not on every cursor change.
+	for (const auto& extra : mThemeExtras) {
+		const auto* element = theme ? theme->getElement(getName(), extra.name, "image") : nullptr;
+		if (!element || !element->has("gameOverlayMatch") ||
+		    !element->get<bool>("gameOverlayMatch") || !element->has("path"))
+			continue;
+		ImageComponent* image = dynamic_cast<ImageComponent*>(extra.component);
+		if (!image) continue;
+		GameOverlayEntry entry;
+		entry.image = image;
+		const std::string directory = Utils::FileSystem::getParent(element->get<std::string>("path"));
+		for (const auto& file : Utils::FileSystem::getDirContent(directory)) {
+			if (Utils::FileSystem::getExtension(file) != ".png") continue;
+			const std::string key = overlayKey(Utils::FileSystem::getStem(file));
+			if (!key.empty() && key.compare(0, 4, "auto") != 0)
+				entry.files.emplace_back(key, file);
+		}
+		mGameOverlays.push_back(std::move(entry));
+	}
 	updateThemeExtrasVisibility();
+	updateGameOverlays();
 
 	if (mHeaderImage.hasImage())
 	{
@@ -86,6 +128,38 @@ void ISimpleGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme
 		addChild(&mHeaderText);
 		removeChild(&mHeaderImage);
 	}
+}
+
+
+void ISimpleGameListView::updateGameOverlays()
+{
+	mLastOverlayCursor = getCursor();
+	if (mGameOverlays.empty()) return;
+	FileData* file = mLastOverlayCursor;
+	const std::string title = (file && !file->isPlaceHolder())
+		? overlayKey(file->getName()) : "";
+	const std::string rom = (file && !file->isPlaceHolder())
+		? overlayKey(Utils::FileSystem::getStem(file->getPath())) : "";
+	for (auto& entry : mGameOverlays) {
+		std::string best;
+		size_t bestLength = 0;
+		for (const auto& candidate : entry.files) {
+			if ((matchesOverlay(title, candidate.first) || matchesOverlay(rom, candidate.first))
+			    && candidate.first.size() > bestLength) {
+				bestLength = candidate.first.size();
+				best = candidate.second;
+			}
+		}
+		entry.image->setImage(best);
+		entry.image->setVisible(!best.empty());
+	}
+}
+
+void ISimpleGameListView::update(int deltaTime)
+{
+	IGameListView::update(deltaTime);
+	if (getCursor() != mLastOverlayCursor)
+		updateGameOverlays();
 }
 
 bool ISimpleGameListView::isSingleGameList()
