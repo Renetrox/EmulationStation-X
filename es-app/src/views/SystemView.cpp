@@ -1092,7 +1092,12 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 	setAnimation(infoFadeIn, goFast ? 0 : 2000, nullptr, false, 2);
 
 	if(endPos == mCamOffset && endPos == mExtrasCamOffset)
+	{
+		// An interrupted fade must not leave a permanent dark overlay.
+		cancelAnimation(0);
+		mExtrasFadeOpacity = 0.0f;
 		return;
+	}
 
 	Animation* anim;
 	bool move_carousel = Settings::getInstance()->getBool("MoveCarousel");
@@ -1114,7 +1119,7 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 
 				t += 1;
 				if(t < 0.3f)
-					this->mExtrasFadeOpacity = Math::lerp(0.0f, 1.0f, t / 0.3f + startExtrasFade);
+					this->mExtrasFadeOpacity = Math::lerp(startExtrasFade, 1.0f, t / 0.3f);
 				else if(t < 0.7f)
 					this->mExtrasFadeOpacity = 1.0f;
 				else
@@ -1160,7 +1165,13 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 			move_carousel ? 500 : 1);
 	}
 
-	setAnimation(anim, 0, nullptr, false, 0);
+	setAnimation(anim, 0, [this, endPos, posMax]()
+	{
+		// Always finish the visual state even if the last animation frame is skipped.
+		mCamOffset = std::fmod(endPos + posMax, posMax);
+		mExtrasCamOffset = mCamOffset;
+		mExtrasFadeOpacity = 0.0f;
+	}, false, 0);
 }
 
 void SystemView::render(const Transform4x4f& parentTrans)
