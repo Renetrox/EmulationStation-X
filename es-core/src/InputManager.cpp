@@ -72,6 +72,62 @@ namespace
 		return true;
 	}
 
+	bool setFrontendVolumeDelta(const Input& input, int delta)
+	{
+		std::shared_ptr<VolumeControl>& volumeControl = VolumeControl::getInstance();
+		int volume = volumeControl->getVolume() + delta;
+
+		if(volume < 0)
+			volume = 0;
+		else if(volume > 100)
+			volume = 100;
+
+		LOG(LogInfo) << "Frontend volume shortcut: " << input.string()
+		             << " -> " << volume << "%";
+		volumeControl->setVolume(volume);
+		return true;
+	}
+
+	bool handleFrontendVolumeInput(InputConfig* config, const Input& input)
+	{
+		if(config == nullptr || input.value == 0)
+			return false;
+
+		if(config->isMappedTo("rightanalogup", input) ||
+		   config->isMappedTo("RightAnalogUp", input) ||
+		   (input.type == TYPE_AXIS && (input.id == 3 || input.id == 4) && input.value < 0))
+		{
+			return setFrontendVolumeDelta(input, 5);
+		}
+
+		if(config->isMappedTo("rightanalogdown", input) ||
+		   config->isMappedTo("RightAnalogDown", input) ||
+		   (input.type == TYPE_AXIS && (input.id == 3 || input.id == 4) && input.value > 0))
+		{
+			return setFrontendVolumeDelta(input, -5);
+		}
+
+		if(config->isMappedTo("LeftTrigger", input) ||
+		   config->isMappedTo("lefttrigger", input) ||
+		   config->isMappedTo("L2", input) ||
+		   config->isMappedTo("l2", input) ||
+		   (input.type == TYPE_BUTTON && input.id == 6))
+		{
+			return setFrontendVolumeDelta(input, -5);
+		}
+
+		if(config->isMappedTo("RightTrigger", input) ||
+		   config->isMappedTo("righttrigger", input) ||
+		   config->isMappedTo("R2", input) ||
+		   config->isMappedTo("r2", input) ||
+		   (input.type == TYPE_BUTTON && input.id == 7))
+		{
+			return setFrontendVolumeDelta(input, 5);
+		}
+
+		return false;
+	}
+
 #if SDL_VERSION_ATLEAST(2,0,9)
 	struct SDLPhysicalBinding
 	{
@@ -862,8 +918,10 @@ bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 			else
 				normValue = -1;
 
-			window->input(getInputConfigByDevice(ev.jaxis.which),
-				Input(ev.jaxis.which, TYPE_AXIS, ev.jaxis.axis, normValue, false));
+			Input input(ev.jaxis.which, TYPE_AXIS, ev.jaxis.axis, normValue, false);
+			InputConfig* config = getInputConfigByDevice(ev.jaxis.which);
+			if(!handleFrontendVolumeInput(config, input))
+				window->input(config, input);
 			causedEvent = true;
 		}
 
@@ -872,9 +930,13 @@ bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 
 	case SDL_JOYBUTTONDOWN:
 	case SDL_JOYBUTTONUP:
-		window->input(getInputConfigByDevice(ev.jbutton.which),
-			Input(ev.jbutton.which, TYPE_BUTTON, ev.jbutton.button, ev.jbutton.state == SDL_PRESSED, false));
+	{
+		Input input(ev.jbutton.which, TYPE_BUTTON, ev.jbutton.button, ev.jbutton.state == SDL_PRESSED, false);
+		InputConfig* config = getInputConfigByDevice(ev.jbutton.which);
+		if(!handleFrontendVolumeInput(config, input))
+			window->input(config, input);
 		return true;
+	}
 
 	case SDL_JOYHATMOTION:
 		window->input(getInputConfigByDevice(ev.jhat.which),
@@ -896,10 +958,12 @@ bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 			return false;
 		}
 
-		window->input(
-			getInputConfigByDevice(DEVICE_KEYBOARD),
-			Input(DEVICE_KEYBOARD, TYPE_KEY, ev.key.keysym.sym, 1, false)
-		);
+		{
+			Input input(DEVICE_KEYBOARD, TYPE_KEY, ev.key.keysym.sym, 1, false);
+			InputConfig* config = getInputConfigByDevice(DEVICE_KEYBOARD);
+			if(!handleFrontendVolumeInput(config, input))
+				window->input(config, input);
+		}
 		return true;
 
 	case SDL_KEYUP:
