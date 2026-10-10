@@ -14,6 +14,7 @@ SliderComponent::SliderComponent(Window* window, float min, float max, float inc
 	, mMoveAccumulator(0)
 	, mKnob(window)
 	, mSuffix(suffix)
+	, mOnValueChanged(nullptr)
 {
 	assert((min - max) != 0);
 
@@ -152,6 +153,9 @@ void SliderComponent::onValueChanged()
 		mValueCache = std::shared_ptr<TextCache>(mFont->buildTextCache(val, mSize.x() - textSize.x(), (mSize.y() - textSize.y()) / 2, 0x777777FF));
 		mValueCache->metrics.size[0] = textSize.x(); // fudge the width
 	}
+
+	if(mOnValueChanged)
+		mOnValueChanged(mValue);
 
 	// update knob position/size
 	mKnob.setResize(0, mSize.y() * 0.7f);
