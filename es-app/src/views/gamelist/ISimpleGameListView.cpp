@@ -9,6 +9,88 @@
 #include "SystemData.h"
 #include "LocaleES.h"
 #include "NavigationSounds.h"
+#include "utils/FileSystemUtil.h"
+#include "utils/StringUtil.h"
+#include <algorithm>
+#include <cctype>
+
+namespace
+{
+	bool isCollectionOverlayExtra(const std::string& name)
+	{
+		return Utils::String::startsWith(name, "overlay-art");
+	}
+
+	bool isOverlayImageFile(const std::string& path)
+	{
+		const std::string ext = Utils::String::toLower(Utils::FileSystem::getExtension(path));
+		return ext == ".png" || ext == ".jpg" || ext == ".jpeg";
+	}
+
+	std::string normalizeOverlayKey(const std::string& value)
+	{
+		const std::string lower = Utils::String::toLower(Utils::String::removeParenthesis(value));
+		std::string normalized;
+		normalized.reserve(lower.size());
+
+		for(char c : lower)
+		{
+			const unsigned char uc = static_cast<unsigned char>(c);
+			if(std::isalnum(uc))
+				normalized.push_back(static_cast<char>(uc));
+		}
+
+		return normalized;
+	}
+
+	void appendUnique(std::vector<std::string>& values, const std::string& value)
+	{
+		if(!value.empty() && std::find(values.cbegin(), values.cend(), value) == values.cend())
+			values.push_back(value);
+	}
+
+	void appendOverlayAliasCandidates(std::vector<std::string>& values, const std::string& key)
+	{
+		if(key.find("teenagemutantninjaturtles") != std::string::npos || key.find("tmnt") != std::string::npos)
+			appendUnique(values, "ninjaturtles");
+
+		if(key.find("dragonballz") != std::string::npos || key.find("dbz") != std::string::npos)
+			appendUnique(values, "dragonball");
+
+		if(key.find("kingoffighters") != std::string::npos || key.find("kof") != std::string::npos)
+			appendUnique(values, "kingoffighters");
+
+		if(key.find("metalgearsolid") != std::string::npos)
+			appendUnique(values, "metalgear");
+	}
+
+	int getOverlayMatchScore(const std::vector<std::string>& gameKeys, const std::string& overlayKey)
+	{
+		if(overlayKey.empty())
+			return 0;
+
+		if(overlayKey.size() < 3 && overlayKey != "ys" && overlayKey != "007")
+			return 0;
+
+		int bestScore = 0;
+
+		for(const std::string& gameKey : gameKeys)
+		{
+			if(gameKey.empty())
+				continue;
+
+			if(gameKey == overlayKey)
+				bestScore = std::max(bestScore, 1000 + static_cast<int>(overlayKey.size()));
+			else if(gameKey.find(overlayKey) != std::string::npos)
+				bestScore = std::max(bestScore, 700 + static_cast<int>(overlayKey.size()));
+			else if(gameKey.size() >= 6 && overlayKey.find(gameKey) != std::string::npos)
+				bestScore = std::max(bestScore, 450 + static_cast<int>(gameKey.size()));
+		}
+
+		return bestScore;
+	}
+}
+
 
 ISimpleGameListView::ISimpleGameListView(Window* window, FileData* root)
 	: IGameListView(window, root),
@@ -88,6 +170,63 @@ void ISimpleGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme
 	}
 }
 
+
+std::string ISimpleGameListView::resolveCollectionOverlay(FileData* game) const
+{
+	if(!game || game->getType() != GAME || !mRoot || !mRoot->getSystem())
+		return "";
+
+	const std::string themeXml = ThemeData::getThemeFromCurrentSet(mRoot->getSystem()->getName());
+	if(themeXml.empty())
+		return "";
+
+	const std::string systemThemeDir = Utils::FileSystem::getParent(themeXml);
+	const std::string themeRootDir = Utils::FileSystem::getParent(systemThemeDir);
+
+	std::vector<std::string> overlayDirs;
+	appendUnique(overlayDirs, themeRootDir + "/_inc/collection-overlays");
+	appendUnique(overlayDirs, themeRootDir + "/_theme_inc/collection-overlays");
+	appendUnique(overlayDirs, systemThemeDir + "/_inc/collection-overlays");
+	appendUnique(overlayDirs, systemThemeDir + "/_theme_inc/collection-overlays");
+
+	std::vector<std::string> gameKeys;
+	appendUnique(gameKeys, normalizeOverlayKey(game->getName()));
+	appendUnique(gameKeys, normalizeOverlayKey(game->getCleanName()));
+	appendUnique(gameKeys, normalizeOverlayKey(game->getDisplayName()));
+	appendUnique(gameKeys, normalizeOverlayKey(Utils::FileSystem::getStem(game->getPath())));
+
+	const size_t baseKeyCount = gameKeys.size();
+	for(size_t i = 0; i < baseKeyCount; i++)
+		appendOverlayAliasCandidates(gameKeys, gameKeys[i]);
+
+	int bestScore = 0;
+	std::string bestPath;
+
+	for(const std::string& dir : overlayDirs)
+	{
+		if(!Utils::FileSystem::isDirectory(dir))
+			continue;
+
+		const Utils::FileSystem::stringList files = Utils::FileSystem::getDirContent(dir);
+		for(auto it = files.cbegin(); it != files.cend(); it++)
+		{
+			if(!Utils::FileSystem::isRegularFile(*it) || !isOverlayImageFile(*it))
+				continue;
+
+			const std::string overlayKey = normalizeOverlayKey(Utils::FileSystem::getStem(*it));
+			const int score = getOverlayMatchScore(gameKeys, overlayKey);
+
+			if(score > bestScore)
+			{
+				bestScore = score;
+				bestPath = *it;
+			}
+		}
+	}
+
+	return bestPath;
+}
+
 bool ISimpleGameListView::isSingleGameList()
 {
 	FileData* cursor = getCursor();
@@ -107,13 +246,31 @@ bool ISimpleGameListView::isSingleGameList()
 void ISimpleGameListView::updateThemeExtrasVisibility()
 {
 	const bool single = isSingleGameList();
+	const std::string collectionOverlay = resolveCollectionOverlay(getCursor());
+	bool overlayApplied = false;
 
 	for (auto& extra : mThemeExtras)
 	{
 		if (!extra.component)
 			continue;
 
-		extra.component->setVisible(!(single && extra.hideWhenSingleGame));
+		bool visible = !(single && extra.hideWhenSingleGame);
+
+		if (isCollectionOverlayExtra(extra.name))
+		{
+			ImageComponent* image = dynamic_cast<ImageComponent*>(extra.component);
+			const bool useThisOverlay = image && !overlayApplied && !collectionOverlay.empty();
+
+			if (useThisOverlay)
+			{
+				image->setImage(collectionOverlay);
+				overlayApplied = true;
+			}
+
+			visible = visible && useThisOverlay;
+		}
+
+		extra.component->setVisible(visible);
 	}
 }
 
