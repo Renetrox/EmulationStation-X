@@ -2,6 +2,7 @@
 
 #include "components/HelpComponent.h"
 #include "components/ImageComponent.h"
+#include "components/VolumeInfoComponent.h"
 #include "resources/Font.h"
 #include "resources/TextureResource.h"
 #include "ThemeData.h"
@@ -313,6 +314,9 @@ bool Window::init()
 	mBluetoothConnected = hasActiveBluetoothConnection();
 	mBluetoothPollAccum = 0;
 
+	if (Settings::getInstance()->getBool("VolumePopup") && !mVolumeInfo)
+		mVolumeInfo = std::make_shared<VolumeInfoComponent>(this);
+
 	// update our help because font sizes probably changed
 	if (peekGui())
 		peekGui()->updateHelpPrompts();
@@ -597,6 +601,18 @@ void Window::update(int deltaTime)
 
 	if (peekGui())
 		peekGui()->update(deltaTime);
+
+	if (Settings::getInstance()->getBool("VolumePopup"))
+	{
+		if (!mVolumeInfo)
+			mVolumeInfo = std::make_shared<VolumeInfoComponent>(this);
+
+		mVolumeInfo->update(deltaTime);
+	}
+	else if (mVolumeInfo)
+	{
+		mVolumeInfo.reset();
+	}
 
 	// Update the screensaver
 	if (mScreenSaver)
@@ -883,6 +899,9 @@ void Window::render()
 	{
 		mInfoPopup->render(transform);
 	}
+
+	if (mVolumeInfo)
+		mVolumeInfo->render(transform);
 
 	if (mTimeSinceLastInput >= screensaverTime && screensaverTime != 0)
 	{
