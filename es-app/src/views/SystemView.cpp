@@ -1009,7 +1009,11 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 	cancelAnimation(1);
 	cancelAnimation(2);
 
-	std::string transition_style = Settings::getInstance()->getString("TransitionStyle");
+	std::string transition_style = Settings::getInstance()->getString("SystemTransitionStyle");
+	if (transition_style.empty())
+		transition_style = Settings::getInstance()->getString("TransitionStyle");
+	if (transition_style != "fade" && transition_style != "slide" && transition_style != "instant")
+		transition_style = "fade";
 	bool goFast                  = transition_style == "instant";
 
 	SystemInfoExtras& infoExtras = getInfoExtras(this);
