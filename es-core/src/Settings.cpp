@@ -127,6 +127,8 @@ void Settings::setDefaults()
 
 	// Compatibilidad antigua + nuevas transiciones separadas
 	mStringMap["TransitionStyle"] = "fade";
+	// Empty means use the legacy system-carousel transition until explicitly chosen.
+	mStringMap["SystemTransitionStyle"] = "";
 	mStringMap["ListTransitionStyle"] = "fade";
 	mStringMap["LaunchTransitionStyle"] = "instant";
 
