@@ -17,12 +17,6 @@
 #include "Settings.h"
 #include "SystemData.h"
 #include "SystemScreenSaver.h"
-#include "VolumeControl.h"
-#include "guis/GuiInfoPopup.h"
-#include "guis/GuiInputConfig.h"
-#include <SDL_keycode.h>
-#include <algorithm>
-#include <map>
 #include <SDL_events.h>
 #include <SDL_main.h>
 #include <SDL_timer.h>
@@ -424,89 +418,6 @@ int main(int argc, char* argv[])
 	int lastTime = SDL_GetTicks();
 	int ps_time = SDL_GetTicks();
 
-	// Volume shortcuts: preserve RetroPie physical mappings. Key multimedia
-	// events are optional: on some desktops the window manager consumes them.
-	auto audioVolume = VolumeControl::getInstance();
-	int lastKnownVolume = audioVolume->getVolume();
-	Uint32 lastVolumePoll = SDL_GetTicks();
-	Uint32 lastVolumeRepeat = SDL_GetTicks();
-	std::map<std::pair<int, int>, bool> heldVolumeTriggers;
-
-	auto displayVolume = [&](int value) {
-		window.setInfoPopup(new GuiInfoPopup(&window,
-			std::string("VOLUME  ") + std::to_string(value) + "%", 1400));
-	};
-
-	auto adjustVolume = [&](int direction) {
-		const int before = audioVolume->getVolume();
-		audioVolume->setVolume(std::max(0, std::min(100, before + direction * 5)));
-		const int after = audioVolume->getVolume();
-		if (after != before) {
-			lastKnownVolume = after;
-			displayVolume(after);
-		}
-	};
-
-	auto volumeInput = [&](const SDL_Event& ev) -> bool {
-		if (ev.type == SDL_JOYDEVICEREMOVED) {
-			for (auto it = heldVolumeTriggers.begin(); it != heldVolumeTriggers.end(); ) {
-				if (it->first.first == ev.jdevice.which)
-					it = heldVolumeTriggers.erase(it);
-				else
-					++it;
-			}
-			return false;
-		}
-		// Never intercept buttons while configuring a controller.
-		if (dynamic_cast<GuiInputConfig*>(window.peekGui()))
-			return false;
-
-		if (ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP) {
-			const SDL_Keycode key = ev.key.keysym.sym;
-			if (key != SDLK_VOLUMEUP && key != SDLK_VOLUMEDOWN)
-				return false;
-			if (ev.type == SDL_KEYDOWN && !ev.key.repeat)
-				adjustVolume(key == SDLK_VOLUMEUP ? 1 : -1);
-			return true;
-		}
-
-		Input physical;
-		int device = -1;
-		bool pressed = false;
-		if (ev.type == SDL_JOYBUTTONDOWN || ev.type == SDL_JOYBUTTONUP) {
-			device = ev.jbutton.which;
-			pressed = ev.type == SDL_JOYBUTTONDOWN;
-			physical = Input(device, TYPE_BUTTON, ev.jbutton.button, pressed ? 1 : 0, false);
-		} else if (ev.type == SDL_JOYAXISMOTION) {
-			device = ev.jaxis.which;
-			pressed = std::abs(static_cast<int>(ev.jaxis.value)) > 16000;
-			physical = Input(device, TYPE_AXIS, ev.jaxis.axis,
-				ev.jaxis.value > 16000 ? 1 : (ev.jaxis.value < -16000 ? -1 : 0), false);
-		} else {
-			return false;
-		}
-
-		InputConfig* config = InputManager::getInstance()->getInputConfigByDevice(device);
-		if (!config || !config->isConfigured())
-			return false;
-
-		bool matched = false;
-		for (int direction : {-1, 1}) {
-			const char* name = direction < 0 ? "LeftTrigger" : "RightTrigger";
-			if (!config->isMappedTo(name, physical))
-				continue;
-			matched = true;
-			const auto key = std::make_pair(device, direction);
-			const bool wasHeld = heldVolumeTriggers[key];
-			heldVolumeTriggers[key] = pressed;
-			if (pressed && !wasHeld) {
-				adjustVolume(direction);
-				lastVolumeRepeat = SDL_GetTicks();
-			}
-		}
-		return matched;
-	};
-
 	bool running = true;
 
 	while(running)
@@ -518,8 +429,7 @@ int main(int argc, char* argv[])
 		{
 			do
 			{
-				if (!volumeInput(event))
-					InputManager::getInstance()->parseEvent(event, &window);
+				InputManager::getInstance()->parseEvent(event, &window);
 
 				if(event.type == SDL_QUIT)
 					running = false;
@@ -548,26 +458,6 @@ int main(int argc, char* argv[])
 
 		if(deltaTime < 0)
 			deltaTime = 1000;
-
-		// Held triggers repeat at a controlled interval; no polling of raw keys.
-		if (SDL_GetTicks() - lastVolumeRepeat >= 180) {
-			int direction = 0;
-			for (const auto& held : heldVolumeTriggers)
-				if (held.second) direction += held.first.second;
-			if (direction != 0) {
-				adjustVolume(direction > 0 ? 1 : -1);
-				lastVolumeRepeat = SDL_GetTicks();
-			}
-		}
-		// FCAMOD-inspired behavior: also show volume changed externally by DE.
-		if (SDL_GetTicks() - lastVolumePoll >= 350) {
-			lastVolumePoll = SDL_GetTicks();
-			const int current = audioVolume->getVolume();
-			if (current != lastKnownVolume) {
-				lastKnownVolume = current;
-				displayVolume(current);
-			}
-		}
 
 		window.update(deltaTime);
 
