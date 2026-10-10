@@ -6,6 +6,7 @@
 #include "Log.h"
 #include "platform.h"
 #include "Scripting.h"
+#include "VolumeControl.h"
 #include "Window.h"
 #include "guis/GuiInfoPopup.h"
 #include "utils/StringUtil.h"
@@ -43,6 +44,32 @@ namespace
 		return std::string(connected ? "🎮 ✓ " : "🎮 ✕ ")
 			+ tr(connected ? "CONTROLLER_CONNECTED" : "CONTROLLER_DISCONNECTED")
 			+ ": " + joyName;
+	}
+
+	bool handleVolumeKey(SDL_Keycode key)
+	{
+		std::shared_ptr<VolumeControl>& volumeControl = VolumeControl::getInstance();
+		const int currentVolume = volumeControl->getVolume();
+		int newVolume = currentVolume;
+
+		if(key == SDLK_VOLUMEUP)
+			newVolume += 5;
+		else if(key == SDLK_VOLUMEDOWN)
+			newVolume -= 5;
+		else if(key == SDLK_AUDIOMUTE)
+			newVolume = 0;
+		else
+			return false;
+
+		if(newVolume < 0)
+			newVolume = 0;
+		else if(newVolume > 100)
+			newVolume = 100;
+
+		if(newVolume != currentVolume)
+			volumeControl->setVolume(newVolume);
+
+		return true;
 	}
 
 #if SDL_VERSION_ATLEAST(2,0,9)
@@ -858,6 +885,9 @@ bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 		if(ev.key.repeat)
 			return false;
 
+		if(handleVolumeKey(ev.key.keysym.sym))
+			return true;
+
 		if(ev.key.keysym.sym == SDLK_F4)
 		{
 			SDL_Event* quit = new SDL_Event();
@@ -873,6 +903,9 @@ bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 		return true;
 
 	case SDL_KEYUP:
+		if(handleVolumeKey(ev.key.keysym.sym))
+			return true;
+
 		window->input(getInputConfigByDevice(DEVICE_KEYBOARD),
 			Input(DEVICE_KEYBOARD, TYPE_KEY, ev.key.keysym.sym, 0, false));
 		return true;
