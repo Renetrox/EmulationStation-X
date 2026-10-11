@@ -264,7 +264,10 @@ GuiMetaDataEd::GuiMetaDataEd(Window* window, MetaDataList* md, const std::vector
 			delete this;
 		};
 
-		const std::string msg = tr("THIS WILL DELETE THE ACTUAL GAME FILE(S)!\nARE YOU SURE?");
+		// The .ini key contains literal \n; expand it after translation for the dialog.
+		const std::string msg = Utils::String::replace(
+			tr("THIS WILL DELETE THE ACTUAL GAME FILE(S)!\\nARE YOU SURE?"),
+			"\\n", "\n");
 		const std::string yes = tr("YES");
 		const std::string no  = tr("NO");
 

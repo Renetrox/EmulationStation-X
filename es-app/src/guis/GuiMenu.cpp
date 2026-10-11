@@ -709,7 +709,7 @@ void GuiMenu::openUISettings()
 			currentSystemTransition = "fade";
 
 		for (auto it = transitions.cbegin(); it != transitions.cend(); ++it)
-			system_transition_style->add(*it, *it, currentSystemTransition == *it);
+			system_transition_style->add(_(*it), *it, currentSystemTransition == *it);
 
 		s->addWithLabel(_("SYSTEM CAROUSEL TRANSITION").c_str(), system_transition_style);
 		s->addSaveFunc([system_transition_style] {
@@ -736,7 +736,7 @@ void GuiMenu::openUISettings()
 			currentListTransition = "fade";
 
 		for (auto it = transitions.cbegin(); it != transitions.cend(); it++)
-			list_transition_style->add(*it, *it, currentListTransition == *it);
+			list_transition_style->add(_(*it), *it, currentListTransition == *it);
 
 		s->addWithLabel(_("LIST TRANSITION STYLE").c_str(), list_transition_style);
 
@@ -773,7 +773,7 @@ void GuiMenu::openUISettings()
 			currentLaunchTransition = "instant";
 
 		for (auto it = transitions.cbegin(); it != transitions.cend(); it++)
-			launch_transition_style->add(*it, *it, currentLaunchTransition == *it);
+			launch_transition_style->add(_(*it), *it, currentLaunchTransition == *it);
 
 		s->addWithLabel(_("GAME LAUNCH TRANSITION").c_str(), launch_transition_style);
 
