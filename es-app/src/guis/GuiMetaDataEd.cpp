@@ -264,7 +264,14 @@ GuiMetaDataEd::GuiMetaDataEd(Window* window, MetaDataList* md, const std::vector
 			delete this;
 		};
 
-		const std::string msg = tr("THIS WILL DELETE THE ACTUAL GAME FILE(S)!\nARE YOU SURE?");
+		// The .ini catalog stores the line break as literal \
+, not a C++ newline.
+\t\tconst std::string msg = Utils::String::replace(
+\t\t\ttr("THIS WILL DELETE THE ACTUAL GAME FILE(S)!\
+ARE YOU SURE?"),
+\t\t\t"\
+", "
+");
 		const std::string yes = tr("YES");
 		const std::string no  = tr("NO");
 
