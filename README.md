@@ -80,7 +80,8 @@ real-world J2ME collections.
 ## Example Theme Options
 <img width="1366" height="768" alt="Captura de pantalla_2025-12-05_07-07-19" src="https://github.com/user-attachments/assets/06f4504c-ea88-4088-953c-7b61d3726ca7" />
 
-<img width="1366" height="768" alt="Captura de pantalla_2025-12-31_12-58-30" src="https://github.com/user-attachments/assets/6980ece3-29b9-42ac-ac95-dfda9f15c095" />
+<img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/c3fe2e88-67c2-409c-8aa4-4eee869aa1a1" />
+
 
 <img width="1366" height="768" alt="Captura de pantalla_2025-12-15_13-20-32" src="https://github.com/user-attachments/assets/1f12408e-4004-4334-be2f-2bb138da43b7" />
 
