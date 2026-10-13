@@ -569,7 +569,8 @@ void Window::update(int deltaTime)
 	{
 		mAverageDeltaTime = mFrameTimeElapsed / mFrameCountElapsed;
 
-		if (Settings::getInstance()->getBool("DrawFramerate"))
+		if (Settings::getInstance()->getBool("DrawFramerate") ||
+			Settings::getInstance()->getBool("DrawFramerateCLI"))
 		{
 			std::stringstream ss;
 
@@ -710,7 +711,8 @@ void Window::render()
 	if (!mRenderedHelpPrompts)
 		mHelp->render(transform);
 
-	if (Settings::getInstance()->getBool("DrawFramerate") && mFrameDataText)
+	if ((Settings::getInstance()->getBool("DrawFramerate") ||
+		Settings::getInstance()->getBool("DrawFramerateCLI")) && mFrameDataText)
 	{
 		Renderer::setMatrix(Transform4x4f::Identity());
 		mDefaultFonts.at(1)->renderTextCache(mFrameDataText.get());
