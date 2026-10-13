@@ -190,8 +190,7 @@ namespace
 
 	bool writeAutoConfigThroughRetroPie(InputConfig* config)
 	{
-		if(!hasRetroPieInputConfigurationAction())
-			return false;
+		const bool hasRetroPieOnFinish = hasRetroPieInputConfigurationAction();
 
 		// Match RetroPie's own inputconfiguration.sh gate. When its automatic
 		// configuration is disabled, keep the SDL mapping in memory for ES-X only.
@@ -212,7 +211,7 @@ namespace
 		// canonical A=east / B=south mapping to avoid a double swap. The same
 		// canonical names are also what RetroArch's config script expects.
 		InputConfig retroPieConfig(*config);
-		if(retropieSwapABEnabled())
+		if(hasRetroPieOnFinish && retropieSwapABEnabled())
 		{
 			Input aInput;
 			Input bInput;
@@ -224,18 +223,23 @@ namespace
 			}
 		}
 
-		InputManager::getInstance()->writeDeviceConfig(&retroPieConfig);
+		// Without RetroPie's onfinish action (e.g. a standalone installation),
+		// persist the effective ES-X mapping directly, like Batocera-ES does.
+		// With onfinish, pass the canonical mapping so RetroPie can apply A/B
+		// swapping exactly once.
+		InputManager::getInstance()->writeDeviceConfig(
+			hasRetroPieOnFinish ? &retroPieConfig : config);
 
 		if(hasSavedInputConfig(config))
 		{
-			LOG(LogInfo) << "RetroPie auto-configuration completed for SDL-mapped joystick '"
+			LOG(LogInfo) << (hasRetroPieOnFinish ? "RetroPie" : "ES-X")
+			             << " saved SDL-mapped joystick '"
 			             << config->getDeviceName() << "'.";
 			return true;
 		}
 
-		LOG(LogWarning) << "RetroPie input onfinish ran for SDL-mapped joystick '"
-		                << config->getDeviceName()
-		                << "', but no persistent ES input configuration was created.";
+		LOG(LogWarning) << "SDL auto-mapping for '" << config->getDeviceName()
+		                << "' was not persisted to es_input.cfg.";
 		return false;
 	}
 
@@ -408,7 +412,11 @@ namespace
 	bool autoConfigureFromSDLGameController(int deviceIndex, SDL_JoystickID deviceId, InputConfig* config)
 	{
 		if(!SDL_IsGameController(deviceIndex))
+		{
+			LOG(LogDebug) << "SDL has no GameController mapping for device index "
+			              << deviceIndex << "; manual configuration is available.";
 			return false;
+		}
 
 		char* mappingC = SDL_GameControllerMappingForDeviceIndex(deviceIndex);
 		if(mappingC == NULL)
@@ -500,6 +508,22 @@ namespace
 				mapSDLLogicalAxis(config, deviceId, "RightAnalogUp", "RightAnalogDown", halfOutput, binding);
 		}
 
+		// A few USB controllers expose only stick directions in SDL's mapping
+		// and omit the D-pad. Like Batocera's permissive SDL mapping import,
+		// use those directions for frontend navigation when no D-pad exists.
+		// Never overwrite a physical D-pad or the user's saved bindings.
+		auto useAnalogForMissingDpad = [config](const char* direction, const char* analog) {
+			Input existing;
+			Input fallback;
+			if (!config->getInputByName(direction, &existing) &&
+			    config->getInputByName(analog, &fallback))
+				config->mapInput(direction, fallback);
+		};
+		useAnalogForMissingDpad("Up", "LeftAnalogUp");
+		useAnalogForMissingDpad("Down", "LeftAnalogDown");
+		useAnalogForMissingDpad("Left", "LeftAnalogLeft");
+		useAnalogForMissingDpad("Right", "LeftAnalogRight");
+
 		// Match the minimum controls required by GuiInputConfig. Partial SDL
 		// mappings should fall back to the existing manual configurator.
 		Input check;
@@ -509,6 +533,9 @@ namespace
 		   !config->getInputByName("Right", &check) ||
 		   !config->getInputByName("A", &check))
 		{
+			LOG(LogInfo) << "SDL mapping for '" << config->getDeviceName()
+			             << "' lacks the minimum ES-X navigation controls; "
+			             << "falling back to manual configuration.";
 			config->clear();
 			return false;
 		}
@@ -558,11 +585,13 @@ void InputManager::init()
 	SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS,
 		Settings::getInstance()->getBool("BackgroundJoystickInput") ? "1" : "0");
 
-	// Don't enable the HIDAPI drivers by default, it will break the existing configurations
-	// for a few controller types, since the names and the input mappings are different.
+	// Batocera-ES lets SDL use HIDAPI on Linux. Some USB gamepads need it
+	// for an SDL GameController mapping, but enabling it can also change GUIDs
+	// and raw input IDs. Preserve the legacy mode unless explicitly requested.
 #if !defined(_WIN32)
 #if SDL_VERSION_ATLEAST(2,0,9)
-	SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI, "0");
+	SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI,
+		Settings::getInstance()->getBool("EnableSDLHIDAPI") ? "1" : "0");
 #endif
 #endif
 

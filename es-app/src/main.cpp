@@ -139,7 +139,9 @@ bool parseArgs(int argc, char* argv[])
 			Settings::getInstance()->setBool("ShowHiddenFiles", true);
 		}else if(strcmp(argv[i], "--draw-framerate") == 0)
 		{
-			Settings::getInstance()->setBool("DrawFramerate", true);
+			// Do not persist this diagnostic flag via GuiSettings::saveFile().
+			// The Show Framerate toggle in Other Settings remains persistent.
+			Settings::getInstance()->setBool("DrawFramerateCLI", true);
 		}else if(strcmp(argv[i], "--no-exit") == 0)
 		{
 			Settings::getInstance()->setBool("ShowExit", false);

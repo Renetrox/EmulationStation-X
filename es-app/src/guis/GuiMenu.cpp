@@ -976,6 +976,17 @@ void GuiMenu::openOtherSettings()
 		});
 	}
 
+#if !defined(_WIN32)
+	// HIDAPI changes how SDL enumerates some USB/Bluetooth gamepads.
+	// Keep the legacy input IDs unless the user opts in and restarts ES-X.
+	auto sdl_hidapi = std::make_shared<SwitchComponent>(mWindow);
+	sdl_hidapi->setState(Settings::getInstance()->getBool("EnableSDLHIDAPI"));
+	s->addWithLabel(_("SDL HIDAPI CONTROLLERS (RESTART REQUIRED)").c_str(), sdl_hidapi);
+	s->addSaveFunc([sdl_hidapi] {
+		Settings::getInstance()->setBool("EnableSDLHIDAPI", sdl_hidapi->getState());
+	});
+#endif
+
 	auto power_saver = std::make_shared<OptionListComponent<std::string>>(mWindow, _("POWER SAVER MODES").c_str(), false);
 	std::vector<std::string> modes;
 	modes.push_back("disabled");

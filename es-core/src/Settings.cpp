@@ -9,12 +9,45 @@
 #include <pugixml.hpp>
 #include <algorithm>
 #include <vector>
+#include <fstream>
+#include <string>
+
+namespace
+{
+	int recommendedTextureCacheMB()
+	{
+#if defined(__linux__)
+		// On SBCs (including Orange Pi) the old board-name macros often fall
+		// through to 100 MB even when the device has several GiB of RAM.
+		std::ifstream meminfo("/proc/meminfo");
+		std::string key;
+		unsigned long long totalKiB = 0;
+		if (meminfo >> key >> totalKiB && key == "MemTotal:")
+		{
+			if (totalKiB < 768ULL * 1024ULL)
+				return 80;   // 512 MiB class devices
+			if (totalKiB < 1536ULL * 1024ULL)
+				return 128;  // about 1 GiB
+			if (totalKiB < 3072ULL * 1024ULL)
+				return 256;  // about 2 GiB
+			return 420;      // 4 GiB+; a cache ceiling, not preallocated VRAM
+		}
+#endif
+#ifdef _RPI_
+		return 128;
+#else
+		return 256;
+#endif
+	}
+}
 
 Settings* Settings::sInstance = NULL;
 
 // Valores que NO se guardan en es_settings.cfg
 std::vector<const char*> settings_dont_save {
 	"Debug",
+	// --draw-framerate is a temporary diagnostic flag, not a saved UI preference.
+	"DrawFramerateCLI",
 	"DebugGrid",
 	"DebugText",
 	"DebugImage",
@@ -60,9 +93,13 @@ void Settings::setDefaults()
 	mMapIntMap.clear();
 
 	mBoolMap["BackgroundJoystickInput"] = false;
+	// Opt-in only: HIDAPI can change SDL's GUID and raw button/axis numbering.
+	mBoolMap["EnableSDLHIDAPI"] = false;
 	mBoolMap["ParseGamelistOnly"] = false;
 	mBoolMap["ShowHiddenFiles"] = false;
 	mBoolMap["DrawFramerate"] = false;
+	// Separate one-run CLI diagnostics from the user's persistent menu choice.
+	mBoolMap["DrawFramerateCLI"] = false;
 	mBoolMap["ShowExit"] = true;
 	mBoolMap["ConfirmQuit"] = true;
 	mBoolMap["FullscreenBorderless"] = false;
@@ -115,11 +152,9 @@ void Settings::setDefaults()
 	mIntMap["ScraperResizeWidth"] = 400;
 	mIntMap["ScraperResizeHeight"] = 0;
 
-#ifdef _RPI_
-	mIntMap["MaxVRAM"] = 80;
-#else
-	mIntMap["MaxVRAM"] = 100;
-#endif
+	// New installations get a usable texture-cache ceiling for complex themes.
+	// An explicit MaxVRAM in es_settings.cfg still overrides this default.
+	mIntMap["MaxVRAM"] = recommendedTextureCacheMB();
 
 	// ES-X: reduce imágenes grandes antes de subirlas a VRAM.
 	// Recomendado ON para Orange Pi / SBCs.

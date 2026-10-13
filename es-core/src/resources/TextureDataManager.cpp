@@ -117,11 +117,20 @@ void TextureDataManager::load(std::shared_ptr<TextureData> tex, bool block)
 		{
 			if (size < max_texture)
 				break;
-			//size -= (*it)->getVRAMUsage();
+
+			// The just-requested texture may already be in the LRU list.
+			// Never discard it during its own load: complex themes otherwise
+			// repeatedly decode the same image when the cache is under pressure.
+			if (*it == tex)
+				continue;
+
+			// Release older committed textures first. Queue entries that have
+			// not been loaded yet consume no VRAM and do not help this budget.
+			if (!(*it)->isLoaded())
+				continue;
+
 			(*it)->releaseVRAM();
 			(*it)->releaseRAM();
-			// It may be already in the loader queue. In this case it wouldn't have been using
-			// any VRAM yet but it will be. Remove it from the loader queue
 			mLoader->remove(*it);
 			size = TextureResource::getTotalMemUsage();
 		}
