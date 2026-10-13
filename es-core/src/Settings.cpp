@@ -24,8 +24,10 @@ namespace
 		unsigned long long totalKiB = 0;
 		if (meminfo >> key >> totalKiB && key == "MemTotal:")
 		{
+			if (totalKiB < 768ULL * 1024ULL)
+				return 80;   // 512 MiB class devices
 			if (totalKiB < 1536ULL * 1024ULL)
-				return 128;  // about 1 GiB or less
+				return 128;  // about 1 GiB
 			if (totalKiB < 3072ULL * 1024ULL)
 				return 256;  // about 2 GiB
 			return 420;      // 4 GiB+; a cache ceiling, not preallocated VRAM
