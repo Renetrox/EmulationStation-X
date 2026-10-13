@@ -46,6 +46,8 @@ Settings* Settings::sInstance = NULL;
 // Valores que NO se guardan en es_settings.cfg
 std::vector<const char*> settings_dont_save {
 	"Debug",
+	// --draw-framerate is a temporary diagnostic flag, not a saved UI preference.
+	"DrawFramerateCLI",
 	"DebugGrid",
 	"DebugText",
 	"DebugImage",
@@ -96,6 +98,8 @@ void Settings::setDefaults()
 	mBoolMap["ParseGamelistOnly"] = false;
 	mBoolMap["ShowHiddenFiles"] = false;
 	mBoolMap["DrawFramerate"] = false;
+	// Separate one-run CLI diagnostics from the user's persistent menu choice.
+	mBoolMap["DrawFramerateCLI"] = false;
 	mBoolMap["ShowExit"] = true;
 	mBoolMap["ConfirmQuit"] = true;
 	mBoolMap["FullscreenBorderless"] = false;
