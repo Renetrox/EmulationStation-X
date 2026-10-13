@@ -232,14 +232,14 @@ namespace
 
 		if(hasSavedInputConfig(config))
 		{
-			LOG(LogInfo) << "RetroPie auto-configuration completed for SDL-mapped joystick '"
+			LOG(LogInfo) << (hasRetroPieOnFinish ? "RetroPie" : "ES-X")
+			             << " saved SDL-mapped joystick '"
 			             << config->getDeviceName() << "'.";
 			return true;
 		}
 
-		LOG(LogWarning) << "RetroPie input onfinish ran for SDL-mapped joystick '"
-		                << config->getDeviceName()
-		                << "', but no persistent ES input configuration was created.";
+		LOG(LogWarning) << "SDL auto-mapping for '" << config->getDeviceName()
+		                << "' was not persisted to es_input.cfg.";
 		return false;
 	}
 
