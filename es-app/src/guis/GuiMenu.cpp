@@ -106,12 +106,13 @@ inline std::string menuLabel(const std::string& icon, const std::string& key)
 		auto list = std::make_shared<OptionListComponent<std::string>>(window, _("DISPLAY IMAGE TYPE").c_str(), false);
 
 		list->add(_("AUTO"), "auto", selected == "auto");
-		list->add(_("IMAGE"), "image", selected == "image");
+		list->add(_("MAIN IMAGE"), "image", selected == "image");
+		list->add(_("BOX ART"), "boxart", selected == "boxart");
 		list->add(_("THUMBNAIL"), "thumbnail", selected == "thumbnail");
-		list->add(_("MARQUEE"), "marquee", selected == "marquee");
+		list->add(_("LOGO / MARQUEE"), "marquee", selected == "marquee");
 		list->add(_("FANART"), "fanart", selected == "fanart");
 		list->add(_("SCREENSHOT"), "screenshot", selected == "screenshot");
-		list->add(_("WHEEL"), "wheel", selected == "wheel");
+		list->add(_("LOGO / WHEEL"), "wheel", selected == "wheel");
 		list->add(_("TEXTURE"), "texture", selected == "texture");
 
 		if (allowNone)
@@ -1311,3 +1312,4 @@ std::vector<HelpPrompt> GuiMenu::getHelpPrompts()
 	prompts.push_back(HelpPrompt("start", _("CLOSE")));
 	return prompts;
 }
+
