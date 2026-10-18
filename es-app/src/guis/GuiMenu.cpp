@@ -205,7 +205,7 @@ void GuiMenu::openScraperSettings()
 		s->addSaveFunc([list, key] { Settings::getInstance()->setString(key, list->getSelected()); });
 	};
 	addChoice(_("SCREENSCRAPER IMAGE"), "ScraperImageSource",
-		{{_("2D BOX"), "box-2D"}, {_("3D BOX"), "box-3D"}, {_("SCREENSHOT"), "ss"}, {_("TITLE SCREEN"), "sstitle"}});
+		{{_("2D BOX"), "box-2D"}, {_("3D BOX"), "box-3D"}, {_("SCREENSHOT"), "ss"}, {_("TITLE SCREEN"), "sstitle"}, {_("MIX V1"), "mixrbv1"}, {_("MIX V2"), "mixrbv2"}});
 	addChoice(_("SCREENSCRAPER BOX ART"), "ScraperBoxSource",
 		{{_("NONE"), "none"}, {_("2D BOX"), "box-2D"}, {_("3D BOX"), "box-3D"}});
 	addChoice(_("SCREENSCRAPER LOGO"), "ScraperLogoSource",
