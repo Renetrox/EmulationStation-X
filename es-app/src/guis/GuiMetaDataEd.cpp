@@ -353,7 +353,8 @@ void GuiMetaDataEd::fetchDone(const ScraperSearchResult& result)
 		if (mdd.isStatistic)
 			continue;
 
-		mEditors.at(edIdx)->setValue(result.mdl.get(mdd.key));
+		if (shouldImportScrapedField(result, mdd.key, mEditors.at(edIdx)->getValue()))
+			mEditors.at(edIdx)->setValue(result.mdl.get(mdd.key));
 		edIdx++;
 	}
 }
