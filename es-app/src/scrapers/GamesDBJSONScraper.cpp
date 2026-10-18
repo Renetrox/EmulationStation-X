@@ -307,32 +307,32 @@ void processGame(const Value& game, const Value& boxart, std::vector<ScraperSear
 
 	ScraperSearchResult result;
 
-	result.mdl.set("name", getStringOrThrow(game, "game_title"));
+	result.setMetadata("name", getStringOrThrow(game, "game_title"));
 	if (game.HasMember("overview") && game["overview"].IsString())
 	{
-		result.mdl.set("desc", game["overview"].GetString());
+		result.setMetadata("desc", game["overview"].GetString());
 	}
 	if (game.HasMember("release_date") && game["release_date"].IsString())
 	{
-		result.mdl.set(
+		result.setMetadata(
 			"releasedate", Utils::Time::DateTime(Utils::Time::stringToTime(game["release_date"].GetString(), "%Y-%m-%d")));
 	}
 	if (game.HasMember("developers") && game["developers"].IsArray())
 	{
-		result.mdl.set("developer", getDeveloperString(game["developers"]));
+		result.setMetadata("developer", getDeveloperString(game["developers"]));
 	}
 	if (game.HasMember("publishers") && game["publishers"].IsArray())
 	{
-		result.mdl.set("publisher", getPublisherString(game["publishers"]));
+		result.setMetadata("publisher", getPublisherString(game["publishers"]));
 	}
 	if (game.HasMember("genres") && game["genres"].IsArray())
 	{
 
-		result.mdl.set("genre", getGenreString(game["genres"]));
+		result.setMetadata("genre", getGenreString(game["genres"]));
 	}
 	if (game.HasMember("players") && game["players"].IsInt())
 	{
-		result.mdl.set("players", std::to_string(game["players"].GetInt()));
+		result.setMetadata("players", std::to_string(game["players"].GetInt()));
 	}
 
 
