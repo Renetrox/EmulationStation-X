@@ -191,6 +191,39 @@ void GuiMenu::openScraperSettings()
 		Settings::getInstance()->setBool("ScrapeRatings", scrape_ratings->getState());
 	});
 
+	// These media and region choices apply to the native ScreenScraper provider.
+	auto addChoice = [this, s](const std::string& label, const std::string& key,
+		const std::vector<std::pair<std::string, std::string>>& choices)
+	{
+		auto list = std::make_shared<OptionListComponent<std::string>>(mWindow, label, false);
+		const auto selected = Settings::getInstance()->getString(key);
+		bool valid = false;
+		for (const auto& choice : choices) if (choice.second == selected) valid = true;
+		for (size_t i = 0; i < choices.size(); ++i)
+			list->add(choices[i].first, choices[i].second, valid ? choices[i].second == selected : i == 0);
+		s->addWithLabel(label.c_str(), list);
+		s->addSaveFunc([list, key] { Settings::getInstance()->setString(key, list->getSelected()); });
+	};
+	addChoice(_("SCREENSCRAPER IMAGE"), "ScraperImageSource",
+		{{_("2D BOX"), "box-2D"}, {_("3D BOX"), "box-3D"}, {_("SCREENSHOT"), "ss"}, {_("TITLE SCREEN"), "sstitle"}, {_("MIX V1"), "mixrbv1"}, {_("MIX V2"), "mixrbv2"}});
+	addChoice(_("SCREENSCRAPER BOX ART"), "ScraperBoxSource",
+		{{_("NONE"), "none"}, {_("2D BOX"), "box-2D"}, {_("3D BOX"), "box-3D"}});
+	addChoice(_("SCREENSCRAPER LOGO"), "ScraperLogoSource",
+		{{_("NONE"), "none"}, {_("WHEEL"), "wheel"}, {_("HD WHEEL"), "wheel-hd"}});
+	addChoice(_("SCREENSCRAPER REGION"), "ScraperRegion",
+		{{_("AUTOMATIC"), ""}, {_("WORLD"), "wor"}, {_("EUROPE"), "eu"}, {_("USA"), "us"}, {_("JAPAN"), "jp"}});
+	auto addSwitch = [this, s](const std::string& label, const std::string& key)
+	{
+		auto option = std::make_shared<SwitchComponent>(mWindow);
+		option->setState(Settings::getInstance()->getBool(key));
+		s->addWithLabel(label.c_str(), option);
+		s->addSaveFunc([option, key] { Settings::getInstance()->setBool(key, option->getState()); });
+	};
+	addSwitch(_("SCREENSCRAPER VIDEOS"), "ScrapeVideos");
+	addSwitch(_("OVERWRITE NAMES"), "ScrapeOverwriteNames");
+	addSwitch(_("OVERWRITE DESCRIPTIONS"), "ScrapeOverwriteDescriptions");
+	addSwitch(_("OVERWRITE MEDIA"), "ScrapeOverwriteMedia");
+
 	ComponentListRow row;
 	auto openScrapeNow = [this] { mWindow->pushGui(new GuiScraperStart(mWindow)); };
 	std::function<void()> openAndSave = openScrapeNow;

@@ -432,8 +432,6 @@ void ScreenScraperRequest::processGame(const pugi::xml_document& xmldoc, std::ve
 	if (game)
 	{
 		ScraperSearchResult result;
-		ScreenScraperRequest::ScreenScraperConfig ssConfig;
-
 		// 🔹 Idioma dinámico según el ajuste "Language" (que ya viene del .ini)
 		std::string language = Settings::getInstance()->getString("Language");
 		if (language.empty())
@@ -441,10 +439,11 @@ void ScreenScraperRequest::processGame(const pugi::xml_document& xmldoc, std::ve
 		language = Utils::String::toLower(language);
 
 		// usamos el idioma como región base; ScreenScraper también usa "wor", "us", etc.
-		std::string region = language;
+		std::string region = Settings::getInstance()->getString("ScraperRegion");
+		if (region.empty()) region = language;
 
 		// Name fallback: región, luego WOR(LD), US, EU, JP, SS.
-		result.mdl.set("name", find_child_by_attribute_list(
+		result.setMetadata("name", find_child_by_attribute_list(
 			game.child("noms"),
 			"nom",
 			"region",
@@ -460,11 +459,11 @@ void ScreenScraperRequest::processGame(const pugi::xml_document& xmldoc, std::ve
 		).text().get();
 
 		if (!description.empty()) {
-			result.mdl.set("desc", Utils::String::replace(description, "&nbsp;", " "));
+			result.setMetadata("desc", Utils::String::replace(description, "&nbsp;", " "));
 		}
 
 		// Genre fallback language: idioma actual, luego EN.
-		result.mdl.set("genre", find_child_by_attribute_list(
+		result.setMetadata("genre", find_child_by_attribute_list(
 			game.child("genres"),
 			"genre",
 			"langue",
@@ -496,7 +495,7 @@ void ScreenScraperRequest::processGame(const pugi::xml_document& xmldoc, std::ve
 				month >= 1 && month <= 12 &&
 				day >= 1 && day <= 31)
 			{
-				result.mdl.set("releasedate",
+				result.setMetadata("releasedate",
 					Utils::Time::DateTime(Utils::Time::stringToTime(_date, "%Y-%m-%d")));
 				validDate = true;
 			}
@@ -507,7 +506,7 @@ void ScreenScraperRequest::processGame(const pugi::xml_document& xmldoc, std::ve
 
 			if (year >= 1900 && year <= 2099)
 			{
-				result.mdl.set("releasedate",
+				result.setMetadata("releasedate",
 					Utils::Time::DateTime(Utils::Time::stringToTime(_date, "%Y")));
 				validDate = true;
 			}
@@ -521,15 +520,15 @@ void ScreenScraperRequest::processGame(const pugi::xml_document& xmldoc, std::ve
 		/// Developer for the game( Xpath: Data/jeu[0]/developpeur )
 		std::string developer = game.child("developpeur").text().get();
 		if (!developer.empty())
-			result.mdl.set("developer", Utils::String::replace(developer, "&nbsp;", " "));
+			result.setMetadata("developer", Utils::String::replace(developer, "&nbsp;", " "));
 
 		// Publisher for the game ( Xpath: Data/jeu[0]/editeur )
 		std::string publisher = game.child("editeur").text().get();
 		if (!publisher.empty())
-			result.mdl.set("publisher", Utils::String::replace(publisher, "&nbsp;", " "));
+			result.setMetadata("publisher", Utils::String::replace(publisher, "&nbsp;", " "));
 
 		// Players
-		result.mdl.set("players", game.child("joueurs").text().get());
+		result.setMetadata("players", game.child("joueurs").text().get());
 
 		// TODO: Validate rating
 		if (Settings::getInstance()->getBool("ScrapeRatings") && game.child("note"))
@@ -537,7 +536,7 @@ void ScreenScraperRequest::processGame(const pugi::xml_document& xmldoc, std::ve
 			float ratingVal = (game.child("note").text().as_int() / 20.0f);
 			std::stringstream ss;
 			ss << ratingVal;
-			result.mdl.set("rating", ss.str());
+			result.setMetadata("rating", ss.str());
 		}
 
 		// Media super-node
@@ -573,14 +572,15 @@ void ScreenScraperRequest::processGame(const pugi::xml_document& xmldoc, std::ve
 			};
 
 			// Keep the configured artwork as first choice.
-			art = findMedia(ssConfig.media_name);
+			const std::string imageSource = Settings::getInstance()->getString("ScraperImageSource");
+			art = findMedia(imageSource);
 
 			// J2ME and some less complete systems often have screenshots
 			// but no box-2D artwork.
-			if (!art && ssConfig.media_name != "ss")
+			if (!art && imageSource != "ss")
 				art = findMedia("ss");
 
-			if (!art && ssConfig.media_name != "sstitle")
+			if (!art && imageSource != "sstitle")
 				art = findMedia("sstitle");
 
 			if (art)
@@ -597,6 +597,18 @@ void ScreenScraperRequest::processGame(const pugi::xml_document& xmldoc, std::ve
 			{
 				LOG(LogDebug) << "ScreenScraper: no usable image media found";
 			}
+			auto addMedia = [&](const std::string& field, const std::string& type)
+			{
+				if (type.empty() || type == "none") return;
+				auto node = findMedia(type);
+				if (!node || std::string(node.text().get()).empty()) return;
+				std::string format = node.attribute("format").value();
+				result.mediaUrls[field] = {Utils::String::replace(node.text().get(), " ", "%20"),
+					format.empty() ? (field == "video" ? ".mp4" : ".png") : "." + format};
+			};
+			addMedia("boxart", Settings::getInstance()->getString("ScraperBoxSource"));
+			addMedia("marquee", Settings::getInstance()->getString("ScraperLogoSource"));
+			if (Settings::getInstance()->getBool("ScrapeVideos")) addMedia("video", "video");
 		}
 
 		out_results.push_back(result);

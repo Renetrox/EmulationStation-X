@@ -8,6 +8,7 @@
 #include "SystemData.h"
 #include <FreeImage.h>
 #include <fstream>
+#include <cstdio>
 
 const std::map<std::string, generate_scraper_requests_func> scraper_request_funcs {
 	{ "TheGamesDB", &thegamesdb_generate_json_scraper_requests },
@@ -139,31 +140,62 @@ std::unique_ptr<MDResolveHandle> resolveMetaDataAssets(const ScraperSearchResult
 	return std::unique_ptr<MDResolveHandle>(new MDResolveHandle(result, search));
 }
 
+bool shouldImportScrapedField(const ScraperSearchResult& result, const std::string& key, const std::string& current)
+{
+	if (!result.suppliedFields.count(key) || result.mdl.get(key).empty()) return false;
+	if (key == "favorite" || key == "hidden" || key == "kidgame" || key == "sortname" ||
+		key == "playcount" || key == "lastplayed") return false;
+	if (current.empty()) return true;
+	if (key == "name") return Settings::getInstance()->getBool("ScrapeOverwriteNames");
+	if (key == "desc") return Settings::getInstance()->getBool("ScrapeOverwriteDescriptions");
+	for (const auto& decl : result.mdl.getMDD())
+		if (decl.key == key && decl.type == MD_PATH)
+			return Settings::getInstance()->getBool("ScrapeOverwriteMedia");
+	return true;
+}
+
+void importScrapedMetadata(MetaDataList& destination, const ScraperSearchResult& result)
+{
+	for (const auto& key : result.suppliedFields)
+		if (shouldImportScrapedField(result, key, destination.get(key)))
+			destination.set(key, result.mdl.get(key));
+}
+
 MDResolveHandle::MDResolveHandle(const ScraperSearchResult& result, const ScraperSearchParams& search) : mResult(result)
 {
-	if(!result.imageUrl.empty())
+	auto media = result.mediaUrls;
+	// Keep TheGamesDB's existing single-image interface working.
+	if (media.count("image") == 0 && !result.imageUrl.empty())
 	{
-
-		std::string ext;
-
-		// If we have a file extension returned by the scraper, then use it.
-		// Otherwise, try to guess it by the name of the URL, which point to an image.
-		if (!result.imageType.empty())
+		std::string ext = result.imageType;
+		if (ext.empty())
 		{
-			ext = result.imageType;
-		}else{
-			size_t dot = result.imageUrl.find_last_of('.');
-
-			if (dot != std::string::npos)
-				ext = result.imageUrl.substr(dot, std::string::npos);
+			const std::string url = result.imageUrl.substr(0, result.imageUrl.find_first_of("?#"));
+			const auto dot = url.find_last_of('.');
+			if (dot != std::string::npos) ext = url.substr(dot);
 		}
-
-		std::string imgPath = getSaveAsPath(search, "image", ext);
-
-		mFuncs.push_back(ResolvePair(downloadImageAsync(result.imageUrl, imgPath), [this, imgPath]
+		media["image"] = {result.imageUrl, ext};
+	}
+	// Resolution consumes pending URLs even when existing media is preserved.
+	// Otherwise returnResult() starts the same resolver again indefinitely.
+	mResult.imageUrl.clear();
+	mResult.mediaUrls.clear();
+	for (const auto& entry : media)
+	{
+		const std::string key = entry.first;
+		if (!Settings::getInstance()->getBool("ScrapeOverwriteMedia") &&
+			!search.game->metadata.get(key).empty()) continue;
+		std::string ext = entry.second.extension;
+		if (ext.empty() || ext[0] != '.' || ext.find_first_not_of(".abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") != std::string::npos)
+			ext = key == "video" ? ".mp4" : ".png";
+		const std::string path = getSaveAsPath(search, key, ext);
+		std::unique_ptr<ImageDownloadHandle> download = key == "video" ?
+			std::unique_ptr<ImageDownloadHandle>(new ImageDownloadHandle(entry.second.url, path, 0, 0)) :
+			downloadImageAsync(entry.second.url, path);
+		mFuncs.push_back(ResolvePair(std::move(download), [this, key, path]
 		{
-			mResult.mdl.set("image", imgPath);
-			mResult.imageUrl = "";
+			mResult.setMetadata(key, path);
+			if (key == "image") mResult.imageUrl.clear();
 		}));
 	}
 }
@@ -200,12 +232,13 @@ std::unique_ptr<ImageDownloadHandle> downloadImageAsync(const std::string& url, 
 }
 
 ImageDownloadHandle::ImageDownloadHandle(const std::string& url, const std::string& path, int maxWidth, int maxHeight) :
-	mSavePath(path), mMaxWidth(maxWidth), mMaxHeight(maxHeight), mReq(new HttpReq(url))
+	mReq(new HttpReq(url)), mSavePath(path), mMaxWidth(maxWidth), mMaxHeight(maxHeight)
 {
 }
 
 void ImageDownloadHandle::update()
 {
+	if (mStatus != ASYNC_IN_PROGRESS) return;
 	if(mReq->status() == HttpReq::REQ_IN_PROGRESS)
 		return;
 
@@ -218,29 +251,45 @@ void ImageDownloadHandle::update()
 	}
 
 	// download is done, save it to disk
-	std::ofstream stream(mSavePath, std::ios_base::out | std::ios_base::binary);
-	if(stream.bad())
+	const std::string temporaryPath = mSavePath + ".part" + mSavePath.substr(mSavePath.find_last_of('.'));
+	std::ofstream stream(temporaryPath, std::ios_base::out | std::ios_base::binary);
+	if(!stream)
 	{
 		setError("Failed to open image path to write. Permission error? Disk full?");
 		return;
 	}
 
 	const std::string& content = mReq->getContent();
+	if (content.empty())
+	{
+		stream.close();
+		std::remove(temporaryPath.c_str());
+		setError("Downloaded media is empty.");
+		return;
+	}
 	stream.write(content.data(), content.length());
 	stream.close();
-	if(stream.bad())
+	if(!stream)
 	{
+		std::remove(temporaryPath.c_str());
 		setError("Failed to save image. Disk full?");
 		return;
 	}
 
 	// resize it
-	if(!resizeImage(mSavePath, mMaxWidth, mMaxHeight))
+	if(!resizeImage(temporaryPath, mMaxWidth, mMaxHeight))
 	{
+		std::remove(temporaryPath.c_str());
 		setError("Error saving resized image. Out of memory? Disk full?");
 		return;
 	}
 
+	if (std::rename(temporaryPath.c_str(), mSavePath.c_str()) != 0)
+	{
+		std::remove(temporaryPath.c_str());
+		setError("Failed to install downloaded media.");
+		return;
+	}
 	setStatus(ASYNC_DONE);
 }
 
@@ -273,6 +322,7 @@ bool resizeImage(const std::string& path, int maxWidth, int maxHeight)
 		return false;
 	}
 
+	if (image == NULL) return false;
 	float width = (float)FreeImage_GetWidth(image);
 	float height = (float)FreeImage_GetHeight(image);
 

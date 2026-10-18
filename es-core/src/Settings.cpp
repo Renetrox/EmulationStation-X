@@ -114,6 +114,14 @@ void Settings::setDefaults()
 	mBoolMap["ShowHelpPrompts"] = true;
 	mBoolMap["DoublePressRemovesFromFavs"] = false;
 	mBoolMap["ScrapeRatings"] = true;
+	mBoolMap["ScrapeVideos"] = false;
+	mBoolMap["ScrapeOverwriteNames"] = true;
+	mBoolMap["ScrapeOverwriteDescriptions"] = true;
+	mBoolMap["ScrapeOverwriteMedia"] = false;
+	mStringMap["ScraperImageSource"] = "box-2D";
+	mStringMap["ScraperBoxSource"] = "none";
+	mStringMap["ScraperLogoSource"] = "none";
+	mStringMap["ScraperRegion"] = "";
 	mBoolMap["IgnoreGamelist"] = false;
 	mBoolMap["HideConsole"] = true;
 	mBoolMap["QuickSystemSelect"] = true;
