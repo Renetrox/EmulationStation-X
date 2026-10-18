@@ -36,8 +36,31 @@ namespace
         return out;
     }
 
+    // INI files store multiline labels using escaped line breaks.
+    static inline std::string decodeNewlines(const std::string& text)
+    {
+        std::string out;
+        for (size_t i = 0; i < text.size(); ++i)
+        {
+            if (text[i] == '\\')
+            {
+                size_t next = i + 1;
+                if (next < text.size() && text[next] == '\\') ++next;
+                if (next < text.size() && text[next] == 'n')
+                {
+                    out += '\n';
+                    i = next;
+                    continue;
+                }
+            }
+            out += text[i];
+        }
+        return out;
+    }
+
     static inline std::string normalizeKey(std::string key)
     {
+        key = decodeNewlines(key);
         trim(key);
 
         // compactar espacios internos múltiples a uno solo
@@ -115,7 +138,7 @@ bool LocaleES::loadLanguageFile(const std::string& filePath)
 
         if (!key.empty())
         {
-            mTranslations[normalizeKey(key)] = value;
+            mTranslations[normalizeKey(key)] = decodeNewlines(value);
             ++loaded;
         }
     }
@@ -259,4 +282,5 @@ std::string es_translate(const std::string& key)
 {
     return LocaleES::get(key);
 }
+
 
