@@ -176,6 +176,10 @@ MDResolveHandle::MDResolveHandle(const ScraperSearchResult& result, const Scrape
 		}
 		media["image"] = {result.imageUrl, ext};
 	}
+	// Resolution consumes pending URLs even when existing media is preserved.
+	// Otherwise returnResult() starts the same resolver again indefinitely.
+	mResult.imageUrl.clear();
+	mResult.mediaUrls.clear();
 	for (const auto& entry : media)
 	{
 		const std::string key = entry.first;
@@ -234,6 +238,7 @@ ImageDownloadHandle::ImageDownloadHandle(const std::string& url, const std::stri
 
 void ImageDownloadHandle::update()
 {
+	if (mStatus != ASYNC_IN_PROGRESS) return;
 	if(mReq->status() == HttpReq::REQ_IN_PROGRESS)
 		return;
 
