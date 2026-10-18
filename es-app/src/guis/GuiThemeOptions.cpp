@@ -622,14 +622,14 @@ namespace
 		if(!okAny)
 		{
 			if(win)
-				win->pushGui(new GuiMsgBox(win, _("No se encontró ningún XML para copiar en este layout."), _("BACK")));
+				win->pushGui(new GuiMsgBox(win, _("NO XML FILES FOUND TO COPY FOR THIS LAYOUT."), _("BACK")));
 			return false;
 		}
 
 		if(!okAll)
 		{
 			if(win)
-				win->pushGui(new GuiMsgBox(win, _("Algunos archivos no se pudieron copiar (revisá permisos/rutas)."), _("BACK")));
+				win->pushGui(new GuiMsgBox(win, _("SOME FILES COULD NOT BE COPIED. CHECK PERMISSIONS AND PATHS."), _("BACK")));
 		}
 
 		return true;
@@ -909,3 +909,4 @@ HelpStyle GuiThemeOptions::getHelpStyle()
 	}
 	return style;
 }
+
