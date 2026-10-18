@@ -21,6 +21,32 @@ static inline std::string tr(const char* key)
 
 namespace
 {
+	// Display text only: keep Input::string() and stored input types unchanged.
+	std::string localizedInputLabel(Input input)
+	{
+		std::stringstream label;
+		switch (input.type)
+		{
+		case TYPE_KEY:
+			label << tr("KEY") << " " << tr(SDL_GetKeyName((SDL_Keycode)input.id));
+			break;
+		case TYPE_BUTTON:
+			label << tr("BUTTON") << " " << input.id;
+			break;
+		case TYPE_AXIS:
+			label << tr("AXIS") << " " << input.id << (input.value > 0 ? "+" : "-");
+			break;
+		case TYPE_HAT:
+			label << tr("HAT") << " " << input.id << " " << es_translate(input.getHatDir(input.value));
+			break;
+		case TYPE_CEC_BUTTON:
+			label << tr("CEC BUTTON") << " " << es_translate(input.getCECButtonName(input.id));
+			break;
+		default:
+			return tr("UNKNOWN INPUT");
+		}
+		return label.str();
+	}
 	inline bool isMenuDark()
 	{
 		return Settings::getInstance()->getBool("MenuDark");
@@ -369,7 +395,7 @@ void GuiInputConfig::setNotDefined(const std::shared_ptr<TextComponent>& text)
 
 void GuiInputConfig::setAssignedTo(const std::shared_ptr<TextComponent>& text, Input input)
 {
-	text->setText(Utils::String::toUpper(input.string()));
+	text->setText(Utils::String::toUpper(localizedInputLabel(input)));
 	text->setColor(getLabelColor());
 }
 
@@ -463,3 +489,4 @@ bool GuiInputConfig::filterTrigger(Input input, InputConfig* config, int inputId
 
 	return false;
 }
+
