@@ -6,6 +6,8 @@
 #include "HttpReq.h"
 #include "MetaData.h"
 #include <functional>
+#include <map>
+#include <set>
 #include <memory>
 #include <queue>
 #include <utility>
@@ -28,6 +30,16 @@ struct ScraperSearchResult
 {
 	ScraperSearchResult() : mdl(GAME_METADATA) {};
 
+	// Only fields actually returned by a provider may replace existing metadata.
+	std::set<std::string> suppliedFields;
+	struct Media { std::string url; std::string extension; };
+	std::map<std::string, Media> mediaUrls;
+	void setMetadata(const std::string& key, const std::string& value)
+	{
+		if (value.empty()) return;
+		mdl.set(key, value);
+		suppliedFields.insert(key);
+	}
 	MetaDataList mdl;
 	std::string imageUrl;
 	std::string thumbnailUrl;
@@ -35,6 +47,9 @@ struct ScraperSearchResult
 	// Needed to pre-set the image type
 	std::string imageType;
 };
+
+bool shouldImportScrapedField(const ScraperSearchResult& result, const std::string& key, const std::string& current);
+void importScrapedMetadata(MetaDataList& destination, const ScraperSearchResult& result);
 
 // So let me explain why I've abstracted this so heavily.
 // There are two ways I can think of that you'd want to write a scraper.
