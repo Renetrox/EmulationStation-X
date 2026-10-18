@@ -215,21 +215,20 @@ void LocaleES::loadFromSettings()
         std::map<std::string, std::string> backup;
         mTranslations.clear();
 
-        if (!loadLanguageFile(userEnPath))
-            loadLanguageFile(appEnPath);
+        // Bundled keys provide updates; personal translations override only
+        // the keys they define instead of hiding the entire bundled language.
+        loadLanguageFile(appEnPath);
+        loadLanguageFile(userEnPath);
 
         mFallbackTranslations = mTranslations;
         mTranslations.clear();
     }
 
     // luego cargar idioma actual
-    if (!loadLanguageFile(userLangPath))
-    {
-        if (!loadLanguageFile(appLangPath))
-        {
-            LOG(LogWarning) << "LocaleES: no language file found for '" << lang << "'";
-        }
-    }
+    const bool appLoaded = loadLanguageFile(appLangPath);
+    const bool userLoaded = loadLanguageFile(userLangPath);
+    if (!appLoaded && !userLoaded)
+        LOG(LogWarning) << "LocaleES: no language file found for '" << lang << "'";
 }
 
 // --------------------
@@ -260,3 +259,4 @@ std::string es_translate(const std::string& key)
 {
     return LocaleES::get(key);
 }
+
