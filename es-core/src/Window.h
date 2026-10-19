@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+class ThemeSplash;
 class SystemData;
 class FileData;
 class Font;
@@ -69,6 +70,8 @@ public:
 
 	void renderLoadingScreen(std::string text, float percent = -1, unsigned char opacity = 255);
 
+	void closeLoadingScreen();
+
 	void renderHelpPromptsEarly();
 	void setHelpPrompts(const std::vector<HelpPrompt>& prompts, const HelpStyle& style);
 
@@ -89,6 +92,8 @@ private:
 
 	bool isProcessing();
 
+	std::unique_ptr<ThemeSplash> mThemeSplash;
+	bool mSplashAttempted = false;
 	HelpComponent* mHelp;
 	ImageComponent* mBackgroundOverlay;
 	ScreenSaver* mScreenSaver;

@@ -686,6 +686,12 @@ void ThemeData::parseIncludesVariables(const pugi::xml_node& root)
 
 	for (pugi::xml_node node = root.child("include"); node; node = node.next_sibling("include"))
 	{
+		if (mSplashOnly && mPaths.size() >= 32)
+			throw error << "Splash include nesting is too deep";
+		// Native Batocera option conditions require an adapted splash in ES-X.
+		if (mSplashOnly && (node.attribute("ifSubset") || node.attribute("if") ||
+			node.attribute("tinyScreen") || node.attribute("ifArch") || node.attribute("ifNotArch")))
+			continue;
 		std::string relPath = resolvePlaceholders(node.text().as_string());
 		std::string path = Utils::FileSystem::resolveRelativePath(relPath, mPaths.back(), true, false);
 
@@ -724,6 +730,12 @@ void ThemeData::parseIncludesViewsAndFeatures(const pugi::xml_node& root)
 
 	for (pugi::xml_node node = root.child("include"); node; node = node.next_sibling("include"))
 	{
+		if (mSplashOnly && mPaths.size() >= 32)
+			throw error << "Splash include nesting is too deep";
+		// Native Batocera option conditions require an adapted splash in ES-X.
+		if (mSplashOnly && (node.attribute("ifSubset") || node.attribute("if") ||
+			node.attribute("tinyScreen") || node.attribute("ifArch") || node.attribute("ifNotArch")))
+			continue;
 		std::string relPath = resolvePlaceholders(node.text().as_string());
 		std::string path = Utils::FileSystem::resolveRelativePath(relPath, mPaths.back(), true, false);
 
@@ -752,8 +764,10 @@ void ThemeData::parseIncludesViewsAndFeatures(const pugi::xml_node& root)
 	}
 }
 
-void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const std::string& path)
+void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const std::string& path, bool splashOnly)
 {
+	mSplashOnly = splashOnly;
+	mPaths.clear();
 	mPaths.push_back(path);
 
 	ThemeException error;
@@ -881,7 +895,8 @@ void ThemeData::parseViews(const pugi::xml_node& root)
 			prevOff = nameAttr.find_first_not_of(delim, off);
 			off = nameAttr.find_first_of(delim, prevOff);
 
-			if (std::find(sSupportedViews.cbegin(), sSupportedViews.cend(), viewKey) != sSupportedViews.cend())
+			if (mSplashOnly ? viewKey == "splash" :
+				std::find(sSupportedViews.cbegin(), sSupportedViews.cend(), viewKey) != sSupportedViews.cend())
 			{
 				ThemeView& view = mViews.insert(std::pair<std::string, ThemeView>(viewKey, ThemeView())).first->second;
 				parseView(node, view);
@@ -900,8 +915,23 @@ void ThemeData::parseView(const pugi::xml_node& root, ThemeView& view)
 		if (!node.attribute("name"))
 			throw error << "Element of type \"" << node.name() << "\" missing \"name\" attribute!";
 
+		if (mSplashOnly && (node.attribute("ifSubset") || node.attribute("if") ||
+			node.attribute("tinyScreen") || node.attribute("region")))
+			continue;
+		const std::string nodeType = node.name();
+		if (mSplashOnly && nodeType != "image" && nodeType != "text" && nodeType != "splash")
+			continue;
+		// Splash-only additions do not relax the normal theme parser.
+		std::map<std::string, ElementPropertyType> splashMap;
+		if (mSplashOnly)
+		{
+			if (nodeType != "splash") splashMap = sElementMap.at(nodeType);
+			splashMap["backgroundColor"] = COLOR;
+			splashMap["minSize"] = RESOLUTION_PAIR;
+			splashMap["verticalAlignment"] = STRING;
+		}
 		auto elemTypeIt = sElementMap.find(node.name());
-		if (elemTypeIt == sElementMap.cend())
+		if (!mSplashOnly && elemTypeIt == sElementMap.cend())
 			throw error << "Unknown element of type \"" << node.name() << "\"!";
 
 		const char* delim = " \t\r\n,";
@@ -915,7 +945,7 @@ void ThemeData::parseView(const pugi::xml_node& root, ThemeView& view)
 			prevOff = nameAttr.find_first_not_of(delim, off);
 			off = nameAttr.find_first_of(delim, prevOff);
 
-			parseElement(node, elemTypeIt->second,
+			parseElement(node, mSplashOnly ? splashMap : elemTypeIt->second,
 			             view.elements.insert(std::pair<std::string, ThemeElement>(elemKey, ThemeElement())).first->second);
 
 			if (std::find(view.orderedKeys.cbegin(), view.orderedKeys.cend(), elemKey) == view.orderedKeys.cend())
@@ -930,15 +960,27 @@ void ThemeData::parseElement(const pugi::xml_node& root, const std::map<std::str
 	error.setFiles(mPaths);
 
 	element.type = root.name();
-	element.extra = root.attribute("extra").as_bool(false);
+	element.extra = root.attribute("extra").as_bool(false) ||
+		(mSplashOnly && std::string(root.attribute("extra").as_string()) == "static");
 
 	for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling())
 	{
+		const std::string property = node.name();
+		if (mSplashOnly && (node.attribute("ifSubset") || node.attribute("if") ||
+			node.attribute("tinyScreen") || property == "pulse" ||
+			property == "frameAnimation" || property == "textStrokeSize"))
+			continue;
 		auto typeIt = typeMap.find(node.name());
+		if (mSplashOnly && typeIt == typeMap.cend())
+			continue; // Static splash: ignore unsupported effects/properties.
 		if (typeIt == typeMap.cend())
 			throw error << "Unknown property type \"" << node.name() << "\" (for element of type " << root.name() << ").";
 
 		std::string str = resolvePlaceholders(node.text().as_string());
+		if (mSplashOnly && str.find("${") != std::string::npos)
+			throw error << "Unresolved splash variable in " << property;
+		if (mSplashOnly && typeIt->second == RESOLUTION_PAIR && str.find(' ') == std::string::npos)
+			str += " " + str;
 
 		switch (typeIt->second)
 		{
@@ -1109,7 +1151,7 @@ const std::shared_ptr<ThemeData>& ThemeData::getDefault()
 	return theme;
 }
 
-std::vector<ThemeData::ThemeExtra> ThemeData::makeExtrasWithMetadata(const std::shared_ptr<ThemeData>& theme, const std::string& view, Window* window)
+std::vector<ThemeData::ThemeExtra> ThemeData::makeExtrasWithMetadata(const std::shared_ptr<ThemeData>& theme, const std::string& view, Window* window, bool forceLoad)
 {
 	std::vector<ThemeExtra> comps;
 
@@ -1122,6 +1164,9 @@ std::vector<ThemeData::ThemeExtra> ThemeData::makeExtrasWithMetadata(const std::
 
 	for (auto it = viewIt->second.orderedKeys.cbegin(); it != viewIt->second.orderedKeys.cend(); ++it)
 	{
+		if (theme->mSplashOnly && (*it == "background" || *it == "label" ||
+			*it == "progressbar" || *it == "progressbar:active"))
+			continue;
 		ThemeElement& elem = viewIt->second.elements.at(*it);
 		if (!elem.extra)
 			continue;
@@ -1130,7 +1175,7 @@ std::vector<ThemeData::ThemeExtra> ThemeData::makeExtrasWithMetadata(const std::
 		const std::string& t = elem.type;
 
 		if (t == "image")
-			comp = new ImageComponent(window);
+			comp = new ImageComponent(window, forceLoad);
 		else if (t == "text")
 			comp = new TextComponent(window); // ScrollableTextComponent deshabilitado
 
@@ -1149,11 +1194,11 @@ std::vector<ThemeData::ThemeExtra> ThemeData::makeExtrasWithMetadata(const std::
 	return comps;
 }
 
-std::vector<GuiComponent*> ThemeData::makeExtras(const std::shared_ptr<ThemeData>& theme, const std::string& view, Window* window)
+std::vector<GuiComponent*> ThemeData::makeExtras(const std::shared_ptr<ThemeData>& theme, const std::string& view, Window* window, bool forceLoad)
 {
 	std::vector<GuiComponent*> comps;
 
-	std::vector<ThemeExtra> extras = makeExtrasWithMetadata(theme, view, window);
+	std::vector<ThemeExtra> extras = makeExtrasWithMetadata(theme, view, window, forceLoad);
 	for (auto& extra : extras)
 	{
 		if (extra.component)
