@@ -8,6 +8,7 @@
 #include "Log.h"
 #include "platform.h"
 #include "Settings.h"
+#include "renderers/Renderer.h"
 
 #include <pugixml.hpp>
 #include <algorithm>
@@ -49,6 +50,8 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "visible", BOOLEAN },
 		{ "hideWhenSingleGame", BOOLEAN },
 		{ "scrollFadeIn", BOOLEAN },
+		{ "linearSmooth", BOOLEAN },
+		{ "backgroundColor", COLOR },
 
 		// ES-X: pulso suave de opacidad para imágenes.
 { "pulse", BOOLEAN },
@@ -644,6 +647,9 @@ void ThemeData::parseLanguageVariables(const pugi::xml_node& root)
 
 		for (pugi::xml_node_iterator it = variables.begin(); it != variables.end(); ++it)
 		{
+			if (!mViewFilter.empty() && !matchesNodeConditions(*it))
+				continue;
+
 			std::string key = it->name();
 			std::string val = resolvePlaceholders(it->text().as_string());
 
@@ -688,6 +694,187 @@ ThemeData::ThemeData()
 	mResolution = { 1, 1 };
 }
 
+bool ThemeData::matchesNodeConditions(const pugi::xml_node& node) const
+{
+	if (node.attribute("if"))
+		return false; // Full Batocera expressions are intentionally out of scope.
+
+	if (node.attribute("tinyScreen"))
+	{
+		const bool requested = node.attribute("tinyScreen").as_bool(false);
+		const bool actual = Renderer::getScreenHeight() > 0 && Renderer::getScreenHeight() <= 480;
+		if (requested != actual)
+			return false;
+	}
+
+	if (node.attribute("lang"))
+	{
+		std::string active = Settings::getInstance()->getString("Language");
+		if (active.empty())
+			active = "en";
+
+		bool matched = false;
+		for (const auto& token : Utils::String::delimitedStringToVector(node.attribute("lang").as_string(), ","))
+		{
+			if (languageMatches(Utils::String::trim(token), active))
+			{
+				matched = true;
+				break;
+			}
+		}
+		if (!matched)
+			return false;
+	}
+
+	auto archMatches = [](const std::string& list) {
+		for (auto token : Utils::String::delimitedStringToVector(Utils::String::toLower(list), ","))
+		{
+			token = Utils::String::trim(token);
+#ifdef _WIN32
+			if (token == "windows") return true;
+#endif
+#if defined(__x86_64__) || defined(_M_X64)
+			if (token == "x86_64" || token == "x86-64-v3") return true;
+#elif defined(__i386__) || defined(_M_IX86)
+			if (token == "x86") return true;
+#elif defined(__aarch64__)
+			if (token == "aarch64" || token == "arm64") return true;
+#elif defined(__arm__)
+			if (token == "arm" || token == "armhf") return true;
+#endif
+		}
+		return false;
+	};
+
+	if (node.attribute("ifArch") && !archMatches(node.attribute("ifArch").as_string()))
+		return false;
+	if (node.attribute("ifNotArch") && archMatches(node.attribute("ifNotArch").as_string()))
+		return false;
+
+	if (node.attribute("region"))
+	{
+		auto it = mVariables.find("region");
+		if (it == mVariables.cend())
+			it = mVariables.find("subset.region");
+		if (it == mVariables.cend())
+			return false;
+
+		bool matched = false;
+		for (auto token : Utils::String::delimitedStringToVector(node.attribute("region").as_string(), ","))
+		{
+			if (Utils::String::trim(token) == it->second)
+			{
+				matched = true;
+				break;
+			}
+		}
+		if (!matched)
+			return false;
+	}
+
+	if (node.attribute("ifSubset"))
+	{
+		for (auto clause : Utils::String::delimitedStringToVector(node.attribute("ifSubset").as_string(), ","))
+		{
+			clause = Utils::String::trim(clause);
+			const size_t colon = clause.find(':');
+			if (colon == std::string::npos)
+				return false;
+
+			const std::string subsetName = Utils::String::trim(clause.substr(0, colon));
+			const std::string allowed = clause.substr(colon + 1);
+			auto it = mVariables.find("subset." + subsetName);
+			if (it == mVariables.cend())
+				return false;
+
+			bool matched = false;
+			for (auto value : Utils::String::delimitedStringToVector(allowed, "|"))
+			{
+				if (Utils::String::trim(value) == it->second)
+				{
+					matched = true;
+					break;
+				}
+			}
+			if (!matched)
+				return false;
+		}
+	}
+
+	return true;
+}
+
+void ThemeData::parseSubsetVariables(const pugi::xml_node& root)
+{
+	for (pugi::xml_node subset = root.child("subset"); subset; subset = subset.next_sibling("subset"))
+	{
+		if (!subset.attribute("name") || !matchesNodeConditions(subset))
+			continue;
+
+		const std::string subsetName = subset.attribute("name").as_string();
+		const std::string variableName = "subset." + subsetName;
+		std::string selected;
+
+		auto current = mVariables.find(variableName);
+		if (current != mVariables.cend())
+			selected = current->second;
+
+		if (selected.empty())
+		{
+			for (pugi::xml_node option = subset.child("include"); option; option = option.next_sibling("include"))
+			{
+				if (!option.attribute("name") || !matchesNodeConditions(option))
+					continue;
+
+				selected = option.attribute("name").as_string();
+				if (!selected.empty())
+					break;
+			}
+		}
+
+		if (selected.empty())
+			continue;
+
+		mVariables[variableName] = selected;
+
+		for (pugi::xml_node option = subset.child("include"); option; option = option.next_sibling("include"))
+		{
+			if (!option.attribute("name") || option.attribute("name").as_string() != selected)
+				continue;
+			if (!matchesNodeConditions(option))
+				continue;
+
+			const std::string relPath = resolvePlaceholders(option.text().as_string());
+			if (relPath.empty() || relPath.find("${") != std::string::npos)
+				break;
+
+			const std::string path = Utils::FileSystem::resolveRelativePath(relPath, mPaths.back(), true, false);
+			if (!ResourceManager::getInstance()->fileExists(path))
+			{
+				LOG(LogWarning) << "ThemeData: selected subset include not found: " << path;
+				break;
+			}
+
+			mPaths.push_back(path);
+			pugi::xml_document doc;
+			pugi::xml_parse_result result = doc.load_file(path.c_str());
+			if (result)
+			{
+				pugi::xml_node theme = doc.child("theme");
+				if (theme)
+				{
+					parseVariables(theme);
+					parseLanguageVariables(theme);
+					parseSubsetVariables(theme);
+					parseIncludesVariables(theme);
+				}
+			}
+			mPaths.pop_back();
+			break;
+		}
+	}
+}
+
 // ─────────────────────────────────────────────
 // PASADA 1: parsea SOLO variables/language de includes (sin views)
 // ─────────────────────────────────────────────
@@ -698,7 +885,16 @@ void ThemeData::parseIncludesVariables(const pugi::xml_node& root)
 
 	for (pugi::xml_node node = root.child("include"); node; node = node.next_sibling("include"))
 	{
+		if (!mViewFilter.empty() && !matchesNodeConditions(node))
+			continue;
+
 		std::string relPath = resolvePlaceholders(node.text().as_string());
+		if (!mViewFilter.empty() && relPath.find("${") != std::string::npos)
+		{
+			LOG(LogDebug) << "ThemeData: splash skipped unresolved include " << relPath;
+			continue;
+		}
+
 		std::string path = Utils::FileSystem::resolveRelativePath(relPath, mPaths.back(), true, false);
 
 		if (!ResourceManager::getInstance()->fileExists(path))
@@ -720,7 +916,14 @@ void ThemeData::parseIncludesVariables(const pugi::xml_node& root)
 		parseVariables(theme);
 		parseLanguageVariables(theme);
 
-		parseIncludesVariables(theme);
+		if (!mViewFilter.empty())
+			parseSubsetVariables(theme);
+
+		const bool hasVariableData =
+			theme.child("variables") || theme.child("language") || theme.child("subset");
+
+		if (mViewFilter.empty() || hasVariableData)
+			parseIncludesVariables(theme);
 
 		mPaths.pop_back();
 	}
@@ -764,8 +967,9 @@ void ThemeData::parseIncludesViewsAndFeatures(const pugi::xml_node& root)
 	}
 }
 
-void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const std::string& path)
+void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const std::string& path, const std::string& viewFilter)
 {
+	mViewFilter = viewFilter;
 	mPaths.push_back(path);
 
 	ThemeException error;
@@ -781,6 +985,18 @@ void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const st
 
 	// 1) variables del sistema (sysDataMap)
 	mVariables.insert(sysDataMap.cbegin(), sysDataMap.cend());
+
+	if (mVariables.find("lang") == mVariables.cend())
+	{
+		std::string lang = Settings::getInstance()->getString("Language");
+		if (lang.empty())
+			lang = "en";
+		std::replace(lang.begin(), lang.end(), '-', '_');
+		const size_t sep = lang.find('_');
+		if (sep != std::string::npos)
+			lang = lang.substr(0, sep);
+		mVariables["lang"] = Utils::String::toLower(lang);
+	}
 
 	pugi::xml_document doc;
 	pugi::xml_parse_result res = doc.load_file(path.c_str());
@@ -824,11 +1040,19 @@ void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const st
 	// 4) language vars del XML principal
 	parseLanguageVariables(root);
 
+	// Splash compatibility: resolve Batocera-style subset values before
+	// processing includes and properties. Normal ES-X theme loading stays unchanged.
+	if (!mViewFilter.empty())
+		parseSubsetVariables(root);
+
 	// 5) includes (variables/language)
 	parseIncludesVariables(root);
 
-	// 6) includes (views/features) + root views/features
-	parseIncludesViewsAndFeatures(root);
+	// 6) views/features. A startup splash only needs its requested root view;
+	// importing every normal system/gamelist view would require system.theme
+	// before a system exists.
+	if (mViewFilter.empty())
+		parseIncludesViewsAndFeatures(root);
 	parseViews(root);
 	parseFeatures(root);
 }
@@ -863,6 +1087,9 @@ void ThemeData::parseVariables(const pugi::xml_node& root)
 
 	for (pugi::xml_node_iterator it = variables.begin(); it != variables.end(); ++it)
 	{
+		if (!mViewFilter.empty() && !matchesNodeConditions(*it))
+			continue;
+
 		std::string key = it->name();
 		std::string val = resolvePlaceholders(it->text().as_string());
 
@@ -895,6 +1122,8 @@ void ThemeData::parseViews(const pugi::xml_node& root)
 
 			if (std::find(sSupportedViews.cbegin(), sSupportedViews.cend(), viewKey) != sSupportedViews.cend())
 			{
+				if (!mViewFilter.empty() && viewKey != mViewFilter)
+					continue;
 				ThemeView& view = mViews.insert(std::pair<std::string, ThemeView>(viewKey, ThemeView())).first->second;
 				parseView(node, view);
 			}
@@ -909,6 +1138,9 @@ void ThemeData::parseView(const pugi::xml_node& root, ThemeView& view)
 
 	for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling())
 	{
+		if (!mViewFilter.empty() && !matchesNodeConditions(node))
+			continue;
+
 		if (!node.attribute("name"))
 			throw error << "Element of type \"" << node.name() << "\" missing \"name\" attribute!";
 
@@ -942,10 +1174,14 @@ void ThemeData::parseElement(const pugi::xml_node& root, const std::map<std::str
 	error.setFiles(mPaths);
 
 	element.type = root.name();
-	element.extra = root.attribute("extra").as_bool(false);
+	const std::string extraValue = Utils::String::toLower(root.attribute("extra").as_string());
+	element.extra = root.attribute("extra").as_bool(false) ||
+		(!mViewFilter.empty() && extraValue == "static");
 
 	for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling())
 	{
+		if (!mViewFilter.empty() && !matchesNodeConditions(node))
+			continue;
 		auto typeIt = typeMap.find(node.name());
 		if (typeIt == typeMap.cend())
 			throw error << "Unknown property type \"" << node.name() << "\" (for element of type " << root.name() << ").";
@@ -977,7 +1213,14 @@ void ThemeData::parseElement(const pugi::xml_node& root, const std::map<std::str
 		{
 			size_t divider = str.find(' ');
 			if (divider == std::string::npos)
-				throw error << "invalid normalized pair (property \"" << node.name() << "\", value \"" << str.c_str() << "\")";
+			{
+				if (mViewFilter.empty())
+					throw error << "invalid normalized pair (property \"" << node.name() << "\", value \"" << str.c_str() << "\")";
+
+				const float single = (float)atof(str.c_str());
+				element.properties[node.name()] = Vector2f(single, single) / mResolution;
+				break;
+			}
 
 			std::string first = str.substr(0, divider);
 			std::string second = str.substr(divider, std::string::npos);
