@@ -464,7 +464,7 @@ axis-aligned `cover` clipping is disabled on rotated items so it cannot cut them
 | `logoSpacingX` | Horizontal item spacing. |
 | `logoSpacingY` | Vertical item spacing. |
 | `scaledLogoSpacing` | Extra spacing caused by selected-item scaling. |
-| `logoOffset` | Fine X/Y adjustment of the carousel anchor. |
+| `logoPos` / `carouselLogoPos` | Absolute selected-logo anchor inside the SystemView carousel. It does not move or resize the carousel clip. |\n| `logoOffset` | Fine X/Y adjustment of the carousel anchor. |
 | `logoOffsetX` | Fine horizontal carousel adjustment. |
 | `logoOffsetY` | Fine vertical carousel adjustment. |
 | `carouselLogoPos` / `logoPos` | Optional absolute carousel anchor inside the `textlist`; offsets can still be used for fine adjustment. |
