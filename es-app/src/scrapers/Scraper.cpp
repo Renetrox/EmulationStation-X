@@ -2,6 +2,7 @@
 
 #include "FileData.h"
 #include "GamesDBJSONScraper.h"
+#include "TheGamesDBRateLimit.h"
 #include "ScreenScraper.h"
 #include "Log.h"
 #include "Settings.h"
@@ -108,13 +109,28 @@ ScraperRequest::ScraperRequest(std::vector<ScraperSearchResult>& resultsWrite) :
 // ScraperHttpRequest
 ScraperHttpRequest::ScraperHttpRequest(std::vector<ScraperSearchResult>& resultsWrite, const std::string& url)
 	: ScraperRequest(resultsWrite)
+	, mIsTheGamesDB(TheGamesDBRateLimit::isApiUrl(url))
 {
+	if (mIsTheGamesDB)
+	{
+		const long seconds = TheGamesDBRateLimit::remainingSeconds();
+		if (seconds > 0)
+		{
+			setError("TheGamesDB rate limit active; wait " +
+				std::to_string(seconds) + " seconds before trying again");
+			return;
+		}
+	}
+
 	setStatus(ASYNC_IN_PROGRESS);
 	mReq = std::unique_ptr<HttpReq>(new HttpReq(url));
 }
 
 void ScraperHttpRequest::update()
 {
+	if (mStatus != ASYNC_IN_PROGRESS || !mReq)
+		return;
+
 	HttpReq::Status status = mReq->status();
 	if(status == HttpReq::REQ_SUCCESS)
 	{
@@ -127,9 +143,14 @@ void ScraperHttpRequest::update()
 	if(status == HttpReq::REQ_IN_PROGRESS)
 		return;
 
-	// everything else is some sort of error
-	LOG(LogError) << "ScraperHttpRequest network error (status: " << status << ") - " << mReq->getErrorMsg();
-	setError(mReq->getErrorMsg());
+	// Only rate-limit TheGamesDB. Other scrapers remain unaffected.
+	const std::string error = mReq->getErrorMsg();
+	if (mIsTheGamesDB && error.find("HTTP status 429") == 0)
+		TheGamesDBRateLimit::noteHttp429();
+
+	LOG(LogError) << (mIsTheGamesDB ? "TheGamesDB" : "ScraperHttpRequest")
+	              << " network error (status: " << status << ") - " << error;
+	setError(error);
 }
 
 

@@ -1,0 +1,28 @@
+name: ES-X TheGamesDB rate-limit regression
+
+on:
+  push:
+    branches:
+      - feature/thegamesdb-key-cooldown-20261020
+    paths:
+      - 'es-app/src/scrapers/TheGamesDBRateLimit.h'
+      - 'es-app/src/scrapers/Scraper.cpp'
+      - 'es-app/src/scrapers/GamesDBJSONScraperResources.cpp'
+      - 'tests/test_thegamesdb_rate_limit.py'
+      - '.github/workflows/test-thegamesdb-rate-limit.yml'
+  pull_request:
+    paths:
+      - 'es-app/src/scrapers/TheGamesDBRateLimit.h'
+      - 'es-app/src/scrapers/Scraper.cpp'
+      - 'es-app/src/scrapers/GamesDBJSONScraperResources.cpp'
+      - 'tests/test_thegamesdb_rate_limit.py'
+      - '.github/workflows/test-thegamesdb-rate-limit.yml'
+  workflow_dispatch:
+
+jobs:
+  limiter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify cooldown is shared and isolated
+        run: python3 -m unittest discover -s tests -p 'test_thegamesdb_rate_limit.py' -v
