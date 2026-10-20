@@ -19,13 +19,13 @@ int main(int argc, char** argv)
 	writeFile(path,
 		"<theme><formatVersion>7</formatVersion>"
 		"<view name='splash'>"
-		"<splash name='splash'><backgroundColor>030303</backgroundColor></splash>"
+		"<splash name='splash'><pos>0 0</pos><origin>0 0</origin><size>1 1</size><minSize>1 1</minSize><backgroundColor>030303</backgroundColor></splash>"
 		"<image name='background'><path>./missing-is-allowed-in-parser.png</path></image>"
 		"<image name='progressbar'><pos>0.05 0.86</pos><size>0.9 0.016</size>"
 		"<color>6060607F</color></image>"
 		"<image name='progressbar:active'><tile>true</tile><color>4a8d35</color></image>"
 		"<text name='label' extra='true'><fontSize>0.023</fontSize>"
-		"<color>000000</color><forceUppercase>true</forceUppercase></text>"
+		"<color>000000</color><glowColor>222222</glowColor><glowSize>1</glowSize><glowOffset>1</glowOffset><verticalAlignment>center</verticalAlignment><forceUppercase>true</forceUppercase></text>"
 		"</view></theme>");
 
 	ThemeData theme;
@@ -45,6 +45,8 @@ int main(int argc, char** argv)
 
 	auto label = theme.getElement("splash", "label", "text");
 	assert(label && label->extra && label->get<bool>("forceUppercase"));
+	assert(label->get<std::string>("verticalAlignment") == "center");
+	assert(label->get<unsigned int>("glowColor") == 0x222222FF);
 
 	if (argc == 3)
 	{
