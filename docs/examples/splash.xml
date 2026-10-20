@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<theme>
+    <formatVersion>7</formatVersion>
+    <view name="splash">
+        <splash name="splash">
+            <backgroundColor>030303</backgroundColor>
+        </splash>
+        <!-- Place your own splash.png beside this XML. -->
+        <image name="background">
+            <path>./splash.png</path>
+            <origin>0.5 0.5</origin>
+            <pos>0.5 0.5</pos>
+            <maxSize>1 1</maxSize>
+        </image>
+        <image name="progressbar, progressbar:active">
+            <pos>0.25 0.87</pos>
+            <size>0.5 0.025</size>
+        </image>
+        <image name="progressbar"><color>252525</color></image>
+        <image name="progressbar:active"><color>b616e4</color></image>
+        <text name="label">
+            <pos>0 0.78</pos>
+            <size>1 0.05</size>
+            <alignment>center</alignment>
+            <fontSize>0.032</fontSize>
+            <color>FFFFFF</color>
+        </text>
+    </view>
+</theme>
