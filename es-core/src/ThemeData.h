@@ -159,7 +159,7 @@ public:
 	ThemeData();
 
 	// throws ThemeException
-	void loadFile(std::map<std::string, std::string> sysDataMap, const std::string& path, bool splashOnly = false);
+	void loadFile(std::map<std::string, std::string> sysDataMap, const std::string& path);
 
 	enum ElementPropertyType
 	{
@@ -194,7 +194,6 @@ private:
 	static std::vector<std::string> sSupportedViews;
 
 	std::deque<std::string> mPaths;
-	bool mSplashOnly = false;
 	float mVersion;
 	Vector2f mResolution;
 
