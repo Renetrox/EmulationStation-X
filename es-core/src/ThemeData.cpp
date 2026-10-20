@@ -187,6 +187,7 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 { "carouselImageBorderSelected", PATH },
 { "carouselImageBorderScale", FLOAT },
 { "carouselImageBorderColor", COLOR },
+{ "carouselImageBorderFit", STRING },
 { "carouselImageBorderZIndex", FLOAT },
 	
 	// ES-X: caja fija opcional para blindar artes raros del scraper
