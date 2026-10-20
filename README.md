@@ -271,6 +271,28 @@ Beautiful themes should not require engine hacks.
 | Enhanced Grid layouts | ✅ Stable |
 Core systems are stable for daily use. New capabilities are introduced carefully to preserve compatibility and performance.
 
+### TheGamesDB API key (optional)
+
+ES-X keeps its existing TheGamesDB key by default. When that shared key
+receives HTTP 429 responses, users with **their own authorized key** can
+override it at runtime without editing source code:
+
+```bash
+export ESX_THEGAMESDB_APIKEY='YOUR_AUTHORIZED_API_KEY'
+./emulationstation
+```
+
+The variable must be present in the environment of the **actual ES-X launcher**
+(including when started through RetroPie). Do not post the key in issues or
+store it in `es_settings.cfg` or tracked project files. ES-X does not log
+the key. Be careful with screenshots, terminal histories and shared shell scripts.
+
+After TheGamesDB responds with HTTP 429, ES-X prevents **new TheGamesDB
+API requests** for approximately two minutes in that process. Already active
+requests may complete or fail. The pause is not an API quota reset, and cannot
+guarantee that an unavailable/limited key will work. ScreenScraper and other
+download services remain unaffected.
+
 ## Installation
 
 ### Recommended (RetroPie Module)
