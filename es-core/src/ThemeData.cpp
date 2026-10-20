@@ -25,6 +25,10 @@ std::vector<std::string> ThemeData::sSupportedFeatures { { "video" }, { "carouse
 // Mapa de elementos y propiedades
 std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> ThemeData::sElementMap {
 	{ "splash", {
+		{ "pos", RESOLUTION_PAIR },
+		{ "size", RESOLUTION_PAIR },
+		{ "minSize", RESOLUTION_PAIR },
+		{ "origin", NORMALIZED_PAIR },
 		{ "backgroundColor", COLOR } } },
 
 	{ "image", {
@@ -109,6 +113,10 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "fontSize", RESOLUTION_FLOAT },
 		{ "color", COLOR },
 		{ "alignment", STRING },
+		{ "verticalAlignment", STRING },
+		{ "glowColor", COLOR },
+		{ "glowSize", FLOAT },
+		{ "glowOffset", FLOAT },
 		{ "forceUppercase", BOOLEAN },
 		{ "lineSpacing", FLOAT },
 		{ "value", STRING },
