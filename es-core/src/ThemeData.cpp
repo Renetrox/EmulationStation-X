@@ -355,6 +355,10 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "scaledLogoSpacing", FLOAT },
 	{ "scrollSound", PATH },
 
+	// posición absoluta del ancla del logo seleccionado dentro del carrusel
+	{ "logoPos", RESOLUTION_PAIR },
+	{ "carouselLogoPos", RESOLUTION_PAIR },
+
 	// nuevos offsets / spacing
 	{ "logoOffset", RESOLUTION_PAIR },
 	{ "logoOffsetX", RESOLUTION_FLOAT },
