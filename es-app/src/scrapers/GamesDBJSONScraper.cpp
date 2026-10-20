@@ -208,21 +208,27 @@ int getIntOrThrow(const Value& v)
 
 std::string getBoxartImage(const Value& v)
 {
-	if (!v.IsArray() || v.Size() == 0)
-	{
+	if (!v.IsArray())
 		return "";
-	}
-	for (int i = 0; i < (int)v.Size(); ++i)
+
+	std::string firstValidImage;
+	for (SizeType i = 0; i < v.Size(); ++i)
 	{
-		auto& im = v[i];
-		std::string type = getStringOrThrow(im, "type");
-		std::string side = getStringOrThrow(im, "side");
-		if (type == "boxart" && side == "front")
-		{
-			return getStringOrThrow(im, "filename");
-		}
+		const Value& image = v[i];
+		if (!image.IsObject() || !image.HasMember("filename") || !image["filename"].IsString())
+			continue;
+
+		const std::string filename = image["filename"].GetString();
+		if (firstValidImage.empty())
+			firstValidImage = filename;
+
+		if (image.HasMember("type") && image["type"].IsString() &&
+			image.HasMember("side") && image["side"].IsString() &&
+			std::string(image["type"].GetString()) == "boxart" &&
+			std::string(image["side"].GetString()) == "front")
+			return filename;
 	}
-	return getStringOrThrow(v[0], "filename");
+	return firstValidImage;
 }
 
 std::string getDeveloperString(const Value& v)
@@ -300,11 +306,8 @@ std::string getGenreString(const Value& v)
 	return out;
 }
 
-void processGame(const Value& game, const Value& boxart, std::vector<ScraperSearchResult>& results)
+void processGame(const Value& game, const Value* boxart, std::vector<ScraperSearchResult>& results)
 {
-	std::string baseImageUrlThumb = getStringOrThrow(boxart["base_url"], "thumb");
-	std::string baseImageUrlLarge = getStringOrThrow(boxart["base_url"], "large");
-
 	ScraperSearchResult result;
 
 	result.setMetadata("name", getStringOrThrow(game, "game_title"));
@@ -336,14 +339,25 @@ void processGame(const Value& game, const Value& boxart, std::vector<ScraperSear
 	}
 
 
-	if (boxart.HasMember("data") && boxart["data"].IsObject())
+	// Artwork is optional. Preserve game metadata even when TheGamesDB
+	// omits the include=boxart payload or a particular game has no image.
+	if (boxart && boxart->IsObject() && boxart->HasMember("base_url") &&
+		(*boxart)["base_url"].IsObject() && boxart->HasMember("data") &&
+		(*boxart)["data"].IsObject() && game.HasMember("id") && game["id"].IsInt())
 	{
-		std::string id = std::to_string(getIntOrThrow(game, "id"));
-		if (boxart["data"].HasMember(id.c_str()))
+		const Value& baseUrl = (*boxart)["base_url"];
+		const Value& data = (*boxart)["data"];
+		const std::string id = std::to_string(game["id"].GetInt());
+		if (data.HasMember(id.c_str()))
 		{
-		    std::string image = getBoxartImage(boxart["data"][id.c_str()]);
-		    result.thumbnailUrl = baseImageUrlThumb + "/" + image;
-		    result.imageUrl = baseImageUrlLarge + "/" + image;
+			const std::string image = getBoxartImage(data[id.c_str()]);
+			if (!image.empty())
+			{
+				if (baseUrl.HasMember("thumb") && baseUrl["thumb"].IsString())
+					result.thumbnailUrl = std::string(baseUrl["thumb"].GetString()) + "/" + image;
+				if (baseUrl.HasMember("large") && baseUrl["large"].IsString())
+					result.imageUrl = std::string(baseUrl["large"].GetString()) + "/" + image;
+			}
 		}
 	}
 
@@ -367,7 +381,8 @@ void TheGamesDBJSONRequest::process(const std::unique_ptr<HttpReq>& req, std::ve
 		return;
 	}
 
-	if (!doc.HasMember("data") || !doc["data"].HasMember("games") || !doc["data"]["games"].IsArray())
+	if (!doc.IsObject() || !doc.HasMember("data") || !doc["data"].IsObject() ||
+		!doc["data"].HasMember("games") || !doc["data"]["games"].IsArray())
 	{
 		std::string warn = "TheGamesDBJSONRequest - Response had no game data.\n";
 		LOG(LogWarning) << warn;
@@ -375,20 +390,15 @@ void TheGamesDBJSONRequest::process(const std::unique_ptr<HttpReq>& req, std::ve
 	}
 	const Value& games = doc["data"]["games"];
 
-	if (!doc.HasMember("include") || !doc["include"].HasMember("boxart"))
+	const Value* boxart = nullptr;
+	if (doc.HasMember("include") && doc["include"].IsObject() &&
+		doc["include"].HasMember("boxart") && doc["include"]["boxart"].IsObject())
 	{
-		std::string warn = "TheGamesDBJSONRequest - Response had no include boxart data.\n";
-		LOG(LogWarning) << warn;
-		return;
+		boxart = &doc["include"]["boxart"];
 	}
-
-	const Value& boxart = doc["include"]["boxart"];
-
-	if (!boxart.HasMember("base_url") || !boxart.HasMember("data") || !boxart.IsObject())
+	else
 	{
-		std::string warn = "TheGamesDBJSONRequest - Response include had no usable boxart data.\n";
-		LOG(LogWarning) << warn;
-		return;
+		LOG(LogWarning) << "TheGamesDBJSONRequest - No boxart returned; importing text metadata.";
 	}
 
 	resources.ensureResources();
@@ -396,7 +406,9 @@ void TheGamesDBJSONRequest::process(const std::unique_ptr<HttpReq>& req, std::ve
 
 	for (int i = 0; i < (int)games.Size(); ++i)
 	{
-		auto& v = games[i];
+		const Value& v = games[i];
+		if (!v.IsObject())
+			continue;
 		try
 		{
 			processGame(v, boxart, results);
