@@ -157,13 +157,27 @@ ThemeSplash::ThemeSplash(Window* window)
 
 	// Follow Tarave/Batocera's model: splash is a normal ThemeData view.
 	// This deliberately avoids a second, splash-only parser with different rules.
-	auto theme = std::make_shared<ThemeData>();
-	theme->loadFile({{"themePath", directory}}, splashPath);
-	if (!theme->hasView("splash"))
-		throw error << "Missing splash view";
-
 	const float width = (float)Renderer::getScreenWidth();
 	const float height = (float)Renderer::getScreenHeight();
+
+	auto theme = std::make_shared<ThemeData>();
+	std::map<std::string, std::string> splashVars;
+	splashVars["themePath"] = directory;
+	splashVars["subset.frontend"] = "EmulationStation";
+
+	const float ratio = height > 0.0f ? width / height : (16.0f / 9.0f);
+	if (std::fabs(ratio - (4.0f / 3.0f)) < 0.05f)
+		splashVars["subset.aspect-ratio"] = "4-3";
+	else if (std::fabs(ratio - (5.0f / 4.0f)) < 0.05f)
+		splashVars["subset.aspect-ratio"] = "5-4";
+	else if (std::fabs(ratio - (16.0f / 10.0f)) < 0.05f)
+		splashVars["subset.aspect-ratio"] = "16-10";
+	else
+		splashVars["subset.aspect-ratio"] = "16-9";
+
+	theme->loadFile(splashVars, splashPath, "splash");
+	if (!theme->hasView("splash"))
+		throw error << "Missing splash view";
 
 	const ThemeData::ThemeElement* config =
 		theme->getElement("splash", "splash", "splash");
