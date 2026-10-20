@@ -486,17 +486,15 @@ axis-aligned `cover` clipping is disabled on rotated items so it cannot cut them
 | `carouselImageType` | Selects the artwork source. |
 | `carouselImageFit` | Artwork fitting mode: `contain`, `cover`, or `stretch`. |
 | `carouselImagePadding` | Internal padding between artwork and tile bounds. |
+| `carouselImageZIndex` | Internal carousel-layer order for the artwork. Default: `10`. Higher values render later/above lower values. |
 | `carouselFallbackImage` | Fallback image used when the requested artwork is missing. |
 | `carouselImageLockSize` | Enables use of a fixed artwork box when `carouselImageBoxSize` is defined. |
 | `carouselImageBoxSize` | Optional fixed artwork box relative to the carousel area. |
-| `carouselImageBackground` | PNG/card plate rendered **behind** the carousel artwork for normal items. |
-| `carouselImageBackgroundSelected` | PNG/card plate rendered **behind** the artwork for the selected item. |
-| `carouselImageBackgroundScale` | Scale of the background plate relative to the visual item. |
-| `carouselImageBackgroundColor` | Color tint applied to the background plate. |
-| `carouselImageBorder` | PNG overlay/frame used for normal carousel items; rendered **above** the artwork. |
+| `carouselImageBorder` | PNG overlay/frame used for normal carousel items. |
 | `carouselImageBorderSelected` | PNG overlay/frame used for the selected item. |
 | `carouselImageBorderScale` | Scale of the artwork border/frame relative to the tile. |
 | `carouselImageBorderColor` | Tint/color shift applied to the border image. |
+| `carouselImageBorderZIndex` | Internal carousel-layer order for the border/overlay. Default: `20`. Set it below `carouselImageZIndex` to place the PNG behind the artwork. |
 
 Supported `carouselImageType` values:
 
@@ -528,16 +526,14 @@ none
   <carouselImageType>fanart</carouselImageType>
   <carouselImageFit>cover</carouselImageFit>
 
-  <!-- Optional card plate below the artwork -->
-  <carouselImageBackground>./_inc/images/card.png</carouselImageBackground>
-  <carouselImageBackgroundSelected>./_inc/images/card_selected.png</carouselImageBackgroundSelected>
-  <carouselImageBackgroundScale>1.0</carouselImageBackgroundScale>
-
-  <!-- Optional frame/overlay above the artwork -->
   <carouselImageBorder>./_inc/images/card_border.png</carouselImageBorder>
   <carouselImageBorderSelected>./_inc/images/card_border.png</carouselImageBorderSelected>
   <carouselImageBorderScale>0.965</carouselImageBorderScale>
   <carouselImageBorderColor>FFFFFFFF</carouselImageBorderColor>
+
+  <!-- Optional internal ordering. Defaults are image=10, border=20. -->
+  <carouselImageZIndex>10</carouselImageZIndex>
+  <carouselImageBorderZIndex>20</carouselImageBorderZIndex>
 
   <logoAlignment>left</logoAlignment>
   <logoSize>0.164 0.164</logoSize>
