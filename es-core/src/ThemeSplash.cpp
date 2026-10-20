@@ -164,6 +164,8 @@ ThemeSplash::ThemeSplash(Window* window)
 	std::map<std::string, std::string> splashVars;
 	splashVars["themePath"] = directory;
 	splashVars["subset.frontend"] = "EmulationStation";
+	splashVars["screen.width"] = std::to_string((int)width);
+	splashVars["screen.height"] = std::to_string((int)height);
 
 	const float ratio = height > 0.0f ? width / height : (16.0f / 9.0f);
 	if (std::fabs(ratio - (4.0f / 3.0f)) < 0.05f)
