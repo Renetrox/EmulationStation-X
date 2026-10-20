@@ -58,6 +58,27 @@ HttpReq::HttpReq(const std::string& url)
 		return;
 	}
 
+	// Identify ES-X explicitly, rather than sending libcurl's default User-Agent.
+	// This is used for scrapers as well as other HTTP downloads.
+	err = curl_easy_setopt(mHandle, CURLOPT_USERAGENT,
+		"EmulationStation-X/1.0 (+https://github.com/Renetrox/EmulationStation-X)");
+	if(err != CURLE_OK)
+	{
+		mStatus = REQ_IO_ERROR;
+		onError(curl_easy_strerror(err));
+		return;
+	}
+
+	// Do not wait indefinitely for an unreachable API host. This is a
+	// connection timeout, not a limit on larger video/media downloads.
+	err = curl_easy_setopt(mHandle, CURLOPT_CONNECTTIMEOUT, 10L);
+	if(err != CURLE_OK)
+	{
+		mStatus = REQ_IO_ERROR;
+		onError(curl_easy_strerror(err));
+		return;
+	}
+
 	//set curl to handle redirects
 	err = curl_easy_setopt(mHandle, CURLOPT_FOLLOWLOCATION, 1L);
 	if(err != CURLE_OK)
@@ -165,8 +186,32 @@ HttpReq::Status HttpReq::status()
 
 				if(msg->data.result == CURLE_OK)
 				{
-					req->mStatus = REQ_SUCCESS;
-				}else{
+					// A completed transfer is not necessarily a successful HTTP response.
+					// In particular, TheGamesDB can send JSON errors with HTTP 401/403/429.
+					long httpCode = 0;
+					CURLcode infoResult = curl_easy_getinfo(msg->easy_handle, CURLINFO_RESPONSE_CODE, &httpCode);
+					if(infoResult != CURLE_OK)
+					{
+						req->mStatus = REQ_IO_ERROR;
+						req->onError(curl_easy_strerror(infoResult));
+					}
+					else if(httpCode >= 200 && httpCode < 300)
+					{
+						req->mStatus = REQ_SUCCESS;
+					}
+					else
+					{
+						req->mStatus = REQ_BAD_STATUS_CODE;
+						std::string error = "HTTP status " + std::to_string(httpCode);
+						if(httpCode == 401 || httpCode == 403)
+							error += " (access denied; check scraper credentials)";
+						else if(httpCode == 429)
+							error += " (rate limit exceeded; try again later)";
+						req->onError(error.c_str());
+					}
+				}
+				else
+				{
 					req->mStatus = REQ_IO_ERROR;
 					req->onError(curl_easy_strerror(msg->data.result));
 				}
