@@ -8,7 +8,6 @@
 #include "Log.h"
 #include "platform.h"
 #include "Settings.h"
-#include "renderers/Renderer.h"
 
 #include <pugixml.hpp>
 #include <algorithm>
@@ -702,7 +701,10 @@ bool ThemeData::matchesNodeConditions(const pugi::xml_node& node) const
 	if (node.attribute("tinyScreen"))
 	{
 		const bool requested = node.attribute("tinyScreen").as_bool(false);
-		const bool actual = Renderer::getScreenHeight() > 0 && Renderer::getScreenHeight() <= 480;
+		bool actual = false;
+		auto heightIt = mVariables.find("screen.height");
+		if (heightIt != mVariables.cend())
+			actual = atoi(heightIt->second.c_str()) > 0 && atoi(heightIt->second.c_str()) <= 480;
 		if (requested != actual)
 			return false;
 	}
