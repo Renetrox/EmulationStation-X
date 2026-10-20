@@ -286,6 +286,7 @@ private:
 	std::string mCarouselImageBorderSelected;
 	float mCarouselImageBorderScale;
 	unsigned int mCarouselImageBorderColor;
+	std::string mCarouselImageBorderFit;
 	float mCarouselImageBorderZIndex;
 
 	ImageComponent mCarouselImageBorderComponent;
@@ -377,6 +378,7 @@ TextListComponent<T>::TextListComponent(Window* window) :
 	mCarouselImageBorderSelected = "";
 	mCarouselImageBorderScale = 1.0f;
 	mCarouselImageBorderColor = 0xFFFFFFFF;
+	mCarouselImageBorderFit = "stretch";
 	mCarouselImageBorderZIndex = 20.0f;
 }
 
@@ -1022,7 +1024,14 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 				border->setOrigin(0.5f, 0.5f);
 				border->setPosition(imagePosX, imagePosY, 0.0f);
-				border->setResize(fixedBorderW, fixedBorderH);
+
+				// Preserve the PNG aspect ratio when requested. The historical
+				// default remains stretch for backward compatibility.
+				if (mCarouselImageBorderFit == "contain")
+					border->setMaxSize(fixedBorderW, fixedBorderH);
+				else
+					border->setResize(fixedBorderW, fixedBorderH);
+
 				border->setOpacity(255);
 				border->render(imageTrans);
 			};
@@ -1645,6 +1654,17 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 
 	if (elem->has("carouselImageBorderColor"))
 		mCarouselImageBorderColor = elem->get<unsigned int>("carouselImageBorderColor");
+
+	mCarouselImageBorderFit = "stretch";
+	if (elem->has("carouselImageBorderFit"))
+		mCarouselImageBorderFit = Utils::String::toLower(elem->get<std::string>("carouselImageBorderFit"));
+
+	if (mCarouselImageBorderFit != "stretch" && mCarouselImageBorderFit != "contain")
+	{
+		LOG(LogWarning) << "Unknown carouselImageBorderFit \"" << mCarouselImageBorderFit
+			<< "\"! Using stretch.";
+		mCarouselImageBorderFit = "stretch";
+	}
 
 	mCarouselImageBorderZIndex = 20.0f;
 	if (elem->has("carouselImageBorderZIndex"))
