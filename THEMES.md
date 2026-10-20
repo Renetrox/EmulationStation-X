@@ -494,6 +494,7 @@ axis-aligned `cover` clipping is disabled on rotated items so it cannot cut them
 | `carouselImageBorderSelected` | PNG overlay/frame used for the selected item. |
 | `carouselImageBorderScale` | Scale of the artwork border/frame relative to the tile. |
 | `carouselImageBorderColor` | Tint/color shift applied to the border image. |
+| `carouselImageBorderFit` | Border/card PNG fitting mode: `stretch` (legacy default) or `contain` (preserves aspect ratio). |
 | `carouselImageBorderZIndex` | Internal carousel-layer order for the border/overlay. Default: `20`. Set it below `carouselImageZIndex` to place the PNG behind the artwork. |
 
 Supported `carouselImageType` values:
@@ -530,6 +531,7 @@ none
   <carouselImageBorderSelected>./_inc/images/card_border.png</carouselImageBorderSelected>
   <carouselImageBorderScale>0.965</carouselImageBorderScale>
   <carouselImageBorderColor>FFFFFFFF</carouselImageBorderColor>
+  <carouselImageBorderFit>contain</carouselImageBorderFit>
 
   <!-- Optional internal ordering. Defaults are image=10, border=20. -->
   <carouselImageZIndex>10</carouselImageZIndex>
