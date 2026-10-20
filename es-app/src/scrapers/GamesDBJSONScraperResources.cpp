@@ -1,4 +1,6 @@
 #include <chrono>
+#include <cstdlib>
+#include <cctype>
 #include <fstream>
 #include <memory>
 #include <thread>
@@ -6,6 +8,7 @@
 #include "Log.h"
 
 #include "scrapers/GamesDBJSONScraperResources.h"
+#include "scrapers/TheGamesDBRateLimit.h"
 #include "utils/FileSystemUtil.h"
 
 
@@ -55,11 +58,33 @@ std::string getScrapersResouceDir()
 		Utils::FileSystem::getHomePath() + "/.emulationstation/" + SCRAPER_RESOURCES_DIR);
 }
 
-std::string TheGamesDBJSONRequestResources::getApiKey() const { return GamesDBAPIKey; }
+std::string TheGamesDBJSONRequestResources::getApiKey() const
+{
+    // Runtime override: never store a personal key in es_settings.cfg,
+    // a tracked source file or a CMake cache. Keep the bundled fallback.
+    const char* configured = std::getenv("ESX_THEGAMESDB_APIKEY");
+    if (configured && *configured)
+    {
+        const std::string key(configured);
+        bool valid = key.size() <= 256;
+        for (unsigned char ch : key)
+            if (std::iscntrl(ch) || std::isspace(ch))
+                valid = false;
+        if (valid)
+            return key;
+
+        LOG(LogWarning) << "TheGamesDB: invalid ESX_THEGAMESDB_APIKEY override; "
+                        << "using bundled key instead (value not logged)";
+    }
+    return GamesDBAPIKey;
+}
 
 
 void TheGamesDBJSONRequestResources::prepare()
 {
+    // Keep cached lookup tables but avoid new requests during a server 429.
+    if (TheGamesDBRateLimit::remainingSeconds() > 0)
+        return;
 	if (checkLoaded())
 	{
 		return;
@@ -140,7 +165,11 @@ bool TheGamesDBJSONRequestResources::saveResource(HttpReq* req, std::unordered_m
 	}
 	if (req->status() != HttpReq::REQ_SUCCESS)
 	{
-		LOG(LogError) << "Resource request for " << file_name << " failed:\n\t" << req->getErrorMsg();
+		const std::string error = req->getErrorMsg();
+		if (error.find("HTTP status 429") == 0)
+			TheGamesDBRateLimit::noteHttp429();
+		LOG(LogError) << "TheGamesDB resource " << resource_name << " failed: "
+		              << error; // Never log a URL with the API key.
 		return true; // Request failed, resetting request.
 	}
 
@@ -157,7 +186,7 @@ std::unique_ptr<HttpReq> TheGamesDBJSONRequestResources::fetchResource(const std
 {
 	std::string path = "https://api.thegamesdb.net/v1";
 	path += endpoint;
-	path += "?apikey=" + getApiKey();
+	path += "?apikey=" + HttpReq::urlEncode(getApiKey());
 
 	return std::unique_ptr<HttpReq>(new HttpReq(path));
 }
