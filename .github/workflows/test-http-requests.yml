@@ -1,0 +1,30 @@
+name: ES-X HTTP request regression test
+
+on:
+  push:
+    branches:
+      - fix/thegamesdb-http-reliability-20261020
+    paths:
+      - 'es-core/src/HttpReq.cpp'
+      - 'es-core/src/HttpReq.h'
+      - 'tests/test_http_req_status.py'
+      - '.github/workflows/test-http-requests.yml'
+  pull_request:
+    paths:
+      - 'es-core/src/HttpReq.cpp'
+      - 'es-core/src/HttpReq.h'
+      - 'tests/test_http_req_status.py'
+      - '.github/workflows/test-http-requests.yml'
+  workflow_dispatch:
+
+jobs:
+  test-http:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install HTTP test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ pkg-config libcurl4-openssl-dev python3
+      - name: Check HTTP status handling and User-Agent
+        run: python3 -m unittest discover -s tests -p 'test_http_req_status.py' -v

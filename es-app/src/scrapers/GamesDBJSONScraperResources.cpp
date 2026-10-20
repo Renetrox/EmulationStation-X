@@ -20,7 +20,9 @@ namespace
 constexpr char GamesDBAPIKey[] = "445fcbc3f32bb2474bc27016b99eb963d318ee3a608212c543b9a79de1041600";
 
 
-constexpr int MAX_WAIT_MS = 90000;
+// Auxiliary developer/publisher/genre tables must not freeze game searches for 90 seconds.
+// Metadata scraping can proceed with names/descriptions even if these lookups fail.
+constexpr int MAX_WAIT_MS = 10000;
 constexpr int POLL_TIME_MS = 500;
 constexpr int MAX_WAIT_ITER = MAX_WAIT_MS / POLL_TIME_MS;
 
@@ -184,8 +186,8 @@ int TheGamesDBJSONRequestResources::loadResource(
 		return 1;
 	}
 
-	if (!doc.HasMember("data") || !doc["data"].HasMember(resource_name.c_str()) ||
-		!doc["data"][resource_name.c_str()].IsObject())
+	if (!doc.IsObject() || !doc.HasMember("data") || !doc["data"].IsObject() ||
+		!doc["data"].HasMember(resource_name.c_str()) || !doc["data"][resource_name.c_str()].IsObject())
 	{
 		std::string err = "TheGamesDBJSONRequest - Response had no resource data.\n";
 		LOG(LogError) << err;
