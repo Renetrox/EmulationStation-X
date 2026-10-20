@@ -1,0 +1,38 @@
+name: ES-X static splash parser
+
+on:
+  push:
+    branches:
+      - feature/theme-splash-main-test-20261020
+    paths:
+      - 'es-core/src/ThemeData.cpp'
+      - 'es-core/src/ThemeData.h'
+      - 'es-core/src/ThemeSplash.cpp'
+      - 'es-core/src/ThemeSplash.h'
+      - 'tests/theme_splash_parser.cpp'
+      - 'tests/run_theme_splash_parser.sh'
+      - '.github/workflows/test-static-splash.yml'
+  pull_request:
+    paths:
+      - 'es-core/src/ThemeData.cpp'
+      - 'es-core/src/ThemeData.h'
+      - 'es-core/src/ThemeSplash.cpp'
+      - 'es-core/src/ThemeSplash.h'
+      - 'tests/theme_splash_parser.cpp'
+      - 'tests/run_theme_splash_parser.sh'
+      - '.github/workflows/test-static-splash.yml'
+  workflow_dispatch:
+
+jobs:
+  splash-parser:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install parser dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ pkg-config libsdl2-dev libfreetype6-dev
+      - name: Check static splash XML parser
+        run: bash tests/run_theme_splash_parser.sh
