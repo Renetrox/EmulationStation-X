@@ -103,6 +103,7 @@ protected:
 	virtual void process(const std::unique_ptr<HttpReq>& req, std::vector<ScraperSearchResult>& results) = 0;
 
 private:
+	bool mIsTheGamesDB;
 	std::unique_ptr<HttpReq> mReq;
 };
 
