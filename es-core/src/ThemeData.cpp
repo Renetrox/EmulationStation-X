@@ -181,7 +181,13 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "carouselImageFit", STRING },
 	{ "carouselImagePadding", NORMALIZED_PAIR },
 	
-	// ES-X: borde/overlay opcional para imagen de tarjeta en modo carrusel
+	// ES-X: fondo PNG opcional de tarjeta; se dibuja antes del artwork.
+{ "carouselImageBackground", PATH },
+{ "carouselImageBackgroundSelected", PATH },
+{ "carouselImageBackgroundScale", FLOAT },
+{ "carouselImageBackgroundColor", COLOR },
+
+	// ES-X: borde/overlay opcional para imagen de tarjeta en modo carrusel.
 { "carouselImageBorder", PATH },
 { "carouselImageBorderSelected", PATH },
 { "carouselImageBorderScale", FLOAT },
