@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Static smoke test: intentionally requires no image assets. -->
+<theme>
+    <formatVersion>7</formatVersion>
+    <view name="splash">
+        <splash name="splash">
+            <backgroundColor>080B15</backgroundColor>
+        </splash>
+        <text name="testTitle" extra="true">
+            <text>ES-X SPLASH TEST</text>
+            <pos>0.1 0.28</pos>
+            <size>0.8 0.12</size>
+            <fontSize>0.055</fontSize>
+            <alignment>center</alignment>
+            <color>FFFFFF</color>
+            <zIndex>11</zIndex>
+        </text>
+        <text name="label">
+            <pos>0 0.76</pos>
+            <size>1 0.06</size>
+            <fontSize>0.028</fontSize>
+            <alignment>center</alignment>
+            <color>FFFFFF</color>
+        </text>
+        <image name="progressbar">
+            <pos>0.2 0.87</pos>
+            <size>0.6 0.022</size>
+            <color>252A3A</color>
+        </image>
+        <image name="progressbar:active">
+            <color>4AA5FF</color>
+        </image>
+    </view>
+</theme>
