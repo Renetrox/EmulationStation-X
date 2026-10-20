@@ -12,6 +12,8 @@
 #include <string>
 #include <vector>
 
+class SystemData;
+
 class GuiMenu : public GuiComponent
 {
 public:
@@ -36,6 +38,8 @@ private:
 	void openConfigInput();
 	void openQuitMenu();
 	void openCollectionSystemSettings();
+	void openEmulatorSettings();
+	void openSystemEmulatorSettings(SystemData* system);
 	void openScreensaverOptions();
 
 	// Opciones internas

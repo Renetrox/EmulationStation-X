@@ -20,6 +20,7 @@
 #include "EmulationStation.h"
 #include "Scripting.h"
 #include "SystemData.h"
+#include "RetroPieRuncommand.h"
 #include "VolumeControl.h"
 #include <SDL_events.h>
 #include <algorithm>
@@ -91,6 +92,20 @@ inline std::string menuLabel(const std::string& icon, const std::string& key)
 			snd->play();
 	}
 
+	// Only expose Runcommand settings for real RetroPie game launchers.
+	// This prevents a false choice for ports and non-Runcommand systems.
+	inline bool hasRuncommandEmulators(SystemData* system)
+	{
+		if (!system || system->isCollection() || !system->getSystemEnvData())
+			return false;
+
+		const std::string& launch = system->getSystemEnvData()->mLaunchCommand;
+		return launch.find("runcommand.sh") != std::string::npos &&
+			launch.find("_SYS_") != std::string::npos &&
+			RetroPieRuncommand::handlesSystem(system->getName()) &&
+			!RetroPieRuncommand::emulators(system->getName()).empty();
+	}
+
 	inline std::string getArtSourceOrDefault(const std::string& key)
 	{
 		std::string value = Settings::getInstance()->getString(key);
@@ -151,6 +166,15 @@ if (isFullUI)
 
 	// Organización y sistema.
 	addEntry(menuLabel("⭐", "GAME COLLECTION SETTINGS"), menuColor, true, [this] { openCollectionSystemSettings(); });
+	for (auto* system : SystemData::sSystemVector)
+	{
+		if (hasRuncommandEmulators(system))
+		{
+			addEntry(menuLabel("🕹", "EMULATOR SETTINGS"), menuColor, true,
+				[this] { openEmulatorSettings(); });
+			break;
+		}
+	}
 	addEntry(menuLabel("⚙", "OTHER SETTINGS"), menuColor, true, [this] { openOtherSettings(); });
 	addEntry(menuLabel("🎮", "CONFIGURE INPUT"), menuColor, true, [this] { openConfigInput(); });
 }
@@ -1246,6 +1270,72 @@ void GuiMenu::addVersionInfo()
 void GuiMenu::openScreensaverOptions()
 {
 	mWindow->pushGui(new GuiGeneralScreensaverOptions(mWindow, _("SCREENSAVER SETTINGS").c_str()));
+}
+
+void GuiMenu::openEmulatorSettings()
+{
+	GuiSettings* systemsMenu = new GuiSettings(mWindow, _("EMULATOR SETTINGS").c_str());
+	bool found = false;
+	for (auto* system : SystemData::sSystemVector)
+	{
+		if (!hasRuncommandEmulators(system))
+			continue;
+		found = true;
+		ComponentListRow row;
+		row.addElement(std::make_shared<TextComponent>(
+			mWindow, system->getFullName(), Font::get(FONT_SIZE_MEDIUM),
+			getMenuTextColor()), true);
+		row.addElement(makeArrow(mWindow), false);
+		row.makeAcceptInputHandler([this, system] { openSystemEmulatorSettings(system); });
+		systemsMenu->addRow(row);
+	}
+	if (!found)
+	{
+		delete systemsMenu;
+		mWindow->pushGui(new GuiMsgBox(mWindow,
+			_("NO RETROPIE EMULATORS FOUND"), _("OK")));
+		return;
+	}
+	mWindow->pushGui(systemsMenu);
+}
+
+void GuiMenu::openSystemEmulatorSettings(SystemData* system)
+{
+	if (!hasRuncommandEmulators(system))
+		return;
+
+	const std::string systemName = system->getName();
+	const std::vector<std::string> choices = RetroPieRuncommand::emulators(systemName);
+	const std::string current = RetroPieRuncommand::getValue(
+		RetroPieRuncommand::systemConfig(systemName), "default");
+
+	auto emulator = std::make_shared<OptionListComponent<std::string>>(
+		mWindow, _("DEFAULT EMULATOR"), false);
+
+	// Runcommand can have no default value, or a now-unavailable default.
+	// Keep the old state selected until the user chooses an installed emulator.
+	if (current.empty())
+		emulator->add(_("NOT SET (RUNCOMMAND)"), "", true);
+	else if (!RetroPieRuncommand::validChoice(choices, current))
+		emulator->add(_("UNAVAILABLE (CURRENT)") + ": " + current, current, true);
+
+	for (const auto& entry : choices)
+		emulator->add(entry, entry, entry == current);
+
+	GuiSettings* settings = new GuiSettings(mWindow, system->getFullName().c_str());
+	settings->addWithLabel(_("DEFAULT EMULATOR"), emulator);
+
+	Window* window = mWindow;
+	settings->addSaveFunc([window, systemName, current, emulator]
+	{
+		const std::string selected = emulator->getSelected();
+		if (selected == current)
+			return;
+		if (!RetroPieRuncommand::setSystemDefault(systemName, selected))
+			window->pushGui(new GuiMsgBox(window,
+				_("COULD NOT SAVE RETROPIE EMULATOR SETTINGS"), _("OK")));
+	});
+	mWindow->pushGui(settings);
 }
 
 void GuiMenu::openCollectionSystemSettings()

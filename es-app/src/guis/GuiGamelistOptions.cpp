@@ -1,6 +1,9 @@
 #include "GuiGamelistOptions.h"
 
 #include "guis/GuiGamelistFilter.h"
+#include "guis/GuiSettings.h"
+#include "guis/GuiMsgBox.h"
+#include "RetroPieRuncommand.h"
 #include "scrapers/Scraper.h"
 #include "views/gamelist/IGameListView.h"
 #include "views/UIModeController.h"
@@ -206,6 +209,34 @@ GuiGamelistOptions::GuiGamelistOptions(Window* window, SystemData* system)
 		mMenu.addRow(row);
 	}
 
+
+	// Only offer a per-game Runcommand override for an actual game, including
+	// games reached through collections. Never expose this for folders/ports.
+	if (UIModeController::getInstance()->isUIModeFull() &&
+		!mFromPlaceholder && file->getType() == GAME)
+	{
+		FileData* source = file->getSourceFileData();
+		SystemData* sourceSystem = source ? source->getSystem() : nullptr;
+		const std::string command = sourceSystem && sourceSystem->getSystemEnvData()
+			? sourceSystem->getSystemEnvData()->mLaunchCommand : "";
+		if (sourceSystem &&
+			command.find("runcommand.sh") != std::string::npos &&
+			command.find("_SYS_") != std::string::npos &&
+			RetroPieRuncommand::handlesSystem(sourceSystem->getName()) &&
+			!RetroPieRuncommand::emulators(sourceSystem->getName()).empty())
+		{
+			row.elements.clear();
+			row.addElement(std::make_shared<TextComponent>(
+				mWindow,
+				es_translate("SELECT GAME EMULATOR"),
+				Font::get(FONT_SIZE_MEDIUM),
+				0x777777FF), true);
+			row.addElement(makeArrow(mWindow), false);
+			row.makeAcceptInputHandler(std::bind(&GuiGamelistOptions::openGameEmulatorSettings, this));
+			mMenu.addRow(row);
+		}
+	}
+
 	// center the menu
 	setSize((float)Renderer::getScreenWidth(), (float)Renderer::getScreenHeight());
 	mMenu.setPosition(
@@ -330,6 +361,69 @@ void GuiGamelistOptions::openMetaDataEd()
 		Utils::FileSystem::getFileName(file->getPath()),
 		saveBtnFunc,
 		deleteBtnFunc));
+}
+
+
+void GuiGamelistOptions::openGameEmulatorSettings()
+{
+	FileData* selected = getGamelist()->getCursor();
+	if (!selected || selected->getType() != GAME)
+		return;
+
+	// The current cursor may belong to a virtual/custom collection.
+	FileData* source = selected->getSourceFileData();
+	SystemData* system = source ? source->getSystem() : nullptr;
+	if (!system || !system->getSystemEnvData() ||
+		system->getSystemEnvData()->mLaunchCommand.find("runcommand.sh") == std::string::npos ||
+		system->getSystemEnvData()->mLaunchCommand.find("_SYS_") == std::string::npos ||
+		!RetroPieRuncommand::handlesSystem(system->getName()))
+		return;
+
+	const std::string systemName = system->getName();
+	const std::string romPath = source->getPath();
+	const std::vector<std::string> choices = RetroPieRuncommand::emulators(systemName);
+	if (choices.empty())
+	{
+		mWindow->pushGui(new GuiMsgBox(mWindow,
+			es_translate("NO EMULATORS AVAILABLE FOR THIS SYSTEM"),
+			es_translate("OK")));
+		return;
+	}
+
+	const std::string key = RetroPieRuncommand::romKey(systemName, romPath);
+	if (key.empty())
+		return;
+	const std::string original = RetroPieRuncommand::getValue(
+		RetroPieRuncommand::romConfig(), key);
+
+	auto choice = std::make_shared<OptionListComponent<std::string>>(
+		mWindow, es_translate("GAME EMULATOR"), false);
+	choice->add(es_translate("AUTOMATIC (SYSTEM DEFAULT)"), "", original.empty());
+
+	// Preserve a stale override until the user actively replaces it.
+	if (!original.empty() &&
+		!RetroPieRuncommand::validChoice(choices, original))
+		choice->add(es_translate("UNAVAILABLE (CURRENT)") + ": " + original,
+			original, true);
+
+	for (const auto& emulator : choices)
+		choice->add(emulator, emulator, emulator == original);
+
+	GuiSettings* settings = new GuiSettings(mWindow, es_translate("GAME EMULATOR").c_str());
+	settings->addWithLabel(es_translate("EMULATOR"), choice);
+	Window* window = mWindow;
+	settings->addSaveFunc([window, systemName, romPath, original, choice]
+	{
+		const std::string selectedEmulator = choice->getSelected();
+		if (selectedEmulator == original)
+			return;
+
+		if (!RetroPieRuncommand::setGameDefault(systemName, romPath, selectedEmulator))
+			window->pushGui(new GuiMsgBox(window,
+				es_translate("COULD NOT SAVE RETROPIE EMULATOR SETTINGS"),
+				es_translate("OK")));
+	});
+	mWindow->pushGui(settings);
 }
 
 void GuiGamelistOptions::jumpToLetter()
