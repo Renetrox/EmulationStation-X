@@ -180,18 +180,14 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "carouselImageType", STRING },
 	{ "carouselImageFit", STRING },
 	{ "carouselImagePadding", NORMALIZED_PAIR },
+	{ "carouselImageZIndex", FLOAT },
 	
-	// ES-X: fondo PNG opcional de tarjeta; se dibuja antes del artwork.
-{ "carouselImageBackground", PATH },
-{ "carouselImageBackgroundSelected", PATH },
-{ "carouselImageBackgroundScale", FLOAT },
-{ "carouselImageBackgroundColor", COLOR },
-
-	// ES-X: borde/overlay opcional para imagen de tarjeta en modo carrusel.
+	// ES-X: borde/overlay opcional para imagen de tarjeta en modo carrusel
 { "carouselImageBorder", PATH },
 { "carouselImageBorderSelected", PATH },
 { "carouselImageBorderScale", FLOAT },
 { "carouselImageBorderColor", COLOR },
+{ "carouselImageBorderZIndex", FLOAT },
 	
 	// ES-X: caja fija opcional para blindar artes raros del scraper
 	{ "carouselImageLockSize", BOOLEAN },
