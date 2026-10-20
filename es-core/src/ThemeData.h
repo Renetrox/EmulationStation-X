@@ -159,7 +159,7 @@ public:
 	ThemeData();
 
 	// throws ThemeException
-	void loadFile(std::map<std::string, std::string> sysDataMap, const std::string& path);
+	void loadFile(std::map<std::string, std::string> sysDataMap, const std::string& path, bool splashOnly = false);
 
 	enum ElementPropertyType
 	{
@@ -180,8 +180,8 @@ public:
 	// If expectedType is an empty string, will do no type checking.
 	const ThemeElement* getElement(const std::string& view, const std::string& element, const std::string& expectedType) const;
 
-	static std::vector<GuiComponent*> makeExtras(const std::shared_ptr<ThemeData>& theme, const std::string& view, Window* window);
-	static std::vector<ThemeExtra> makeExtrasWithMetadata(const std::shared_ptr<ThemeData>& theme, const std::string& view, Window* window);
+	static std::vector<GuiComponent*> makeExtras(const std::shared_ptr<ThemeData>& theme, const std::string& view, Window* window, bool forceLoad = false);
+	static std::vector<ThemeExtra> makeExtrasWithMetadata(const std::shared_ptr<ThemeData>& theme, const std::string& view, Window* window, bool forceLoad = false);
 
 	static const std::shared_ptr<ThemeData>& getDefault();
 
@@ -194,6 +194,7 @@ private:
 	static std::vector<std::string> sSupportedViews;
 
 	std::deque<std::string> mPaths;
+	bool mSplashOnly = false;
 	float mVersion;
 	Vector2f mResolution;
 
