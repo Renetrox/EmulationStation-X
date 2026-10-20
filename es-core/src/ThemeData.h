@@ -159,7 +159,7 @@ public:
 	ThemeData();
 
 	// throws ThemeException
-	void loadFile(std::map<std::string, std::string> sysDataMap, const std::string& path);
+	void loadFile(std::map<std::string, std::string> sysDataMap, const std::string& path, const std::string& viewFilter = "");
 
 	enum ElementPropertyType
 	{
@@ -211,6 +211,8 @@ private:
 	                  ThemeElement& element);
 
 	void parseVariables(const pugi::xml_node& root);
+	void parseSubsetVariables(const pugi::xml_node& root);
+	bool matchesNodeConditions(const pugi::xml_node& node) const;
 
 	// soporte ES-DE style <language name="xx_YY"><variables>...</variables></language>
 	void parseLanguageVariables(const pugi::xml_node& root);
@@ -218,6 +220,7 @@ private:
 	std::string normalizeLanguage(const std::string& lang) const;
 
 	std::map<std::string, ThemeView> mViews;
+	std::string mViewFilter;
 
 	std::string resolvePlaceholders(const char* in);
 	std::map<std::string, std::string> mVariables;
