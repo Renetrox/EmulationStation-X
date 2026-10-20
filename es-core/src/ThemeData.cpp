@@ -866,7 +866,11 @@ void ThemeData::parseSubsetVariables(const pugi::xml_node& root)
 					parseVariables(theme);
 					parseLanguageVariables(theme);
 					parseSubsetVariables(theme);
-					parseIncludesVariables(theme);
+
+					const bool hasVariableData =
+						theme.child("variables") || theme.child("language") || theme.child("subset");
+					if (hasVariableData)
+						parseIncludesVariables(theme);
 				}
 			}
 			mPaths.pop_back();
@@ -1274,13 +1278,24 @@ void ThemeData::parseElement(const pugi::xml_node& root, const std::map<std::str
 		case PATH:
 		{
 			std::string path = Utils::FileSystem::resolveRelativePath(str, mPaths.back(), true, false);
-			if (!ResourceManager::getInstance()->fileExists(path))
+			const bool exists = ResourceManager::getInstance()->fileExists(path);
+			if (!exists)
 			{
 				std::stringstream ss;
 				ss << "ThemeData: could not find file \"" << node.text().get() << "\" ";
 				if (node.text().get() != path)
 					ss << "(resolved to \"" << path << "\") ";
 				LOG(LogWarning) << ss.str();
+
+				// Batocera themes often provide PNG/SVG alternatives as repeated
+				// <path> nodes. During splash loading, keep an earlier valid path
+				// instead of replacing it with a later missing alternative.
+				if (!mViewFilter.empty() && element.has(node.name()) &&
+					ResourceManager::getInstance()->fileExists(
+						element.get<std::string>(node.name())))
+				{
+					break;
+				}
 			}
 			element.properties[node.name()] = path;
 			break;
