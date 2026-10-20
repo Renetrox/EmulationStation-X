@@ -692,7 +692,6 @@ void Window::update(int deltaTime)
 
 void Window::render()
 {
-	closeLoadingScreen();
 	Transform4x4f transform = Transform4x4f::Identity();
 
 	mRenderedHelpPrompts = false;
