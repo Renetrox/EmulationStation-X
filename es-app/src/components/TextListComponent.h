@@ -279,6 +279,16 @@ private:
 	bool mCarouselImageLockSize;
 	Vector2f mCarouselImageBoxSize;
 
+	// ES-X: fondo/placa opcional de tarjeta en modo carrusel.
+	// Se dibuja debajo del thumbnail/marquee/artwork.
+	std::string mCarouselImageBackground;
+	std::string mCarouselImageBackgroundSelected;
+	float mCarouselImageBackgroundScale;
+	unsigned int mCarouselImageBackgroundColor;
+
+	ImageComponent mCarouselImageBackgroundComponent;
+	ImageComponent mCarouselImageBackgroundSelectedComponent;
+
 	// ES-X: borde/overlay opcional para imagen de tarjeta en modo carrusel.
 	// No recorta la imagen; solo dibuja un PNG encima.
 	std::string mCarouselImageBorder;
@@ -295,6 +305,8 @@ private:
 template <typename T>
 TextListComponent<T>::TextListComponent(Window* window) :
 	IList<TextListData, T>(window),
+	mCarouselImageBackgroundComponent(window),
+	mCarouselImageBackgroundSelectedComponent(window),
 	mCarouselImageBorderComponent(window),
 	mCarouselImageBorderSelectedComponent(window),
 	mSelectorImage(window)
@@ -369,6 +381,11 @@ TextListComponent<T>::TextListComponent(Window* window) :
 
 	mCarouselImageLockSize = false;
 	mCarouselImageBoxSize = Vector2f::Zero();
+
+	mCarouselImageBackground = "";
+	mCarouselImageBackgroundSelected = "";
+	mCarouselImageBackgroundScale = 1.0f;
+	mCarouselImageBackgroundColor = 0xFFFFFFFF;
 
 	mCarouselImageBorder = "";
 	mCarouselImageBorderSelected = "";
@@ -808,6 +825,33 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			itemHeight,
 			bgColor,
 			bgColor);
+
+		// ES-X: placa/fondo PNG opcional. A diferencia de carouselImageBorder,
+		// esta capa se dibuja ANTES del thumbnail/marquee/artwork.
+		ImageComponent* cardBackground = nullptr;
+
+		if (visuallyCentered && !mCarouselImageBackgroundSelected.empty())
+			cardBackground = &mCarouselImageBackgroundSelectedComponent;
+		else if (!mCarouselImageBackground.empty())
+			cardBackground = &mCarouselImageBackgroundComponent;
+
+		if (cardBackground)
+		{
+			float backgroundScale = mCarouselImageBackgroundScale;
+			if (backgroundScale <= 0.0f)
+				backgroundScale = 1.0f;
+
+			const float backgroundW = Math::max(1.0f, scaledW * backgroundScale);
+			const float backgroundH = Math::max(1.0f, scaledH * backgroundScale);
+			const float backgroundX = std::round(drawX + (scaledW * 0.5f));
+			const float backgroundY = std::round(drawY + (scaledH * 0.5f));
+
+			cardBackground->setOrigin(0.5f, 0.5f);
+			cardBackground->setPosition(backgroundX, backgroundY, 0.0f);
+			cardBackground->setResize(backgroundW, backgroundH);
+			cardBackground->setOpacity((unsigned char)(opacity01 * 255.0f));
+			cardBackground->render(itemTrans);
+		}
 
 		// Resuelve primero la imagen para que el texto actúe únicamente
 		// como último recurso cuando no haya arte ni fallback del tema.
@@ -1611,6 +1655,40 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 			boxSize.x() * mSize.x(),
 			boxSize.y() * mSize.y());
 	}
+
+	mCarouselImageBackground = "";
+	mCarouselImageBackgroundSelected = "";
+	mCarouselImageBackgroundScale = 1.0f;
+	mCarouselImageBackgroundColor = 0xFFFFFFFF;
+
+	mCarouselImageBackgroundComponent.setImage("");
+	mCarouselImageBackgroundSelectedComponent.setImage("");
+
+	if (elem->has("carouselImageBackground"))
+	{
+		mCarouselImageBackground = elem->get<std::string>("carouselImageBackground");
+		if (!mCarouselImageBackground.empty())
+			mCarouselImageBackgroundComponent.setImage(mCarouselImageBackground);
+	}
+
+	if (elem->has("carouselImageBackgroundSelected"))
+	{
+		mCarouselImageBackgroundSelected = elem->get<std::string>("carouselImageBackgroundSelected");
+		if (!mCarouselImageBackgroundSelected.empty())
+			mCarouselImageBackgroundSelectedComponent.setImage(mCarouselImageBackgroundSelected);
+	}
+
+	if (elem->has("carouselImageBackgroundScale"))
+		mCarouselImageBackgroundScale = elem->get<float>("carouselImageBackgroundScale");
+
+	if (mCarouselImageBackgroundScale <= 0.0f)
+		mCarouselImageBackgroundScale = 1.0f;
+
+	if (elem->has("carouselImageBackgroundColor"))
+		mCarouselImageBackgroundColor = elem->get<unsigned int>("carouselImageBackgroundColor");
+
+	mCarouselImageBackgroundComponent.setColorShift(mCarouselImageBackgroundColor);
+	mCarouselImageBackgroundSelectedComponent.setColorShift(mCarouselImageBackgroundColor);
 
 	mCarouselImageBorder = "";
 	mCarouselImageBorderSelected = "";
