@@ -1,66 +1,50 @@
-# Static theme loading splash
+# Native theme loading splash
 
-Put `splash.xml` in the selected theme's root directory. The configuration is
-read independently before the systems are scanned. No per-system theme needs
-to be loaded first. See [the example](examples/splash.xml).
+ES-X can read a `splash.xml` from the root of the selected theme. The splash
+is implemented as a normal `ThemeData` view, following the same architecture
+used by Tarave/Batocera rather than maintaining a second splash-only parser.
 
-Supported elements in `<view name="splash">`:
+## Target format
 
-- `<splash name="splash">`: `backgroundColor`.
-- `<image name="background">`: image, position, origin, size/maxSize/minSize.
-- `<text name="label">`: live loading text, position, size, font and color.
-  The text comes from ES-X and cannot be replaced by the XML.
-- `<image name="progressbar">` and `<image name="progressbar:active">`:
-  solid rectangles with position, size, origin, rotation, color/colorEnd and
-  gradientType. Image textures on these two bars are not supported.
-- Extra static images/text (`extra="true"` or `extra="static"`), ordered by
-  `zIndex`. Text can be vertically aligned with `verticalAlignment` on `label`.
+A theme may define:
 
-The active bar inherits the inactive bar's geometry, then applies its own
-properties. Progress changes its visible width without moving its origin.
-Negative progress hides both bars. Values above one are clamped.
+- `<view name="splash">`
+- `<splash name="splash">` with `backgroundColor`
+- `<image name="background">`
+- `<text name="label">` for ES-X's live loading text
+- `<image name="progressbar">`
+- `<image name="progressbar:active">`
+- ordinary image/text extras with `extra="true"`, ordered by `zIndex`
 
-Riescade's standalone `splash.xml` is the reference: its full-height progress
-rectangles must remain behind its extra `resources/_parts/splash.png` image.
-The renderer uses stable ascending zIndex order, preserving ties.
+The progress bar accepts a real image path as well as solid colors. This is
+important for PiStation-X, whose startup splash uses
+`./main/media/progress.png`.
 
-This is static support, not full Batocera theme compatibility. Glow, shadows,
-smoothing options and unknown properties are ignored only by this loader.
-Pulse/frame-animation activation and text strokes are disabled. Conditional
-nodes (`ifSubset`, `if`, `tinyScreen`, region) are skipped; use a standalone,
-adapted XML with explicit choices instead of relying on Batocera options.
-`${themePath}` is supplied, and ES-X's existing variable/include and theme.ini
-loading remain available. Native PlayStation-X imports its full theme and
-requires adaptation of its subset variables and conditional paths. Unresolved
-variables, invalid XML and a missing background image fall back to the original
-ES-X splash. Missing extra images follow the existing image-loader behavior.
-Other views are skipped while parsing splash includes; normal theme parsing
-remains strict. Include depth is bounded in splash mode.
+The splash components are force-loaded during startup and released explicitly
+when startup loading finishes. The classic ES-X splash remains the fallback
+when the selected theme has no usable `splash.xml`.
 
-Resources are created once per loading operation, loaded synchronously and
-released when normal rendering resumes, at the end of startup or on renderer
-shutdown. No video, animation loop, external process or timed delay is added.
-The original splash remains available for themes without a valid splash.xml.
+## Compatibility scope
+
+The first compatibility target is PiStation-X's standalone `splash.xml`,
+which uses normal theme properties and relative resources.
+
+This does **not** yet make ES-X fully compatible with Batocera's advanced
+theme-option/subset language. Themes such as newer PlayStation-X builds may
+reference `${subset.*}`, conditional `ifSubset` expressions, Batocera
+globals, glow properties, and other syntax not currently implemented by
+ES-X's normal theme parser. Such themes need either an adapted splash or later
+theme-engine support; they fall back to the classic ES-X splash instead of
+breaking startup.
 
 ## Manual verification
 
-1. Start with a theme without splash.xml: original ES-X splash should appear.
-2. Install the example and your image: verify text, aspect ratio and progress.
-3. Test Riescade with its original resources: verify its mask/layer composition.
-4. Try a malformed XML, unresolved variable and missing background: verify a
-   warning and the original splash, without interrupting startup.
-5. Reload/change themes and return from a game: verify the new theme is used on
-   the next loading operation and no splash resources survive normal rendering.
-6. Test 16:9 and 4:3 on the target renderer, especially the Orange Pi GLES path.
+1. Build the draft branch and select PiStation-X.
+2. Start ES-X and verify the theme background and themed progress bar appear.
+3. Confirm the live loading label is visible.
+4. Remove/rename the theme's `splash.xml` and verify the classic ES-X splash returns.
+5. Test again on Orange Pi ARM64/GLES after desktop validation.
 
-## Automated parser checks
-
-On Linux with the normal SDL2/FreeType development dependencies and initialized
-submodules, run `tests/run_theme_splash_parser.sh`. Optionally pass the local
-path to Riescade's original splash.xml to check that reference too.
-
-Development validation: full Linux desktop OpenGL build passed. Offscreen Mesa
-pixel checks passed for partial/full/hidden progress, centered bar origin and
-foreground image layering; malformed XML fell back to the original splash.
-Texture size returned to its pre-splash baseline after destruction. Target
-Orange Pi/GLES and original Riescade artwork still need visual verification.
+The parser regression test is available through
+`tests/run_theme_splash_parser.sh`. An optional second argument can point to a
+local `splash.xml` such as PiStation-X for an additional parser check.
