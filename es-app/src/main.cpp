@@ -401,6 +401,8 @@ int main(int argc, char* argv[])
 	if(splashScreen)
 	window.renderLoadingScreen(es_translate("Done."));
 
+	window.closeLoadingScreen();
+
 	InputManager::getInstance()->init();
 
 	// 🔊 NUEVO: inicializar música de fondo ES-X (si está habilitada)
