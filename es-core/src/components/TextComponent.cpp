@@ -301,6 +301,14 @@ void TextComponent::applyTheme(const std::shared_ptr<ThemeData>& theme,
         else if (a == "right")  setHorizontalAlignment(ALIGN_RIGHT);
     }
 
+    if (properties & ALIGNMENT && elem->has("verticalAlignment"))
+    {
+        std::string a = elem->get<std::string>("verticalAlignment");
+        if (a == "top") setVerticalAlignment(ALIGN_TOP);
+        else if (a == "center") setVerticalAlignment(ALIGN_CENTER);
+        else if (a == "bottom") setVerticalAlignment(ALIGN_BOTTOM);
+    }
+
     if (properties & TEXT && elem->has("text"))
         setText(elem->get<std::string>("text"));
 
