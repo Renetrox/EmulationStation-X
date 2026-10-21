@@ -200,10 +200,12 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "logoSize", NORMALIZED_PAIR },
 	{ "logoAlignment", STRING },
 
-	// ES-X: espaciado y offsets
+	// ES-X: espaciado, ancla y offsets
 	{ "logoSpacing", RESOLUTION_PAIR },
 	{ "logoSpacingX", RESOLUTION_FLOAT },
 	{ "logoSpacingY", RESOLUTION_FLOAT },
+	{ "logoPos", RESOLUTION_PAIR },
+	{ "carouselLogoPos", RESOLUTION_PAIR },
 	{ "logoOffset", RESOLUTION_PAIR },
 	{ "logoOffsetX", RESOLUTION_FLOAT },
 	{ "logoOffsetY", RESOLUTION_FLOAT },
