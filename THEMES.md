@@ -314,6 +314,8 @@ Important properties:
 - `logoScale`
 - `minLogoOpacity`
 - `scaledLogoSpacing`
+- `logoPos` / `carouselLogoPos`: absolute selected-logo anchor inside the SystemView carousel without changing the carousel `pos`, `origin`, `size`, or clip.
+- `logoOffset`, `logoOffsetX`, `logoOffsetY`: optional fine adjustment after the anchor is resolved.
 
 Depth and spacing can be fully adjusted without modifying engine code.
 
