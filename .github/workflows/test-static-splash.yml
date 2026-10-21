@@ -1,0 +1,56 @@
+name: ES-X native theme splash
+
+on:
+  push:
+    branches:
+      - feature/theme-splash-main-test-20261020
+    paths:
+      - 'es-core/src/ThemeData.cpp'
+      - 'es-core/src/ThemeData.h'
+      - 'es-core/src/ThemeSplash.cpp'
+      - 'es-core/src/ThemeSplash.h'
+      - 'tests/theme_splash_parser.cpp'
+      - 'tests/run_theme_splash_parser.sh'
+      - '.github/workflows/test-static-splash.yml'
+  pull_request:
+    paths:
+      - 'es-core/src/ThemeData.cpp'
+      - 'es-core/src/ThemeData.h'
+      - 'es-core/src/ThemeSplash.cpp'
+      - 'es-core/src/ThemeSplash.h'
+      - 'tests/theme_splash_parser.cpp'
+      - 'tests/run_theme_splash_parser.sh'
+      - '.github/workflows/test-static-splash.yml'
+  workflow_dispatch:
+
+jobs:
+  splash-parser:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install parser dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ pkg-config libsdl2-dev libfreetype6-dev
+      - name: Check static splash XML parser
+        run: bash tests/run_theme_splash_parser.sh
+
+  splash-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install ES-X build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential pkg-config \
+            libsdl2-dev libsdl2-mixer-dev libboost-dev libfreeimage-dev libfreetype6-dev \
+            libcurl4-openssl-dev rapidjson-dev libasound2-dev libgl1-mesa-dev \
+            libvlc-dev libvlccore-dev vlc-bin
+      - name: Configure ES-X
+        run: cmake .
+      - name: Compile ES-X
+        run: make -j2

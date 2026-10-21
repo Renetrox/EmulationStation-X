@@ -17,17 +17,25 @@
 #include <cctype>
 
 // Vistas soportadas
-std::vector<std::string> ThemeData::sSupportedViews { { "system" }, { "basic" }, { "detailed" }, { "grid" }, { "video" }, { "screen" }, { "all" } };
+std::vector<std::string> ThemeData::sSupportedViews { { "system" }, { "basic" }, { "detailed" }, { "grid" }, { "video" }, { "screen" }, { "splash" }, { "all" } };
 
 // Features soportados
 std::vector<std::string> ThemeData::sSupportedFeatures { { "video" }, { "carousel" }, { "z-index" }, { "visible" }, { "navigationsounds" } };
 
 // Mapa de elementos y propiedades
 std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> ThemeData::sElementMap {
+	{ "splash", {
+		{ "pos", RESOLUTION_PAIR },
+		{ "size", RESOLUTION_PAIR },
+		{ "minSize", RESOLUTION_PAIR },
+		{ "origin", NORMALIZED_PAIR },
+		{ "backgroundColor", COLOR } } },
+
 	{ "image", {
 		{ "pos", RESOLUTION_PAIR },
 		{ "size", RESOLUTION_PAIR },
 		{ "maxSize", RESOLUTION_PAIR },
+		{ "minSize", RESOLUTION_PAIR },
 		{ "origin", NORMALIZED_PAIR },
 		{ "rotation", FLOAT },
 		{ "rotationOrigin", NORMALIZED_PAIR },
@@ -105,6 +113,10 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "fontSize", RESOLUTION_FLOAT },
 		{ "color", COLOR },
 		{ "alignment", STRING },
+		{ "verticalAlignment", STRING },
+		{ "glowColor", COLOR },
+		{ "glowSize", FLOAT },
+		{ "glowOffset", FLOAT },
 		{ "forceUppercase", BOOLEAN },
 		{ "lineSpacing", FLOAT },
 		{ "value", STRING },
@@ -1109,7 +1121,7 @@ const std::shared_ptr<ThemeData>& ThemeData::getDefault()
 	return theme;
 }
 
-std::vector<ThemeData::ThemeExtra> ThemeData::makeExtrasWithMetadata(const std::shared_ptr<ThemeData>& theme, const std::string& view, Window* window)
+std::vector<ThemeData::ThemeExtra> ThemeData::makeExtrasWithMetadata(const std::shared_ptr<ThemeData>& theme, const std::string& view, Window* window, bool forceLoad)
 {
 	std::vector<ThemeExtra> comps;
 
@@ -1130,7 +1142,7 @@ std::vector<ThemeData::ThemeExtra> ThemeData::makeExtrasWithMetadata(const std::
 		const std::string& t = elem.type;
 
 		if (t == "image")
-			comp = new ImageComponent(window);
+			comp = new ImageComponent(window, forceLoad);
 		else if (t == "text")
 			comp = new TextComponent(window); // ScrollableTextComponent deshabilitado
 
@@ -1149,11 +1161,11 @@ std::vector<ThemeData::ThemeExtra> ThemeData::makeExtrasWithMetadata(const std::
 	return comps;
 }
 
-std::vector<GuiComponent*> ThemeData::makeExtras(const std::shared_ptr<ThemeData>& theme, const std::string& view, Window* window)
+std::vector<GuiComponent*> ThemeData::makeExtras(const std::shared_ptr<ThemeData>& theme, const std::string& view, Window* window, bool forceLoad)
 {
 	std::vector<GuiComponent*> comps;
 
-	std::vector<ThemeExtra> extras = makeExtrasWithMetadata(theme, view, window);
+	std::vector<ThemeExtra> extras = makeExtrasWithMetadata(theme, view, window, forceLoad);
 	for (auto& extra : extras)
 	{
 		if (extra.component)

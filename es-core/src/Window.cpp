@@ -1,4 +1,5 @@
 #include "Window.h"
+#include "ThemeSplash.h"
 
 #include "components/HelpComponent.h"
 #include "components/ImageComponent.h"
@@ -218,6 +219,7 @@ Window::Window()
 
 Window::~Window()
 {
+	closeLoadingScreen();
 	delete mBackgroundOverlay;
 
 	// delete all our GUIs
@@ -491,6 +493,7 @@ void Window::applyClockTheme(const std::shared_ptr<ThemeData>& theme)
 
 void Window::deinit()
 {
+	closeLoadingScreen();
 	// Hide all GUI elements on uninitialisation - this disable
 	for (auto i = mGuiStack.cbegin(); i != mGuiStack.cend(); i++)
 	{
@@ -913,8 +916,25 @@ void Window::setAllowSleep(bool sleep)
 	mAllowSleep = sleep;
 }
 
+void Window::closeLoadingScreen()
+{
+	mThemeSplash.reset();
+	mSplashAttempted = false;
+}
+
 void Window::renderLoadingScreen(std::string text, float percent, unsigned char opacity)
 {
+	if (!mSplashAttempted)
+	{
+		mSplashAttempted = true;
+		mThemeSplash = ThemeSplash::create(this);
+	}
+	if (mThemeSplash)
+	{
+		mThemeSplash->render(text, percent, opacity);
+		return;
+	}
+
 	Transform4x4f trans = Transform4x4f::Identity();
 
 	Renderer::setMatrix(trans);
