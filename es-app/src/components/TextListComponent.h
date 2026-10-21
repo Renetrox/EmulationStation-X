@@ -274,6 +274,7 @@ private:
 	std::string mCarouselImageFit;
 	std::string mCarouselFallbackImage;
 	Vector2f mCarouselImagePadding;
+	float mCarouselImageZIndex;
 
 	// ES-X: caja fija opcional para blindar artes raros del scraper.
 	bool mCarouselImageLockSize;
@@ -285,6 +286,8 @@ private:
 	std::string mCarouselImageBorderSelected;
 	float mCarouselImageBorderScale;
 	unsigned int mCarouselImageBorderColor;
+	std::string mCarouselImageBorderFit;
+	float mCarouselImageBorderZIndex;
 
 	ImageComponent mCarouselImageBorderComponent;
 	ImageComponent mCarouselImageBorderSelectedComponent;
@@ -366,6 +369,7 @@ TextListComponent<T>::TextListComponent(Window* window) :
 	mCarouselImageFit = "contain";
 	mCarouselFallbackImage = "";
 	mCarouselImagePadding = Vector2f(0.04f, 0.04f);
+	mCarouselImageZIndex = 10.0f;
 
 	mCarouselImageLockSize = false;
 	mCarouselImageBoxSize = Vector2f::Zero();
@@ -374,6 +378,8 @@ TextListComponent<T>::TextListComponent(Window* window) :
 	mCarouselImageBorderSelected = "";
 	mCarouselImageBorderScale = 1.0f;
 	mCarouselImageBorderColor = 0xFFFFFFFF;
+	mCarouselImageBorderFit = "stretch";
+	mCarouselImageBorderZIndex = 20.0f;
 }
 
 template <typename T>
@@ -997,16 +1003,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 					Vector2i((int)std::round(clipDim.x()), (int)std::round(clipDim.y())));
 			}
 
-			entry.data.carouselImage->render(imageTrans);
-
-			if (clipCoverImage)
-				Renderer::popClipRect();
-
-			// ES-X:
-			// Borde/overlay opcional para imagen de tarjeta en modo carrusel.
-			// Laterales: tamaño fijo.
-			// Centro: tamaño seleccionado estable, adaptado al logo central.
-			// El marco sigue el tamaño visual actual del ítem, sin heredar minLogoOpacity.
 			ImageComponent* border = nullptr;
 
 			if (visuallyCentered && !mCarouselImageBorderSelected.empty())
@@ -1014,35 +1010,45 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			else if (!mCarouselImageBorder.empty())
 				border = &mCarouselImageBorderComponent;
 
-			if (border)
+			auto renderBorder = [&]()
 			{
-				float borderScale = mCarouselImageBorderScale;
+				if (!border)
+					return;
 
+				float borderScale = mCarouselImageBorderScale;
 				if (borderScale <= 0.0f)
 					borderScale = 1.0f;
 
-				// ES-X:
-				// El borde representa el marco externo del ítem actual,
-				// igual que un tile/frame normal. No se calcula desde la
-				// imagen interna ni desde un clip.
-				float fixedBorderW = Math::max(1.0f, currentCardW * borderScale);
-				float fixedBorderH = Math::max(1.0f, currentCardH * borderScale);
+				const float fixedBorderW = Math::max(1.0f, currentCardW * borderScale);
+				const float fixedBorderH = Math::max(1.0f, currentCardH * borderScale);
 
-				// ES-X:
-				// El marco usa el centro de la misma caja visual. logoAlignment ya
-				// fue resuelto al calcular drawX/drawY, así que no debe alterar
-				// el origin del PNG del borde ni el recorte interno de la imagen.
 				border->setOrigin(0.5f, 0.5f);
 				border->setPosition(imagePosX, imagePosY, 0.0f);
 
-				// setResize fuerza el tamaño exacto del PNG.
-				border->setResize(fixedBorderW, fixedBorderH);
+				// Preserve the PNG aspect ratio when requested. The historical
+				// default remains stretch for backward compatibility.
+				if (mCarouselImageBorderFit == "contain")
+					border->setMaxSize(fixedBorderW, fixedBorderH);
+				else
+					border->setResize(fixedBorderW, fixedBorderH);
 
-				// El marco se mantiene sólido, sin heredar minLogoOpacity.
 				border->setOpacity(255);
-
 				border->render(imageTrans);
-			}
+			};
+
+			// ES-X: orden interno configurable. Los valores por defecto
+			// mantienen compatibilidad: artwork (10) y overlay/border (20).
+			// Un tema puede invertirlos para usar el "border" como placa debajo.
+			if (border && mCarouselImageBorderZIndex < mCarouselImageZIndex)
+				renderBorder();
+
+			entry.data.carouselImage->render(imageTrans);
+
+			if (clipCoverImage)
+				Renderer::popClipRect();
+
+			if (border && mCarouselImageBorderZIndex >= mCarouselImageZIndex)
+				renderBorder();
 		}
 	};
 
@@ -1600,6 +1606,10 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	if (elem->has("carouselImagePadding"))
 		mCarouselImagePadding = elem->get<Vector2f>("carouselImagePadding");
 
+	mCarouselImageZIndex = 10.0f;
+	if (elem->has("carouselImageZIndex"))
+		mCarouselImageZIndex = elem->get<float>("carouselImageZIndex");
+
 	if (elem->has("carouselImageLockSize"))
 		mCarouselImageLockSize = elem->get<bool>("carouselImageLockSize");
 
@@ -1644,6 +1654,21 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 
 	if (elem->has("carouselImageBorderColor"))
 		mCarouselImageBorderColor = elem->get<unsigned int>("carouselImageBorderColor");
+
+	mCarouselImageBorderFit = "stretch";
+	if (elem->has("carouselImageBorderFit"))
+		mCarouselImageBorderFit = Utils::String::toLower(elem->get<std::string>("carouselImageBorderFit"));
+
+	if (mCarouselImageBorderFit != "stretch" && mCarouselImageBorderFit != "contain")
+	{
+		LOG(LogWarning) << "Unknown carouselImageBorderFit \"" << mCarouselImageBorderFit
+			<< "\"! Using stretch.";
+		mCarouselImageBorderFit = "stretch";
+	}
+
+	mCarouselImageBorderZIndex = 20.0f;
+	if (elem->has("carouselImageBorderZIndex"))
+		mCarouselImageBorderZIndex = elem->get<float>("carouselImageBorderZIndex");
 
 	mCarouselImageBorderComponent.setColorShift(mCarouselImageBorderColor);
 	mCarouselImageBorderSelectedComponent.setColorShift(mCarouselImageBorderColor);

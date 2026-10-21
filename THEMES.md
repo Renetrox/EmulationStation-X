@@ -314,6 +314,8 @@ Important properties:
 - `logoScale`
 - `minLogoOpacity`
 - `scaledLogoSpacing`
+- `logoPos` / `carouselLogoPos`: absolute selected-logo anchor inside the SystemView carousel without changing the carousel `pos`, `origin`, `size`, or clip.
+- `logoOffset`, `logoOffsetX`, `logoOffsetY`: optional fine adjustment after the anchor is resolved.
 
 Depth and spacing can be fully adjusted without modifying engine code.
 
@@ -464,7 +466,7 @@ axis-aligned `cover` clipping is disabled on rotated items so it cannot cut them
 | `logoSpacingX` | Horizontal item spacing. |
 | `logoSpacingY` | Vertical item spacing. |
 | `scaledLogoSpacing` | Extra spacing caused by selected-item scaling. |
-| `logoOffset` | Fine X/Y adjustment of the carousel anchor. |
+| `logoPos` / `carouselLogoPos` | Absolute selected-logo anchor inside the SystemView carousel. It does not move or resize the carousel clip. |\n| `logoOffset` | Fine X/Y adjustment of the carousel anchor. |
 | `logoOffsetX` | Fine horizontal carousel adjustment. |
 | `logoOffsetY` | Fine vertical carousel adjustment. |
 | `carouselLogoPos` / `logoPos` | Optional absolute carousel anchor inside the `textlist`; offsets can still be used for fine adjustment. |
@@ -486,6 +488,7 @@ axis-aligned `cover` clipping is disabled on rotated items so it cannot cut them
 | `carouselImageType` | Selects the artwork source. |
 | `carouselImageFit` | Artwork fitting mode: `contain`, `cover`, or `stretch`. |
 | `carouselImagePadding` | Internal padding between artwork and tile bounds. |
+| `carouselImageZIndex` | Internal carousel-layer order for the artwork. Default: `10`. Higher values render later/above lower values. |
 | `carouselFallbackImage` | Fallback image used when the requested artwork is missing. |
 | `carouselImageLockSize` | Enables use of a fixed artwork box when `carouselImageBoxSize` is defined. |
 | `carouselImageBoxSize` | Optional fixed artwork box relative to the carousel area. |
@@ -493,6 +496,8 @@ axis-aligned `cover` clipping is disabled on rotated items so it cannot cut them
 | `carouselImageBorderSelected` | PNG overlay/frame used for the selected item. |
 | `carouselImageBorderScale` | Scale of the artwork border/frame relative to the tile. |
 | `carouselImageBorderColor` | Tint/color shift applied to the border image. |
+| `carouselImageBorderFit` | Border/card PNG fitting mode: `stretch` (legacy default) or `contain` (preserves aspect ratio). |
+| `carouselImageBorderZIndex` | Internal carousel-layer order for the border/overlay. Default: `20`. Set it below `carouselImageZIndex` to place the PNG behind the artwork. |
 
 Supported `carouselImageType` values:
 
@@ -528,6 +533,11 @@ none
   <carouselImageBorderSelected>./_inc/images/card_border.png</carouselImageBorderSelected>
   <carouselImageBorderScale>0.965</carouselImageBorderScale>
   <carouselImageBorderColor>FFFFFFFF</carouselImageBorderColor>
+  <carouselImageBorderFit>contain</carouselImageBorderFit>
+
+  <!-- Optional internal ordering. Defaults are image=10, border=20. -->
+  <carouselImageZIndex>10</carouselImageZIndex>
+  <carouselImageBorderZIndex>20</carouselImageBorderZIndex>
 
   <logoAlignment>left</logoAlignment>
   <logoSize>0.164 0.164</logoSize>

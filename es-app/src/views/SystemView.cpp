@@ -97,6 +97,9 @@ namespace
 {
 	struct SystemCarouselExtras
 	{
+		bool logoPosSet = false;
+		Vector2f logoPos = Vector2f::Zero();
+
 		float logoOffsetX = 0.0f;
 		float logoOffsetY = 0.0f;
 
@@ -1642,6 +1645,22 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 		break;
 	}
 
+	// ES-X: logoPos/carouselLogoPos fija el ancla del elemento seleccionado
+	// dentro del espacio local del carrusel. No modifica pos/origin/size ni el clip.
+	if(extraCfg.logoPosSet)
+	{
+		if(mCarousel.type == HORIZONTAL || mCarousel.type == HORIZONTAL_WHEEL)
+		{
+			xOff = extraCfg.logoPos.x() - (mCamOffset * logoSpacing[0]);
+			yOff = extraCfg.logoPos.y();
+		}
+		else
+		{
+			xOff = extraCfg.logoPos.x();
+			yOff = extraCfg.logoPos.y() - (mCamOffset * logoSpacing[1]);
+		}
+	}
+
 	// offset fino del bloque completo
 	xOff += extraCfg.logoOffsetX;
 	yOff += extraCfg.logoOffsetY;
@@ -2048,6 +2067,8 @@ void SystemView::getDefaultElements(void)
 
 	// extras locales
 	SystemCarouselExtras& extraCfg = getCarouselExtras(this);
+	extraCfg.logoPosSet = false;
+	extraCfg.logoPos = Vector2f::Zero();
 	extraCfg.logoOffsetX = 0.0f;
 	extraCfg.logoOffsetY = 0.0f;
 	extraCfg.selectedLogoOffsetX = 0.0f;
@@ -2293,6 +2314,18 @@ void SystemView::getCarouselFromTheme(const ThemeData::ThemeElement* elem)
 	// ─────────────────────────────────────────────
 	// Nuevas propiedades opcionales
 	// ─────────────────────────────────────────────
+
+	if(elem->has("logoPos") || elem->has("carouselLogoPos"))
+	{
+		Vector2f v = elem->has("logoPos") ?
+			elem->get<Vector2f>("logoPos") :
+			elem->get<Vector2f>("carouselLogoPos");
+
+		// Igual que el resto de coordenadas del tema: valores normalizados
+		// respecto al viewport, pero aplicados dentro del espacio local del carrusel.
+		extraCfg.logoPos = v * mSize;
+		extraCfg.logoPosSet = true;
+	}
 
 	if(elem->has("logoOffset"))
 	{

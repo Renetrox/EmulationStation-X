@@ -180,12 +180,15 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "carouselImageType", STRING },
 	{ "carouselImageFit", STRING },
 	{ "carouselImagePadding", NORMALIZED_PAIR },
+	{ "carouselImageZIndex", FLOAT },
 	
 	// ES-X: borde/overlay opcional para imagen de tarjeta en modo carrusel
 { "carouselImageBorder", PATH },
 { "carouselImageBorderSelected", PATH },
 { "carouselImageBorderScale", FLOAT },
 { "carouselImageBorderColor", COLOR },
+{ "carouselImageBorderFit", STRING },
+{ "carouselImageBorderZIndex", FLOAT },
 	
 	// ES-X: caja fija opcional para blindar artes raros del scraper
 	{ "carouselImageLockSize", BOOLEAN },
@@ -197,10 +200,12 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "logoSize", NORMALIZED_PAIR },
 	{ "logoAlignment", STRING },
 
-	// ES-X: espaciado y offsets
+	// ES-X: espaciado, ancla y offsets
 	{ "logoSpacing", RESOLUTION_PAIR },
 	{ "logoSpacingX", RESOLUTION_FLOAT },
 	{ "logoSpacingY", RESOLUTION_FLOAT },
+	{ "logoPos", RESOLUTION_PAIR },
+	{ "carouselLogoPos", RESOLUTION_PAIR },
 	{ "logoOffset", RESOLUTION_PAIR },
 	{ "logoOffsetX", RESOLUTION_FLOAT },
 	{ "logoOffsetY", RESOLUTION_FLOAT },
@@ -351,6 +356,10 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "minLogoOpacity", FLOAT },
 	{ "scaledLogoSpacing", FLOAT },
 	{ "scrollSound", PATH },
+
+	// posición absoluta del ancla del logo seleccionado dentro del carrusel
+	{ "logoPos", RESOLUTION_PAIR },
+	{ "carouselLogoPos", RESOLUTION_PAIR },
 
 	// nuevos offsets / spacing
 	{ "logoOffset", RESOLUTION_PAIR },
