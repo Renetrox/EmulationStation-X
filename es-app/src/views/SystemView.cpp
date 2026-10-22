@@ -1,4 +1,5 @@
 #include "views/SystemView.h"
+#include "views/SystemCarouselItemTemplate.h"
 
 #include "animations/LambdaAnimation.h"
 #include "guis/GuiMsgBox.h"
@@ -384,9 +385,30 @@ void SystemView::populate()
 			e.data.hasDescription = false;
 			e.data.descriptionText.clear();
 
+			// Tarave itemTemplate: a themed card can contain both a generic
+			// image and the bound system name (for example RetroPie).
+			// Only opt into it when explicitly present in the XML; classic logo
+			// and logoText rendering continue unchanged for all other themes.
+			const ThemeData::ThemeElement* carouselElement =
+				theme->getElement("system", "systemcarousel", "carousel");
+			if (carouselElement && mCarousel.displayMode != "textlist")
+			{
+				for (const auto& part : carouselElement->children)
+				{
+					if (part.first != "itemTemplate")
+						continue;
+					auto card = std::make_shared<SystemCarouselItemTemplate>(mWindow);
+					if (card->load(part.second,
+					               mCarousel.logoSize * mCarousel.logoScale,
+					               (*it)->getName(), (*it)->getFullName()))
+						e.data.logo = card;
+					break;
+				}
+			}
+
 			// make logo
 			const ThemeData::ThemeElement* logoElem = theme->getElement("system", "logo", "image");
-			if(logoElem)
+			if(!e.data.logo && logoElem)
 			{
 				std::string path        = logoElem->get<std::string>("path");
 				std::string defaultPath = logoElem->has("default") ? logoElem->get<std::string>("default") : "";
