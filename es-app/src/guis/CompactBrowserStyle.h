@@ -42,6 +42,38 @@ namespace CompactBrowserStyle
         return Font::get(detailSize(), ":/fonts/fontawesome-webfont.ttf");
     }
 
+
+    // Single-line theme entry: author and repository are already shown below
+    // the preview image in ES-X. Keep only the name and unobtrusive status.
+    inline std::shared_ptr<ComponentGrid> makeTitleRow(
+        Window* window,
+        const std::string& title,
+        bool installed,
+        bool updateAvailable = false)
+    {
+        auto grid = std::make_shared<ComponentGrid>(window, Vector2i(2, 1));
+        const float rowHeight = std::max(
+            titleFont()->getLetterHeight() + 14.0f,
+            Renderer::getScreenHeight() * 0.052f);
+
+        grid->setColWidthPerc(0, 0.085f, false);
+
+        const char* glyph = updateAvailable ? u8"\uf021" :
+            (installed ? u8"\uf058" : u8"\uf019");
+        auto status = std::make_shared<TextComponent>(
+            window, glyph, iconFont(), 0xD3D6D9FF, ALIGN_CENTER);
+        status->setVerticalAlignment(ALIGN_CENTER);
+
+        auto headline = std::make_shared<TextComponent>(
+            window, title, titleFont(), 0xEEEEEEFF, ALIGN_LEFT);
+        headline->setVerticalAlignment(ALIGN_CENTER);
+
+        grid->setEntry(status, Vector2i(0, 0), false, true);
+        grid->setEntry(headline, Vector2i(1, 0), false, true);
+        grid->setSize(Vector2f(0.0f, rowHeight));
+        return grid;
+    }
+
     inline std::shared_ptr<ComponentGrid> makeRow(
         Window* window,
         const std::string& title,
