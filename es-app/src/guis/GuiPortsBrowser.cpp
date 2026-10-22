@@ -94,11 +94,15 @@ GuiPortsBrowser::GuiPortsBrowser(Window* window)
     : GuiComponent(window)
     , mFrame(window)
     , mList(window)
+    , mTabs(window, trPorts("FREE GAMES"), trPorts("PORTS"))
     , mHeader(window, trPorts("X-TRAS"), Font::get(FONT_SIZE_MEDIUM), 0xF3F3F3FF, ALIGN_CENTER)
     , mSubHeader(window, trPorts("PORTS AND FREE GAMES"),
                  CompactBrowserStyle::titleFont(), 0xAAB0B8FF, ALIGN_CENTER)
     , mFooter(window, "", CompactBrowserStyle::detailFont(), 0xB3B6BAFF, ALIGN_CENTER)
     , mLastSelectedIndex(0)
+    , mActiveTab(0)
+    , mHasGames(false)
+    , mHasPorts(false)
     , mInnerX(0.0f)
     , mInnerY(0.0f)
     , mInnerW(0.0f)
@@ -150,7 +154,11 @@ GuiPortsBrowser::GuiPortsBrowser(Window* window)
     mSubHeader.setSize(mInnerW, 24.0f);
 
     // Give the list breathing room and keep the last row clear of the footer.
-    const float topPad = 78.0f;
+    // A compact horizontal category strip, like Tarave X-TRAS.
+    mTabs.setPosition(mInnerX, mInnerY + 71.0f);
+    mTabs.setSize(mInnerW, 34.0f);
+
+    const float topPad = 113.0f;
     const float bottomPad = 52.0f;
 
     mList.setPosition(mInnerX, mInnerY + topPad);
@@ -603,9 +611,50 @@ bool GuiPortsBrowser::removeGame(const PortEntry& game)
     return ::unlink(dst.c_str()) == 0;
 }
 
+void GuiPortsBrowser::selectTab(int tab)
+{
+    if (tab == mActiveTab || (tab == 0 && !mHasGames) ||
+        (tab == 1 && !mHasPorts))
+        return;
+
+    mActiveTab = tab;
+    // Choose the first visible item in the new tab, not an arbitrary
+    // index from the complete source catalog.
+    mLastSelectedIndex = -1;
+    rebuildList();
+}
+
 void GuiPortsBrowser::rebuildList()
 {
     mList.clear();
+    mVisiblePortIndices.clear();
+
+    mHasGames = false;
+    mHasPorts = false;
+    for (const auto& entry : mPorts)
+    {
+        if (entry.isGame) mHasGames = true;
+        else mHasPorts = true;
+    }
+
+    // Do not display an empty tab when only one catalog is available.
+    if (mActiveTab == 0 && !mHasGames) mActiveTab = 1;
+    if (mActiveTab == 1 && !mHasPorts) mActiveTab = 0;
+    mTabs.setAvailable(mHasGames, mHasPorts);
+    mTabs.setActive(mActiveTab);
+
+    for (int i = 0; i < (int)mPorts.size(); ++i)
+    {
+        if (mPorts[i].isGame == (mActiveTab == 0))
+            mVisiblePortIndices.push_back(i);
+    }
+
+    if (!mVisiblePortIndices.empty() &&
+        std::find(mVisiblePortIndices.begin(), mVisiblePortIndices.end(),
+                  mLastSelectedIndex) == mVisiblePortIndices.end())
+        mLastSelectedIndex = mVisiblePortIndices.front();
+
+    if (mPorts.empty()) mLastSelectedIndex = 0;
 
     if (mPorts.empty())
     {
@@ -631,6 +680,8 @@ void GuiPortsBrowser::rebuildList()
     for (int i = 0; i < (int)mPorts.size(); ++i)
     {
         const PortEntry& port = mPorts[i];
+        if (port.isGame != (mActiveTab == 0))
+            continue;
         const std::string section = sectionName(port.section);
 
         if (section != previousSection)
@@ -1097,24 +1148,34 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
         return GuiComponent::input(config, input);
     }
 
-    if (config->isMappedLike("up", input))
+    // Horizontal movement changes category; vertical movement stays inside
+    // the visible category. The source mPorts indices remain unchanged for
+    // install, update, delete, and asynchronous jobs.
+    if (config->isMappedLike("left", input))
     {
-        --mLastSelectedIndex;
-
-        if (mLastSelectedIndex < 0)
-            mLastSelectedIndex = (int)mPorts.size() - 1;
-
-        rebuildList();
+        selectTab(0);
+        return true;
+    }
+    if (config->isMappedLike("right", input))
+    {
+        selectTab(1);
         return true;
     }
 
-    if (config->isMappedLike("down", input))
+    if (config->isMappedLike("up", input) ||
+        config->isMappedLike("down", input))
     {
-        ++mLastSelectedIndex;
+        if (mVisiblePortIndices.empty())
+            return true;
 
-        if (mLastSelectedIndex >= (int)mPorts.size())
-            mLastSelectedIndex = 0;
-
+        auto it = std::find(mVisiblePortIndices.begin(), mVisiblePortIndices.end(),
+                            mLastSelectedIndex);
+        const int count = (int)mVisiblePortIndices.size();
+        int position = it == mVisiblePortIndices.end() ? 0 :
+            (int)std::distance(mVisiblePortIndices.begin(), it);
+        const int step = config->isMappedLike("up", input) ? -1 : 1;
+        position = (position + step + count) % count;
+        mLastSelectedIndex = mVisiblePortIndices[position];
         rebuildList();
         return true;
     }
@@ -1240,6 +1301,7 @@ void GuiPortsBrowser::update(int deltaTime)
 
     mFrame.update(deltaTime);
     mList.update(deltaTime);
+    mTabs.update(deltaTime);
     mHeader.update(deltaTime);
     mSubHeader.update(deltaTime);
     mFooter.update(deltaTime);
@@ -1265,6 +1327,7 @@ void GuiPortsBrowser::render(const Transform4x4f& parentTrans)
     mFrame.render(trans);
     mHeader.render(trans);
     mSubHeader.render(trans);
+    mTabs.render(trans);
     mList.render(trans);
     mFooter.render(trans);
 
@@ -1276,6 +1339,8 @@ std::vector<HelpPrompt> GuiPortsBrowser::getHelpPrompts()
     std::vector<HelpPrompt> prompts;
 
     prompts.push_back(HelpPrompt("up/down", trPorts("MOVE")));
+    if (mHasGames && mHasPorts)
+        prompts.push_back(HelpPrompt("left/right", trPorts("CHANGE TAB")));
 
     if (!mPorts.empty())
     {
