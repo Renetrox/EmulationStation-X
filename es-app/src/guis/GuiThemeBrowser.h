@@ -122,6 +122,7 @@ private:
 
 	TextComponent mRepoLabel;
 	TextComponent mHeader;
+	TextComponent mSubtitle;
 	TextComponent mFooter;
 
 	// Paths
