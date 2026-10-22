@@ -650,8 +650,6 @@ void GuiPortsBrowser::rebuildList()
             previousSection = section;
         }
 
-        ComponentListRow row;
-
         std::string title =
             port.description.empty() ? port.id : port.description;
         // Keep the existing name and catalog data, but lay it out like
