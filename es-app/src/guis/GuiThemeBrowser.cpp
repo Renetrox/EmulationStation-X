@@ -543,22 +543,12 @@ void GuiThemeBrowser::rebuildList()
 		const ThemeEntry& e = mThemes[i];
 		const bool installed = isInstalled(e);
 
-		// Visual presentation only: status icon + compact title and metadata.
-		// Original selection handlers and download/update logic stay unchanged.
+		// Show just the theme name and installation/update status.
+		// Author and repository belong under the preview image on the right.
 		const bool hasUpdate = installed && getUpdateStateFor(e) == UpdateState::UPDATE_AVAILABLE;
-		std::string details;
-		if (!e.author.empty())
-			details = std::string(u8"\uf007  ") + ellipsize(e.author, 26);
-		if (!e.repo.empty())
-		{
-			if (!details.empty()) details += "    ";
-			details += std::string(u8"\uf0ac  ") + ellipsize(e.repo, 28);
-		}
-		if (details.empty()) details = e.id;
-
 		ComponentListRow row;
-		auto item = CompactBrowserStyle::makeRow(
-			mWindow, e.title.empty() ? e.id : e.title, details, installed, hasUpdate);
+		auto item = CompactBrowserStyle::makeTitleRow(
+			mWindow, e.title.empty() ? e.id : e.title, installed, hasUpdate);
 		row.addElement(item, true);
 
 		row.makeAcceptInputHandler([this, i]()
