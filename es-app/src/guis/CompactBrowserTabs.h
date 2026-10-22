@@ -38,34 +38,26 @@ public:
     void setActive(int tab)
     {
         mActiveTab = tab;
-        mGames.setColor(tab == 0 ? 0xFFFFFFFF : 0x89939FFF);
-        mPorts.setColor(tab == 1 ? 0xFFFFFFFF : 0x89939FFF);
+        // Display missing categories as disabled tabs rather than hiding
+        // the entire tab bar when the optional free-games catalog is absent.
+        mGames.setColor(!mGamesAvailable ? 0x65707BFF :
+                        (tab == 0 ? 0xFFFFFFFF : 0x89939FFF));
+        mPorts.setColor(!mPortsAvailable ? 0x65707BFF :
+                        (tab == 1 ? 0xFFFFFFFF : 0x89939FFF));
     }
 
     void onSizeChanged() override
     {
-        const int visibleCount = (mGamesAvailable ? 1 : 0) +
-                                 (mPortsAvailable ? 1 : 0);
-        if (!visibleCount)
-            return;
-
-        // Central, compact tabs instead of very wide menu buttons.
-        mTabWidth = std::min(mSize.x() / visibleCount,
+        // Always reserve both tab labels; missing categories appear dimmed.
+        // This keeps the layout stable after refreshing the free-games catalog.
+        mTabWidth = std::min(mSize.x() / 2.0f,
                              std::max(135.0f, Renderer::getScreenHeight() * 0.32f));
-        mStartX = (mSize.x() - mTabWidth * visibleCount) * 0.5f;
+        mStartX = (mSize.x() - mTabWidth * 2.0f) * 0.5f;
 
-        float x = mStartX;
-        if (mGamesAvailable)
-        {
-            mGames.setPosition(x, 0.0f);
-            mGames.setSize(mTabWidth, mSize.y() - 6.0f);
-            x += mTabWidth;
-        }
-        if (mPortsAvailable)
-        {
-            mPorts.setPosition(x, 0.0f);
-            mPorts.setSize(mTabWidth, mSize.y() - 6.0f);
-        }
+        mGames.setPosition(mStartX, 0.0f);
+        mGames.setSize(mTabWidth, mSize.y() - 6.0f);
+        mPorts.setPosition(mStartX + mTabWidth, 0.0f);
+        mPorts.setSize(mTabWidth, mSize.y() - 6.0f);
     }
 
     void render(const Transform4x4f& parentTrans) override
@@ -80,16 +72,13 @@ public:
         Renderer::drawRect(0.0f, mSize.y() - 2.0f, mSize.x(), 1.0f,
                            0x56616F88, 0x56616F88);
 
-        const float activeX = mStartX +
-            ((mActiveTab == 1 && mGamesAvailable) ? mTabWidth : 0.0f);
+        const float activeX = mStartX + (mActiveTab == 1 ? mTabWidth : 0.0f);
         Renderer::drawRect(activeX + 8.0f, mSize.y() - 4.0f,
                            std::max(0.0f, mTabWidth - 16.0f), 3.0f,
                            0x429BDFFF, 0x429BDFFF);
 
-        if (mGamesAvailable)
-            mGames.render(trans);
-        if (mPortsAvailable)
-            mPorts.render(trans);
+        mGames.render(trans);
+        mPorts.render(trans);
     }
 
 private:
