@@ -1754,21 +1754,14 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 	xOff += extraCfg.logoOffsetX;
 	yOff += extraCfg.logoOffsetY;
 
-	int center    = (int)(mCamOffset);
-	int logoCount = Math::min(mCarousel.maxLogoCount, (int)mEntries.size());
-
-	int bufferIndex = getScrollingVelocity() + 1;
-	if(bufferIndex < 0) bufferIndex = 0;
-	if(bufferIndex > 2) bufferIndex = 2;
-
-	int bufferLeft  = logoBuffersLeft[bufferIndex];
-	int bufferRight = logoBuffersRight[bufferIndex];
-
-	if(logoCount == 1)
-	{
-		bufferLeft  = 0;
-		bufferRight = 0;
-	}
+	// Respect maxLogoCount even when fixed logoSpacingX/Y leaves additional
+	// space in the carousel viewport. Never render scroll-buffer logos here.
+	// Follow the animated camera with a fixed-size rendering window.
+	const int center = static_cast<int>(std::floor(mCamOffset + 0.5f));
+	const int logoCount = std::max(1,
+		std::min(mCarousel.maxLogoCount, static_cast<int>(mEntries.size())));
+	const int firstLogo = center - (logoCount - 1) / 2;
+	const int lastLogo = firstLogo + logoCount - 1;
 
 	auto renderLogo = [this, &carouselTrans, &logoSpacing, xOff, yOff, &extraCfg](int i)
 	{
@@ -1910,9 +1903,7 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 	};
 
 	std::vector<int> activePositions;
-	for(int i = center - logoCount / 2 + bufferLeft;
-	    i <= center + logoCount / 2 + bufferRight;
-	    i++)
+	for(int i = firstLogo; i <= lastLogo; ++i)
 	{
 		int index = i;
 		while(index < 0)
