@@ -123,7 +123,9 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	mFooter.setSize(mInnerW, 28.0f);
 
 	const float topPad = 75.0f;
-	const float bottomPad = 40.0f;
+	// Actions already appear in EmulationStation Help; don't duplicate
+	// A/X/B labels in the dialog footer.
+	const float bottomPad = 22.0f;
 
 	// Lista izquierda
 	mList.setPosition(mInnerX, mInnerY + topPad);
@@ -884,7 +886,6 @@ void GuiThemeBrowser::render(const Transform4x4f& parentTrans)
 	mList.render(trans);
 	mPreview.render(trans);
 	mRepoLabel.render(trans);
-	mFooter.render(trans);
 
 	renderChildren(trans);
 }
