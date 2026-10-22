@@ -5,6 +5,7 @@
 #include "components/ComponentList.h"
 #include "components/TextComponent.h"
 #include "components/NinePatchComponent.h"
+#include "guis/CompactBrowserTabs.h"
 
 #include <string>
 #include <vector>
@@ -51,6 +52,7 @@ private:
     void setBusyVisible(bool visible);
     void showPopup(const std::string& msg, int durationMs);
     void rebuildList();
+    void selectTab(int tab);
     void updateFooter();
 
     bool findRetroPieSetup();
@@ -85,6 +87,7 @@ private:
 private:
     NinePatchComponent mFrame;
     ComponentList mList;
+    CompactBrowserTabs mTabs;
     TextComponent mHeader;
     TextComponent mSubHeader;
     TextComponent mFooter;
@@ -95,7 +98,11 @@ private:
     std::string mLogPath;
 
     std::vector<PortEntry> mPorts;
+    std::vector<int> mVisiblePortIndices;
     int mLastSelectedIndex;
+    int mActiveTab;  // 0 = free games; 1 = ports
+    bool mHasGames;
+    bool mHasPorts;
 
     float mInnerX;
     float mInnerY;

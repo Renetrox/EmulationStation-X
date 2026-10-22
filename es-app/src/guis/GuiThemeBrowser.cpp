@@ -1,5 +1,6 @@
 // es-app/src/guis/GuiThemeBrowser.cpp
 #include "guis/GuiThemeBrowser.h"
+#include "guis/CompactBrowserStyle.h"
 
 #include "Log.h"
 #include "Window.h"
@@ -54,9 +55,10 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	, mFrame(window)
 	, mList(window)
 	, mPreview(window)
-	, mRepoLabel(window, "", Font::get(FONT_SIZE_SMALL), 0x777777CC, ALIGN_LEFT)
-	, mHeader(window, trTheme("THEME DOWNLOADER"), Font::get(FONT_SIZE_LARGE), 0xFFFFFFFF, ALIGN_CENTER)
-	, mFooter(window, "", Font::get(FONT_SIZE_SMALL), 0xFFFFFFFF, ALIGN_CENTER)
+	, mRepoLabel(window, "", CompactBrowserStyle::detailFont(), 0xAAB0B8FF, ALIGN_LEFT)
+	, mHeader(window, trTheme("THEME DOWNLOADER"), Font::get(FONT_SIZE_MEDIUM), 0xF3F3F3FF, ALIGN_CENTER)
+	, mSubtitle(window, trTheme("THEME DOWNLOADER"), CompactBrowserStyle::titleFont(), 0xAAB0B8FF, ALIGN_CENTER)
+	, mFooter(window, "", CompactBrowserStyle::detailFont(), 0xB3B6BAFF, ALIGN_CENTER)
 	, mCatalogDir("")
 	, mPreviewDir("")
 	, mThemesDir("")
@@ -111,14 +113,16 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	mInnerH = (sh - (marginY * 2.0f)) - (sh * 0.04f);
 
 	// Header
-	mHeader.setPosition(mInnerX, mInnerY);
-	mHeader.setSize(mInnerW, 40.0f);
+	mHeader.setPosition(mInnerX, mInnerY + 3.0f);
+	mHeader.setSize(mInnerW, 39.0f);
+	mSubtitle.setPosition(mInnerX, mInnerY + 43.0f);
+	mSubtitle.setSize(mInnerW, 24.0f);
 
 	// Footer
 	mFooter.setPosition(mInnerX, mInnerY + mInnerH - 32.0f);
 	mFooter.setSize(mInnerW, 28.0f);
 
-	const float topPad = 55.0f;
+	const float topPad = 75.0f;
 	const float bottomPad = 40.0f;
 
 	// Lista izquierda
@@ -525,7 +529,7 @@ void GuiThemeBrowser::rebuildList()
 		ComponentListRow row;
 		auto txt = std::make_shared<TextComponent>(
 			mWindow, trTheme("NO THEMES FOUND (THEMES.INI EMPTY?)"),
-			Font::get(FONT_SIZE_MEDIUM), 0xFFFFFFFF, ALIGN_LEFT
+			CompactBrowserStyle::titleFont(), 0xEDEDEFFF, ALIGN_LEFT
 		);
 
 		row.addElement(txt, false);
@@ -539,31 +543,13 @@ void GuiThemeBrowser::rebuildList()
 		const ThemeEntry& e = mThemes[i];
 		const bool installed = isInstalled(e);
 
-		// NEW: icono update
-		std::string upd = "";
-		if (installed)
-		{
-			switch (getUpdateStateFor(e))
-			{
-			case UpdateState::UPDATE_AVAILABLE: upd = "⟳  "; break; // update disponible
-			case UpdateState::UP_TO_DATE:       upd = "   "; break;
-			case UpdateState::ERROR:            upd = "?  "; break;
-			case UpdateState::UNKNOWN:          upd = "   "; break;
-			}
-		}
-
+		// Show just the theme name and installation/update status.
+		// Author and repository belong under the preview image on the right.
+		const bool hasUpdate = installed && getUpdateStateFor(e) == UpdateState::UPDATE_AVAILABLE;
 		ComponentListRow row;
-
-		std::string label = installed ? "☑  " : "☐  ";
-		label += upd;
-		label += (e.title.empty() ? e.id : e.title);
-
-		auto title = std::make_shared<TextComponent>(
-			mWindow, label,
-			Font::get(FONT_SIZE_MEDIUM), 0xFFFFFFFF, ALIGN_LEFT
-		);
-
-		row.addElement(title, false);
+		auto item = CompactBrowserStyle::makeTitleRow(
+			mWindow, e.title.empty() ? e.id : e.title, installed, hasUpdate);
+		row.addElement(item, true);
 
 		row.makeAcceptInputHandler([this, i]()
 		{
@@ -617,8 +603,8 @@ void GuiThemeBrowser::updatePreview()
 	const std::string preview = getPreviewPath(e);
 	mPreview.setImage(preview.empty() ? "" : preview);
 
-	std::string repoLine = e.repo.empty() ? "" : ellipsize(e.repo, 70);
-	std::string authorLine = e.author.empty() ? "" : (trTheme("BY") + " " + e.author);
+	std::string repoLine = e.repo.empty() ? "" : std::string(u8"\uf0ac  ") + ellipsize(e.repo, 70);
+	std::string authorLine = e.author.empty() ? "" : std::string(u8"\uf007  ") + e.author;
 
 	if (!repoLine.empty() && !authorLine.empty())
 		mRepoLabel.setText(repoLine + "\n" + authorLine);
@@ -874,6 +860,7 @@ void GuiThemeBrowser::update(int deltaTime)
 	mPreview.update(deltaTime);
 	mRepoLabel.update(deltaTime);
 	mHeader.update(deltaTime);
+	mSubtitle.update(deltaTime);
 	mFooter.update(deltaTime);
 
 	// NEW: si el thread marcó cambios de update state, refrescar lista 1 vez
@@ -893,6 +880,7 @@ void GuiThemeBrowser::render(const Transform4x4f& parentTrans)
 
 	mFrame.render(trans);
 	mHeader.render(trans);
+	mSubtitle.render(trans);
 	mList.render(trans);
 	mPreview.render(trans);
 	mRepoLabel.render(trans);
