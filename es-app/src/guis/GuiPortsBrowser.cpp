@@ -1,5 +1,6 @@
 // es-app/src/guis/GuiPortsBrowser.cpp
 #include "guis/GuiPortsBrowser.h"
+#include "guis/CompactBrowserStyle.h"
 
 #include "Log.h"
 #include "Window.h"
@@ -93,10 +94,10 @@ GuiPortsBrowser::GuiPortsBrowser(Window* window)
     : GuiComponent(window)
     , mFrame(window)
     , mList(window)
-    , mHeader(window, trPorts("X-TRAS"), Font::get(FONT_SIZE_MEDIUM), 0xFFFFFFFF, ALIGN_CENTER)
+    , mHeader(window, trPorts("X-TRAS"), Font::get(FONT_SIZE_MEDIUM), 0xF3F3F3FF, ALIGN_CENTER)
     , mSubHeader(window, trPorts("PORTS AND FREE GAMES"),
-                 Font::get(FONT_SIZE_SMALL), 0x9A9A9AFF, ALIGN_CENTER)
-    , mFooter(window, "", Font::get(FONT_SIZE_SMALL), 0xFFFFFFFF, ALIGN_CENTER)
+                 CompactBrowserStyle::titleFont(), 0xAAB0B8FF, ALIGN_CENTER)
+    , mFooter(window, "", CompactBrowserStyle::detailFont(), 0xB3B6BAFF, ALIGN_CENTER)
     , mLastSelectedIndex(0)
     , mInnerX(0.0f)
     , mInnerY(0.0f)
@@ -122,7 +123,7 @@ GuiPortsBrowser::GuiPortsBrowser(Window* window)
     const float sw = (float)Renderer::getScreenWidth();
     const float sh = (float)Renderer::getScreenHeight();
 
-    const float frameW = sw * 0.64f;
+    const float frameW = sw * 0.76f;
     const float frameH = sh * 0.82f;
     const float frameX = (sw - frameW) * 0.5f;
     const float frameY = (sh - frameH) * 0.5f;
@@ -143,13 +144,13 @@ GuiPortsBrowser::GuiPortsBrowser(Window* window)
 
     // More separation between title/subtitle, closer to Batocera's dialog.
     mHeader.setPosition(mInnerX, mInnerY + 2.0f);
-    mHeader.setSize(mInnerW, 30.0f);
+    mHeader.setSize(mInnerW, 38.0f);
 
-    mSubHeader.setPosition(mInnerX, mInnerY + 36.0f);
-    mSubHeader.setSize(mInnerW, 18.0f);
+    mSubHeader.setPosition(mInnerX, mInnerY + 40.0f);
+    mSubHeader.setSize(mInnerW, 24.0f);
 
     // Give the list breathing room and keep the last row clear of the footer.
-    const float topPad = 70.0f;
+    const float topPad = 78.0f;
     const float bottomPad = 52.0f;
 
     mList.setPosition(mInnerX, mInnerY + topPad);
@@ -651,53 +652,35 @@ void GuiPortsBrowser::rebuildList()
 
         ComponentListRow row;
 
-        const std::string icon = port.installed ? "✓  " : "↓  ";
-
         std::string title =
             port.description.empty() ? port.id : port.description;
+        // Keep the existing name and catalog data, but lay it out like
+        // Tarave's two-level native store instead of a large text block.
+        title = ellipsizePorts(title, 78);
 
-        // Avoid long RetroPie descriptions running outside the panel.
-        title = ellipsizePorts(title, 62);
-
-        // Keep the secondary line user-facing. RetroPie flags such as !mali
-        // are useful internally, but make the browser look like a debug view.
-        // El glifo comunica el estado:
-        // ↓ disponible para instalar
-        // ✓ instalado
-        // ⟳ reservado para "actualización disponible"
-        std::string meta = port.id;
-
+        std::string meta;
         if (port.isGame)
         {
-            meta.clear();
-
             if (!port.author.empty())
-                meta += port.author;
-
+                meta = std::string(u8"\uf007  ") + port.author;
             if (!port.license.empty())
             {
-                if (!meta.empty())
-                    meta += " · ";
-                meta += port.license;
+                if (!meta.empty()) meta += "    ";
+                meta += std::string(u8"\uf02e  ") + port.license;
             }
-
-            if (meta.empty())
-                meta = trPorts("FREE GAME");
+            if (meta.empty()) meta = trPorts("FREE GAME");
+        }
+        else
+        {
+            meta = std::string(u8"\uf085  ") + port.id;
+            if (!port.section.empty())
+                meta += std::string(u8"    \uf07b  ") + section;
         }
 
-        std::string label = icon + title + "\n    " + meta;
-
-        if (port.isGame && !port.summary.empty())
-            label += "\n    " + ellipsizePorts(port.summary, 72);
-
-        auto txt = std::make_shared<TextComponent>(
-            mWindow,
-            label,
-            Font::get(FONT_SIZE_SMALL),
-            0xFFFFFFFF,
-            ALIGN_LEFT);
-
-        row.addElement(txt, false);
+        ComponentListRow row;
+        auto item = CompactBrowserStyle::makeRow(
+            mWindow, title, meta, port.installed);
+        row.addElement(item, true);
 
         row.makeAcceptInputHandler([this, i]()
         {
