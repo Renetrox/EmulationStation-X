@@ -20,6 +20,15 @@ class SystemCarouselItemTemplate : public GuiComponent
 public:
     explicit SystemCarouselItemTemplate(Window* window) : GuiComponent(window) {}
 
+    // Carousel fading must affect the complete composed item, not just
+    // the empty parent; otherwise inactive cards remain fully opaque.
+    void setOpacity(unsigned char opacity) override
+    {
+        GuiComponent::setOpacity(opacity);
+        for (const auto& child : mParts)
+            child->setOpacity(opacity);
+    }
+
     bool load(const ThemeData::ThemeElement& templ, const Vector2f& size,
               const std::string& name, const std::string& fullName)
     {
@@ -46,6 +55,8 @@ public:
                 image->setImage(chosen);
                 if (elem.has("color"))
                     image->setColorShift(elem.get<unsigned int>("color"));
+                if (elem.has("zIndex"))
+                    image->setZIndex(elem.get<float>("zIndex"));
                 if (elem.has("visible"))
                     image->setVisible(elem.get<bool>("visible"));
                 if (elem.has("origin"))
@@ -84,6 +95,14 @@ public:
                     text->setOrigin(elem.get<Vector2f>("origin"));
                 if (elem.has("forceUppercase"))
                     text->setUppercase(elem.get<bool>("forceUppercase"));
+                if (elem.has("backgroundColor"))
+                    text->setBackgroundColor(elem.get<unsigned int>("backgroundColor"));
+                if (elem.has("textStrokeColor"))
+                    text->setTextStrokeColor(elem.get<unsigned int>("textStrokeColor"));
+                if (elem.has("textStrokeSize"))
+                    text->setTextStrokeSize(elem.get<float>("textStrokeSize"));
+                if (elem.has("zIndex"))
+                    text->setZIndex(elem.get<float>("zIndex"));
                 if (elem.has("lineSpacing"))
                     text->setLineSpacing(elem.get<float>("lineSpacing"));
                 if (elem.has("visible"))
@@ -100,6 +119,7 @@ public:
                 attach(text);
             }
         }
+        sortChildren();
         return !mParts.empty();
     }
 
