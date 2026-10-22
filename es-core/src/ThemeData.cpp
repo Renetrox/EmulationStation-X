@@ -344,6 +344,7 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "color", COLOR },
 	{ "colorEnd", COLOR },
 	{ "gradientType", STRING },
+	{ "showFallbackName", BOOLEAN },
 	{ "logoScale", FLOAT },
 	{ "logoRotation", FLOAT },
 	{ "logoRotationOrigin", NORMALIZED_PAIR },

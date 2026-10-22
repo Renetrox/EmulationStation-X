@@ -33,6 +33,76 @@
 #include <limits>
 #include <memory>
 
+// Opt-in label over a missing per-system logo's existing fallback image.
+// Unlike itemTemplate, this derives from the normal ImageComponent and keeps
+// the original per-system logo geometry, size, rotation and carousel behavior.
+namespace
+{
+class SystemFallbackLogo : public ImageComponent
+{
+public:
+    SystemFallbackLogo(Window* window,
+                       const std::shared_ptr<ThemeData>& theme,
+                       const std::string& systemName)
+        : ImageComponent(window, false, false)
+        , mCaption(window, systemName, Font::get(FONT_SIZE_MEDIUM),
+                   0xFFFFFFFF, ALIGN_CENTER)
+        , mPositionFraction(0.5f, 0.50f)
+        , mSizeFraction(0.94f, 0.28f)
+    {
+        const ThemeData::ThemeElement* style =
+            theme->getElement("system", "logoText", "text");
+        if (style)
+        {
+            if (style->has("pos"))
+                mPositionFraction = style->get<Vector2f>("pos");
+            if (style->has("size"))
+                mSizeFraction = style->get<Vector2f>("size");
+        }
+
+        mCaption.applyTheme(theme, "system", "logoText",
+            ThemeFlags::FONT_PATH | ThemeFlags::FONT_SIZE |
+            ThemeFlags::COLOR | ThemeFlags::FORCE_UPPERCASE |
+            ThemeFlags::LINE_SPACING);
+        mCaption.setText(systemName); // Never a static text string for all systems
+        mCaption.setOrigin(0.5f, 0.5f);
+        addChild(&mCaption);
+        placeCaption();
+    }
+
+    void onSizeChanged() override
+    {
+        ImageComponent::onSizeChanged();
+        placeCaption();
+    }
+
+    // ImageComponent::setOpacity does not propagate to children; synchronize
+    // the caption with the regular carousel's per-logo fade.
+    void setOpacity(unsigned char opacity) override
+    {
+        ImageComponent::setOpacity(opacity);
+        mCaption.setOpacity(opacity);
+    }
+
+private:
+    void placeCaption()
+    {
+        const Vector2f size = getSize();
+        if (size.x() <= 0.0f || size.y() <= 0.0f)
+            return;
+
+        mCaption.setSize(size.x() * mSizeFraction.x(),
+                         size.y() * mSizeFraction.y());
+        mCaption.setPosition(size.x() * mPositionFraction.x(),
+                             size.y() * mPositionFraction.y());
+    }
+
+    TextComponent mCaption;
+    Vector2f mPositionFraction;
+    Vector2f mSizeFraction;
+};
+}
+
 // buffer values for scrolling velocity (left, stopped, right)
 const int logoBuffersLeft[]  = { -5, -2, -1 };
 const int logoBuffersRight[] = {  1,  2,  5 };
@@ -388,13 +458,32 @@ void SystemView::populate()
 			const ThemeData::ThemeElement* logoElem = theme->getElement("system", "logo", "image");
 			if(logoElem)
 			{
-				std::string path        = logoElem->get<std::string>("path");
-				std::string defaultPath = logoElem->has("default") ? logoElem->get<std::string>("default") : "";
+				const std::string path = logoElem->has("path") ?
+					logoElem->get<std::string>("path") : "";
+				const std::string defaultPath = logoElem->has("default") ?
+					logoElem->get<std::string>("default") : "";
 
-				if((!path.empty() && ResourceManager::getInstance()->fileExists(path)) ||
-				   (!defaultPath.empty() && ResourceManager::getInstance()->fileExists(defaultPath)))
+				const bool logoExists =
+					!path.empty() && ResourceManager::getInstance()->fileExists(path);
+				const bool defaultExists =
+					!defaultPath.empty() && ResourceManager::getInstance()->fileExists(defaultPath);
+
+				if(logoExists || defaultExists)
 				{
-					ImageComponent* logo = new ImageComponent(mWindow, false, false);
+					const ThemeData::ThemeElement* carouselElem =
+						theme->getElement("system", "systemcarousel", "carousel");
+					const bool labelMissingLogo =
+						carouselElem && carouselElem->has("showFallbackName") &&
+						carouselElem->get<bool>("showFallbackName") &&
+						mCarousel.displayMode != "textlist" &&
+						!logoExists && defaultExists;
+
+					ImageComponent* logo = labelMissingLogo ?
+						static_cast<ImageComponent*>(new SystemFallbackLogo(
+							mWindow, theme, (*it)->getName())) :
+						static_cast<ImageComponent*>(new ImageComponent(mWindow, false, false));
+
+					// Preserve the same image loading and dimensions as ES-X main.
 					logo->setMaxSize(mCarousel.logoSize * mCarousel.logoScale);
 					logo->applyTheme(theme, "system", "logo", ThemeFlags::PATH | ThemeFlags::COLOR);
 					logo->setRotateByTargetSize(true);
@@ -1665,21 +1754,14 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 	xOff += extraCfg.logoOffsetX;
 	yOff += extraCfg.logoOffsetY;
 
-	int center    = (int)(mCamOffset);
-	int logoCount = Math::min(mCarousel.maxLogoCount, (int)mEntries.size());
-
-	int bufferIndex = getScrollingVelocity() + 1;
-	if(bufferIndex < 0) bufferIndex = 0;
-	if(bufferIndex > 2) bufferIndex = 2;
-
-	int bufferLeft  = logoBuffersLeft[bufferIndex];
-	int bufferRight = logoBuffersRight[bufferIndex];
-
-	if(logoCount == 1)
-	{
-		bufferLeft  = 0;
-		bufferRight = 0;
-	}
+	// Respect maxLogoCount even when fixed logoSpacingX/Y leaves additional
+	// space in the carousel viewport. Never render scroll-buffer logos here.
+	// Follow the animated camera with a fixed-size rendering window.
+	const int center = static_cast<int>(std::floor(mCamOffset + 0.5f));
+	const int logoCount = std::max(1,
+		std::min(mCarousel.maxLogoCount, static_cast<int>(mEntries.size())));
+	const int firstLogo = center - (logoCount - 1) / 2;
+	const int lastLogo = firstLogo + logoCount - 1;
 
 	auto renderLogo = [this, &carouselTrans, &logoSpacing, xOff, yOff, &extraCfg](int i)
 	{
@@ -1821,9 +1903,7 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 	};
 
 	std::vector<int> activePositions;
-	for(int i = center - logoCount / 2 + bufferLeft;
-	    i <= center + logoCount / 2 + bufferRight;
-	    i++)
+	for(int i = firstLogo; i <= lastLogo; ++i)
 	{
 		int index = i;
 		while(index < 0)
