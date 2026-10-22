@@ -47,7 +47,7 @@ public:
         : ImageComponent(window, false, false)
         , mCaption(window, systemName, Font::get(FONT_SIZE_MEDIUM),
                    0xFFFFFFFF, ALIGN_CENTER)
-        , mPositionFraction(0.5f, 0.80f)
+        , mPositionFraction(0.5f, 0.50f)
         , mSizeFraction(0.94f, 0.28f)
     {
         const ThemeData::ThemeElement* style =
