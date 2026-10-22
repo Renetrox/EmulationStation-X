@@ -955,6 +955,39 @@ void ThemeData::parseElement(const pugi::xml_node& root, const std::map<std::str
 
 	for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling())
 	{
+		// Batocera/Tarave system carousel items can combine an image and
+		// dynamic text. Keep the template nested instead of interpreting its
+		// child elements as unknown flat <carousel> properties.
+		if (element.type == "carousel" && std::string(node.name()) == "itemTemplate")
+		{
+			ThemeElement templ;
+			templ.type = "itemTemplate";
+			templ.extra = false;
+			for (pugi::xml_node child = node.first_child(); child; child = child.next_sibling())
+			{
+				const std::string type = child.name();
+				// Scoped visual subset: non-image/text children are ignored, not
+				// promoted to a bogus theme property or a top-level extra.
+				if (type != "image" && type != "text")
+					continue;
+				auto childTypeIt = sElementMap.find(type);
+				if (childTypeIt == sElementMap.cend())
+					continue;
+				ThemeElement item;
+				parseElement(child, childTypeIt->second, item);
+				templ.children.emplace_back(child.attribute("name").as_string(), std::move(item));
+			}
+			if (!templ.children.empty())
+			{
+				auto& children = element.children;
+				children.erase(std::remove_if(children.begin(), children.end(),
+					[](const std::pair<std::string, ThemeElement>& child)
+					{ return child.first == "itemTemplate"; }), children.end());
+				children.emplace_back("itemTemplate", std::move(templ));
+			}
+			continue;
+		}
+
 		auto typeIt = typeMap.find(node.name());
 		if (typeIt == typeMap.cend())
 			throw error << "Unknown property type \"" << node.name() << "\" (for element of type " << root.name() << ").";
