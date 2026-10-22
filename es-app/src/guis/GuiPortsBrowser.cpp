@@ -159,7 +159,8 @@ GuiPortsBrowser::GuiPortsBrowser(Window* window)
     mTabs.setSize(mInnerW, 34.0f);
 
     const float topPad = 113.0f;
-    const float bottomPad = 52.0f;
+    // X-TRAS actions are already shown by the shared Help bar.
+    const float bottomPad = 26.0f;
 
     mList.setPosition(mInnerX, mInnerY + topPad);
     mList.setSize(mInnerW, mInnerH - topPad - bottomPad);
@@ -1329,7 +1330,6 @@ void GuiPortsBrowser::render(const Transform4x4f& parentTrans)
     mSubHeader.render(trans);
     mTabs.render(trans);
     mList.render(trans);
-    mFooter.render(trans);
 
     renderChildren(trans);
 }
