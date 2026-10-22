@@ -112,10 +112,6 @@ public:
 
 		std::map<std::string, Property> properties;
 
-		// Optional nested carousel itemTemplate (composed image/text children).
-		// Ordinary flat theme elements remain unchanged.
-		std::vector<std::pair<std::string, ThemeElement>> children;
-
 		template<typename T>
 		const T get(const std::string& prop) const
 		{
