@@ -14,17 +14,32 @@
 
 namespace CompactBrowserStyle
 {
+    inline int titleSize()
+    {
+        // Tarave-like compact typography without changing ES-X global fonts.
+        return std::max(16, static_cast<int>(Renderer::getScreenHeight() * 0.026f));
+    }
+
+    inline int detailSize()
+    {
+        return std::max(13, static_cast<int>(Renderer::getScreenHeight() * 0.019f));
+    }
+
+    inline std::shared_ptr<Font> titleFont()
+    {
+        return Font::get(titleSize());
+    }
+
     inline std::shared_ptr<Font> iconFont()
     {
         // Font Awesome is already bundled in ES-X.
-        return Font::get(FONT_SIZE_SMALL, ":/fonts/fontawesome-webfont.ttf");
+        return Font::get(titleSize(), ":/fonts/fontawesome-webfont.ttf");
     }
 
     inline std::shared_ptr<Font> detailFont()
     {
-        // The glyphs come from Font Awesome; letters use the bundled
-        // Unicode fallback faces. This retains distinct metadata icons.
-        return Font::get(FONT_SIZE_MINI, ":/fonts/fontawesome-webfont.ttf");
+        // Icons use Font Awesome; Latin text uses the usual fallback faces.
+        return Font::get(detailSize(), ":/fonts/fontawesome-webfont.ttf");
     }
 
     inline std::shared_ptr<ComponentGrid> makeRow(
@@ -36,12 +51,12 @@ namespace CompactBrowserStyle
     {
         auto grid = std::make_shared<ComponentGrid>(window, Vector2i(2, 2));
         const float rowHeight = std::max(
-            Font::get(FONT_SIZE_SMALL)->getHeight() +
-            Font::get(FONT_SIZE_MINI)->getHeight() + 8.0f,
-            Renderer::getScreenHeight() * 0.064f);
+            titleFont()->getLetterHeight() +
+            detailFont()->getLetterHeight() + 12.0f,
+            Renderer::getScreenHeight() * 0.054f);
 
         grid->setColWidthPerc(0, 0.085f, false);
-        grid->setRowHeightPerc(0, 0.53f, false);
+        grid->setRowHeightPerc(0, 0.55f, false);
 
         const char* glyph = updateAvailable ? u8"\uf021" :
             (installed ? u8"\uf058" : u8"\uf019");
@@ -50,7 +65,7 @@ namespace CompactBrowserStyle
         status->setVerticalAlignment(ALIGN_CENTER);
 
         auto headline = std::make_shared<TextComponent>(
-            window, title, Font::get(FONT_SIZE_SMALL), 0xEEEEEEFF, ALIGN_LEFT);
+            window, title, titleFont(), 0xEEEEEEFF, ALIGN_LEFT);
         headline->setVerticalAlignment(ALIGN_CENTER);
 
         auto metadata = std::make_shared<TextComponent>(
