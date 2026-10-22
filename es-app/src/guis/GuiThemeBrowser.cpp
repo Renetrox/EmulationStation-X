@@ -529,7 +529,7 @@ void GuiThemeBrowser::rebuildList()
 		ComponentListRow row;
 		auto txt = std::make_shared<TextComponent>(
 			mWindow, trTheme("NO THEMES FOUND (THEMES.INI EMPTY?)"),
-			Font::get(FONT_SIZE_MEDIUM), 0xFFFFFFFF, ALIGN_LEFT
+			CompactBrowserStyle::titleFont(), 0xEDEDEFFF, ALIGN_LEFT
 		);
 
 		row.addElement(txt, false);
