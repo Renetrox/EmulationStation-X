@@ -2,6 +2,9 @@ name: C/C++ CI
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - experiment/tarave-inspired-browsers-20261022
 
 jobs:
   build:
