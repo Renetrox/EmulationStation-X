@@ -617,8 +617,8 @@ void GuiPortsBrowser::rebuildList()
 
         auto txt = std::make_shared<TextComponent>(
             mWindow, msg,
-            Font::get(FONT_SIZE_MEDIUM),
-            0xFFFFFFFF,
+            CompactBrowserStyle::titleFont(),
+            0xEDEDEFFF,
             ALIGN_LEFT);
 
         row.addElement(txt, false);
@@ -640,8 +640,8 @@ void GuiPortsBrowser::rebuildList()
             auto header = std::make_shared<TextComponent>(
                 mWindow,
                 section,
-                Font::get(FONT_SIZE_SMALL),
-                0x8E8E8EFF,
+                CompactBrowserStyle::detailFont(),
+                0x9EA2A8FF,
                 ALIGN_LEFT);
 
             headerRow.addElement(header, false);
