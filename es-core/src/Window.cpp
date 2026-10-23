@@ -950,6 +950,7 @@ void Window::updateBackgroundTasks(int deltaTime)
 		return;
 
 	mBackgroundTaskAnimMs = (mBackgroundTaskAnimMs + deltaTime) % 1800;
+	mBackgroundTaskShowMs = (mBackgroundTaskShowMs + deltaTime) % 3600000;
 	mBackgroundTaskPollMs += deltaTime;
 	const bool poll = mBackgroundTaskPollMs >= 750;
 	if (poll)
@@ -986,17 +987,21 @@ void Window::renderBackgroundTasks()
 	if (mBackgroundTasks.empty() || mRenderScreenSaver)
 		return;
 
-	// Display one task at a time: prefer ongoing work over completed messages.
-	auto selected = mBackgroundTasks.begin();
+	// Rotate between simultaneous running jobs, so neither monopolizes the
+	// notification. Finished jobs remain visible briefly when nothing is running.
+	std::vector<std::map<std::string, BackgroundTaskEntry>::iterator> candidates;
 	for (auto it = mBackgroundTasks.begin(); it != mBackgroundTasks.end(); ++it)
 	{
 		if (it->second.status.state == BackgroundTaskStatus::RUNNING)
-		{
-			selected = it;
-			break;
-		}
+			candidates.push_back(it);
 	}
-	BackgroundTaskEntry& entry = selected->second;
+	if (candidates.empty())
+	{
+		for (auto it = mBackgroundTasks.begin(); it != mBackgroundTasks.end(); ++it)
+			candidates.push_back(it);
+	}
+	const size_t selectedIndex = (static_cast<size_t>(mBackgroundTaskShowMs / 4500)) % candidates.size();
+	BackgroundTaskEntry& entry = candidates[selectedIndex]->second;
 	const BackgroundTaskStatus& task = entry.status;
 	std::shared_ptr<Font> font = Font::get(FONT_SIZE_SMALL);
 
