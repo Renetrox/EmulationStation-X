@@ -95,6 +95,12 @@ public:
 		const std::function<BackgroundTaskStatus()>& monitor);
 	void setBackgroundTask(const std::string& id, const BackgroundTaskStatus& status);
 	void clearBackgroundTask(const std::string& id);
+	// A GUI doing async work can leave the stack while the Window keeps
+	// updating it on the main thread; this avoids threads touching game data.
+	bool parkGuiInBackground(GuiComponent* gui);
+	bool hasBackgroundGui() const { return mBackgroundGui != nullptr; }
+	GuiComponent* restoreBackgroundGui();
+	void releaseBackgroundGuiAfterUpdate(GuiComponent* gui);
 	void setBackgroundTaskOverlaySuppressed(bool suppress)
 	{
 		mBackgroundTaskOverlaySuppressed = suppress;
@@ -164,6 +170,8 @@ private:
 	int mBackgroundTaskAnimMs = 0;
 	int mBackgroundTaskShowMs = 0;
 	bool mBackgroundTaskOverlaySuppressed = false;
+	std::unique_ptr<GuiComponent> mBackgroundGui;
+	bool mBackgroundGuiReleasePending = false;
 	std::unique_ptr<ImageComponent> mBackgroundTaskIcon;
 	std::string mBackgroundTaskIconPath;
 	float mBackgroundTaskIconSize = 0.0f;
