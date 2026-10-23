@@ -5,6 +5,7 @@
 #include "components/ScraperSearchComponent.h"
 #include "components/TextComponent.h"
 #include "guis/GuiMsgBox.h"
+#include "guis/GuiInfoPopup.h"
 #include "views/ViewController.h"
 #include "Gamelist.h"
 #include "PowerSaver.h"
@@ -201,10 +202,13 @@ void GuiScraperMulti::update(int deltaTime)
 
 bool GuiScraperMulti::input(InputConfig* config, Input input)
 {
-	if (mBackgroundAllowed && mIsProcessing && input.value &&
-		config->isMappedTo("b", input))
+	if (mIsProcessing && input.value && config->isMappedTo("b", input))
 	{
-		goBackground();
+		if (mBackgroundAllowed)
+			goBackground();
+		else
+			mWindow->setInfoPopup(new GuiInfoPopup(
+				mWindow, es_translate("BACKGROUND REQUIRES AUTOMATIC RESULTS"), 4500));
 		return true;
 	}
 	return GuiComponent::input(config, input);
