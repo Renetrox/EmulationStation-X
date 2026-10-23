@@ -8,6 +8,8 @@
 #include "math/Vector2f.h"
 
 #include <memory>
+#include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -72,6 +74,23 @@ public:
 
 	void closeLoadingScreen();
 
+	// Small reusable status overlay for long-running frontend tasks. All calls
+	// and monitors run on the UI thread; worker threads must marshal updates.
+	struct BackgroundTaskStatus
+	{
+		enum State { RUNNING, SUCCESS, ERROR, CANCELLED };
+		std::string title;
+		std::string detail;
+		int current = -1; // <0: progress cannot be measured
+		int total = 0;
+		State state = RUNNING;
+	};
+
+	void observeBackgroundTask(const std::string& id,
+		const std::function<BackgroundTaskStatus()>& monitor);
+	void setBackgroundTask(const std::string& id, const BackgroundTaskStatus& status);
+	void clearBackgroundTask(const std::string& id);
+
 	void renderHelpPromptsEarly();
 	void setHelpPrompts(const std::vector<HelpPrompt>& prompts, const HelpStyle& style);
 
@@ -89,6 +108,8 @@ public:
 private:
 	void onSleep();
 	void onWake();
+	void updateBackgroundTasks(int deltaTime);
+	void renderBackgroundTasks();
 
 	bool isProcessing();
 
@@ -117,6 +138,18 @@ private:
 	unsigned int mTimeSinceLastInput;
 
 	bool mRenderedHelpPrompts;
+
+	struct BackgroundTaskEntry
+	{
+		BackgroundTaskStatus status;
+		std::function<BackgroundTaskStatus()> monitor;
+		std::unique_ptr<TextCache> titleCache;
+		std::unique_ptr<TextCache> detailCache;
+		int finishedMs = 0;
+	};
+	std::map<std::string, BackgroundTaskEntry> mBackgroundTasks;
+	int mBackgroundTaskPollMs = 0;
+	int mBackgroundTaskAnimMs = 0;
 
 	// =========================
 	// Clock overlay (theme-driven)
