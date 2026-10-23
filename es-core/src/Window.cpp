@@ -534,9 +534,10 @@ void Window::input(InputConfig* config, Input input)
 		return;
 
 	// A completed background task can leave a useful message on screen until
-	// the next configured button/key press. Do not consume the input: navigation
-	// continues normally, and there is no automatic screen transition.
-	if (input.configured && input.value != 0 && input.type != TYPE_COUNT)
+	// the next mapped button/key/navigation press. Runtime SDL Input instances
+	// have configured=false; the mapping belongs to InputConfig, not the event.
+	// Do not consume input or navigate to any menu automatically.
+	if (input.value != 0 && config && !config->getMappedTo(input).empty())
 	{
 		for (auto it = mBackgroundTasks.begin(); it != mBackgroundTasks.end(); )
 		{
