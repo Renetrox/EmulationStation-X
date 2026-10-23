@@ -1100,7 +1100,11 @@ void Window::renderBackgroundTasks()
 			mBackgroundTaskIcon->setImage(task.iconPath);
 			mBackgroundTaskIconPath = task.iconPath;
 		}
-		mBackgroundTaskIcon->setResize(iconSize, iconSize);
+		if (mBackgroundTaskIconSize != iconSize)
+		{
+			mBackgroundTaskIcon->setResize(iconSize, iconSize);
+			mBackgroundTaskIconSize = iconSize;
+		}
 		mBackgroundTaskIcon->setPosition(x + width - iconSize - 12.0f, y + 10.0f);
 		mBackgroundTaskIcon->render(Transform4x4f::Identity());
 	}
