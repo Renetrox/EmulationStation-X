@@ -78,7 +78,7 @@ public:
 	// and monitors run on the UI thread; worker threads must marshal updates.
 	struct BackgroundTaskStatus
 	{
-		enum State { RUNNING, SUCCESS, ERROR, CANCELLED };
+		enum State { RUNNING, SUCCESS, FAILED, CANCELLED };
 		std::string title;
 		std::string detail;
 		int current = -1; // <0: progress cannot be measured
@@ -150,6 +150,7 @@ private:
 	std::map<std::string, BackgroundTaskEntry> mBackgroundTasks;
 	int mBackgroundTaskPollMs = 0;
 	int mBackgroundTaskAnimMs = 0;
+	int mBackgroundTaskShowMs = 0;
 
 	// =========================
 	// Clock overlay (theme-driven)
