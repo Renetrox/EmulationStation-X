@@ -18,6 +18,9 @@ public:
 
 	void onSizeChanged() override;
 	void render(const Transform4x4f& parentTrans) override;
+	void update(int deltaTime) override;
+	bool input(InputConfig* config, Input input) override;
+	void resumeForeground();
 	std::vector<HelpPrompt> getHelpPrompts() override;
 
 private:
@@ -26,6 +29,9 @@ private:
 	void doNextSearch();
 
 	void finish();
+	void backgroundError(const std::string& reason);
+	void goBackground();
+	void publishBackgroundProgress();
 
 	unsigned int mTotalGames;
 	unsigned int mCurrentGame;
@@ -41,6 +47,9 @@ private:
 	std::shared_ptr<TextComponent> mSubtitle;
 	std::shared_ptr<ScraperSearchComponent> mSearchComp;
 	std::shared_ptr<ComponentGrid> mButtonGrid;
+	bool mBackgroundAllowed;
+	bool mInBackground;
+	std::string mBackgroundError;
 };
 
 #endif // ES_APP_GUIS_GUI_SCRAPER_MULTI_H
