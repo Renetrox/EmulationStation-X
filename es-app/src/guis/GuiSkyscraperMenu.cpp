@@ -318,7 +318,7 @@ namespace
 			}
 			else if (startsWith(status, "error:") || !isSkyscraperJobActive(status))
 			{
-				task.state = Window::BackgroundTaskStatus::ERROR;
+				task.state = Window::BackgroundTaskStatus::FAILED;
 				task.detail = tr("ERROR");
 			}
 			else
