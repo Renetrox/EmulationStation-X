@@ -102,6 +102,12 @@ public:
 	bool hasBackgroundGui() const { return mBackgroundGui != nullptr; }
 	GuiComponent* restoreBackgroundGui();
 	void releaseBackgroundGuiAfterUpdate(GuiComponent* gui);
+	// Theme Browser downloads own a GUI-scoped worker thread. Keep that GUI
+	// alive independently of the native scraper while its job completes.
+	bool parkThemeBrowserGui(GuiComponent* gui);
+	bool hasParkedThemeBrowser() const { return mThemeBrowserBackgroundGui != nullptr; }
+	GuiComponent* restoreThemeBrowserGui();
+	void releaseThemeBrowserGuiAfterUpdate(GuiComponent* gui);
 	void setBackgroundTaskOverlaySuppressed(bool suppress)
 	{
 		mBackgroundTaskOverlaySuppressed = suppress;
@@ -178,6 +184,8 @@ private:
 	bool mBackgroundTaskOverlaySuppressed = false;
 	std::unique_ptr<GuiComponent> mBackgroundGui;
 	bool mBackgroundGuiReleasePending = false;
+	std::unique_ptr<GuiComponent> mThemeBrowserBackgroundGui;
+	bool mThemeBrowserReleasePending = false;
 	std::unique_ptr<ImageComponent> mBackgroundTaskIcon;
 	std::string mBackgroundTaskIconPath;
 	float mBackgroundTaskIconSize = 0.0f;
