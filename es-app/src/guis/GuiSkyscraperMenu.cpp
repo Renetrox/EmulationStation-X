@@ -612,6 +612,8 @@ namespace
 			if (config->isMappedTo("b", input) && input.value)
 			{
 				// B returns to the carousel without cancelling the external job.
+				mWindow->setInfoPopup(new GuiInfoPopup(
+					mWindow, tr("SKYSCRAPER CONTINUES IN BACKGROUND"), 2500));
 				delete this;
 				return true;
 			}
@@ -695,7 +697,7 @@ namespace
 			if (mFinished)
 				return {};
 
-			return { { "b", tr("BACK") }, { "y", tr("STOP") } };
+			return { { "b", tr("BACKGROUND") }, { "y", tr("STOP") } };
 		}
 
 	private:
