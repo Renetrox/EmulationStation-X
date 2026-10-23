@@ -585,12 +585,10 @@ namespace
 			, mFakeTotal(total > 0 ? total : 0)
 			, mDots(0)
 			, mTickAccumulator(0)
-			, mActivityMs(0)
 			, mStartupGraceMs(0)
 			, mNoPidMs(0)
 			, mFinishDelayMs(0)
 			, mFinished(false)
-			, mJobSucceeded(false)
 			, mHasMeasuredProgress(false)
 		{
 			setSize(Renderer::getScreenWidth() * 0.28f, Renderer::getScreenHeight() * 0.13f);
@@ -674,9 +672,6 @@ namespace
 			}
 
 			mTickAccumulator += deltaTime;
-			// The generator may not log #n/total: animate an indeterminate bar
-			// without implying any percentage of completion.
-			mActivityMs = (mActivityMs + deltaTime) % 1800;
 			mStartupGraceMs += deltaTime;
 
 			if (mTickAccumulator < 900)
@@ -702,32 +697,15 @@ namespace
 
 			GuiComponent::render(parentTrans);
 
-			// Generating a gamelist does not always report numeric progress.
-			// Reuse the background notification's progress style: measured if
-			// available, otherwise a short moving segment (never a fake percent).
-			const float width = mSize.x() - 36.0f;
-			const float barY = mSize.y() - 9.0f;
-			Renderer::setMatrix(trans);
-			Renderer::drawRect(18.0f, barY, width, 3.0f, 0x77777766, 0x77777766);
-			if (mJobSucceeded)
+			// Show a determinate bar only when Skyscraper actually reports #n/total.
+			if (mHasMeasuredProgress && mFakeTotal > 0)
 			{
-				Renderer::drawRect(18.0f, barY, width, 3.0f,
-					0x4A90E2FF, 0x4A90E2FF);
-			}
-			else if (mHasMeasuredProgress && mFakeTotal > 0)
-			{
+				const float width = mSize.x() - 36.0f;
 				const float fraction = std::min(1.0f,
 					static_cast<float>(mFakeCurrent) / static_cast<float>(mFakeTotal));
-				Renderer::drawRect(18.0f, barY, width * fraction, 3.0f,
-					0x4A90E2FF, 0x4A90E2FF);
-			}
-			else if (!mFinished)
-			{
-				const float segment = width * 0.24f;
-				const float offset = (width - segment) *
-					(static_cast<float>(mActivityMs) / 1800.0f);
-				Renderer::drawRect(18.0f + offset, barY, segment, 3.0f,
-					0x4A90E2FF, 0x4A90E2FF);
+				Renderer::setMatrix(trans);
+				Renderer::drawRect(18.0f, mSize.y() - 9.0f, width, 3.0f, 0x77777766, 0x77777766);
+				Renderer::drawRect(18.0f, mSize.y() - 9.0f, width * fraction, 3.0f, 0x4A90E2FF, 0x4A90E2FF);
 			}
 		}
 
@@ -758,7 +736,6 @@ namespace
 
 			if (startsWith(status, "done:"))
 			{
-				mJobSucceeded = true;
 				if (mFakeCurrent < mFakeTotal)
 					mFakeCurrent = mFakeTotal;
 
@@ -898,12 +875,10 @@ namespace
 		int mFakeTotal;
 		int mDots;
 		int mTickAccumulator;
-		int mActivityMs;
 		int mStartupGraceMs;
 		int mNoPidMs;
 		int mFinishDelayMs;
 		bool mFinished;
-		bool mJobSucceeded;
 		bool mHasMeasuredProgress;
 	};
 }
