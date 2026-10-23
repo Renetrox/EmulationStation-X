@@ -82,7 +82,8 @@ public:
 		std::string title;
 		std::string detail;
 		std::string footer; // optional third line (stage, status)
-		std::string iconPath; // optional resource icon (e.g. :/icons/scraper.png)
+		std::string iconPath; // legacy image icon fallback (still supported)
+		std::string iconGlyph; // Font Awesome UTF-8 glyph; terminal state selects its own icon
 		int current = -1; // <0: progress cannot be measured
 		int total = 0;
 		State state = RUNNING;
@@ -161,6 +162,11 @@ private:
 		std::unique_ptr<TextCache> titleCache;
 		std::unique_ptr<TextCache> detailCache;
 		std::unique_ptr<TextCache> footerCache;
+		std::unique_ptr<TextCache> glyphCache;
+		std::shared_ptr<Font> glyphFont;
+		std::string cachedGlyph;
+		int glyphFontSize = 0;
+		unsigned int glyphColor = 0;
 		bool themeCached = false;
 		bool cachedDark = false;
 		int finishedMs = 0;
