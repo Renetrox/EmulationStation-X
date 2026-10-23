@@ -22,6 +22,10 @@
 #include <cstdio>
 #include <functional>
 #include <algorithm>
+#include <cerrno>
+#include <climits>
+#include <csignal>
+#include <ctime>
 
 #define SKY_SCRIPT "$HOME/.emulationstation/scripts/skyscraper-esx.sh"
 #define SKY_STATUS_FILE "/tmp/esx-skyscraper/status"
@@ -247,21 +251,42 @@ namespace
 		return readFirstLine(SKY_STATUS_FILE);
 	}
 
+	inline bool isSkyscraperPidAlive()
+	{
+		const std::string pidLine = readFirstLine(SKY_PID_FILE);
+		if (pidLine.empty())
+			return false;
+
+		char* end = nullptr;
+		const long value = std::strtol(pidLine.c_str(), &end, 10);
+		if (end == pidLine.c_str() || *end != '\0' || value <= 1 || value > INT_MAX)
+			return false;
+
+		errno = 0;
+		return ::kill(static_cast<pid_t>(value), 0) == 0 || errno == EPERM;
+	}
+
 	inline bool isSkyscraperJobActive(const std::string& status)
 	{
-		if (status.empty())
-			return false;
+		if (startsWith(status, "running:"))
+			return isSkyscraperPidAlive();
 
-		if (!fileExists(SKY_PID_FILE) &&
-			!startsWith(status, "done:") &&
-			!startsWith(status, "error:") &&
-			status != "stopped")
+		// The start script writes 'starting' shortly before creating the PID.
+		// Accept only a recent start marker, not one left behind by a crash.
+		if (startsWith(status, "starting:"))
 		{
-			return false;
+			if (isSkyscraperPidAlive())
+				return true;
+
+			struct stat st;
+			if (stat(SKY_STATUS_FILE, &st) == 0)
+			{
+				const std::time_t age = std::time(nullptr) - st.st_mtime;
+				return age >= 0 && age < 15;
+			}
 		}
 
-		return startsWith(status, "starting:") ||
-			   startsWith(status, "running:");
+		return false;
 	}
 
 	inline std::string runCommandCapture(const std::string& cmd)
@@ -617,7 +642,7 @@ namespace
 		void pollState(int stepMs)
 		{
 			const std::string status = readFirstLine(SKY_STATUS_FILE);
-			const bool pidExists = fileExists(SKY_PID_FILE);
+			const bool pidExists = isSkyscraperPidAlive();
 
 			int logCurrent = 0;
 			int logTotal = 0;
@@ -669,17 +694,20 @@ namespace
 				return;
 			}
 
-			if (startsWith(status, "running:"))
+			if (startsWith(status, "running:") || startsWith(status, "starting:"))
 			{
-				mNoPidMs = 0;
-				refreshText(status);
-				return;
-			}
+				// A stale 'running' status must not leave the panel spinning forever.
+				mNoPidMs = pidExists ? 0 : (mNoPidMs + stepMs);
+				if (mStartupGraceMs >= 12000 && mNoPidMs > 15000)
+				{
+					mFinished = true;
+					refreshText("error");
+					mWindow->setInfoPopup(new GuiInfoPopup(
+						mWindow, tr("SKYSCRAPER FAILED: ") + mSystem, 5000));
+					return;
+				}
 
-			if (startsWith(status, "starting:"))
-			{
-				mNoPidMs = 0;
-				refreshText("starting");
+				refreshText(startsWith(status, "running:") ? status : "starting");
 				return;
 			}
 
