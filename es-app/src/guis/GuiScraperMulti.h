@@ -17,6 +17,7 @@ public:
 	virtual ~GuiScraperMulti();
 
 	void onSizeChanged() override;
+	void render(const Transform4x4f& parentTrans) override;
 	std::vector<HelpPrompt> getHelpPrompts() override;
 
 private:
