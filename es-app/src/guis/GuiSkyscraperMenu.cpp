@@ -9,6 +9,7 @@
 #include "SystemData.h"
 #include "Settings.h"
 #include "Window.h"
+#include "TaskGlyphs.h"
 #include "Log.h"
 #include "resources/Font.h"
 #include "renderers/Renderer.h"
@@ -307,7 +308,7 @@ namespace
 			// Finished in background: show the next step without moving menus.
 			task.title = tr("SCRAPING");
 			task.detail = tr("SYSTEM") + ": " + system;
-			task.iconPath = ":/icons/scraper.png";
+			task.iconGlyph = action == "generate" ? TaskGlyphs::GAMELIST : TaskGlyphs::GATHER;
 			const std::string status = getSkyscraperStatus();
 
 			if (startsWith(status, "done:"))
@@ -580,7 +581,11 @@ namespace
 			, mLine1(window, "", Font::get(FONT_SIZE_SMALL), getMenuTextColor())
 			, mLine2(window, "", Font::get(FONT_SIZE_SMALL), getMenuTextColor())
 			, mLine3(window, "", Font::get(FONT_SIZE_SMALL), getMenuTextColor())
-			, mIcon(window)
+			, mIcon(window, action == "generate" ? TaskGlyphs::GAMELIST : TaskGlyphs::GATHER,
+				Font::get(static_cast<int>(Renderer::getScreenHeight() * 0.043f),
+					TaskGlyphs::FONT_PATH),
+				Settings::getInstance()->getBool("MenuDark") ? 0xD3D6D9FF : 0x666666FF,
+				ALIGN_CENTER)
 			, mFakeCurrent(0)
 			, mFakeTotal(total > 0 ? total : 0)
 			, mDots(0)
@@ -602,8 +607,8 @@ namespace
 			mLine3.setPosition(18, 60);
 
 			const float iconSize = Renderer::getScreenHeight() * 0.052f;
-			mIcon.setImage(":/icons/scraper.png");
-			mIcon.setResize(iconSize, iconSize);
+			mIcon.setSize(iconSize, iconSize);
+			mIcon.setVerticalAlignment(ALIGN_CENTER);
 			mIcon.setPosition(mSize.x() - iconSize - 12.0f, 10.0f);
 
 			addChild(&mLine1);
@@ -838,11 +843,20 @@ namespace
 			std::string line3;
 
 			if (status == "done")
+			{
 				line3 = tr("COMPLETED");
+				mIcon.setText(TaskGlyphs::DONE);
+			}
 			else if (status == "error")
+			{
 				line3 = tr("ERROR");
+				mIcon.setText(TaskGlyphs::ERROR);
+			}
 			else if (status == "stopped")
+			{
 				line3 = tr("STOPPED");
+				mIcon.setText(TaskGlyphs::CANCEL);
+			}
 			else if (startsWith(status, "running:gather:") || mAction == "gather")
 				line3 = tr("GATHERING RESOURCES") + dots;
 			else if (startsWith(status, "running:generate:") || mAction == "generate")
@@ -869,7 +883,7 @@ namespace
 		TextComponent mLine1;
 		TextComponent mLine2;
 		TextComponent mLine3;
-		ImageComponent mIcon;
+		TextComponent mIcon;
 
 		int mFakeCurrent;
 		int mFakeTotal;
