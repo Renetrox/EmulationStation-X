@@ -927,10 +927,13 @@ void Window::setBackgroundTask(const std::string& id, const BackgroundTaskStatus
 		return;
 
 	BackgroundTaskEntry& task = mBackgroundTasks[id];
-	if (task.status.title != status.title)
+	if (task.status.title != status.title ||
+		task.status.current != status.current || task.status.total != status.total)
 		task.titleCache.reset();
 	if (task.status.detail != status.detail)
 		task.detailCache.reset();
+	if (task.status.footer != status.footer)
+		task.footerCache.reset();
 
 	task.status = status;
 	if (status.state == BackgroundTaskStatus::RUNNING)
@@ -963,10 +966,13 @@ void Window::updateBackgroundTasks(int deltaTime)
 		{
 			// Monitors are fast state readers; never execute downloads here.
 			const BackgroundTaskStatus latest = task.monitor();
-			if (task.status.title != latest.title)
+			if (task.status.title != latest.title ||
+				task.status.current != latest.current || task.status.total != latest.total)
 				task.titleCache.reset();
 			if (task.status.detail != latest.detail)
 				task.detailCache.reset();
+			if (task.status.footer != latest.footer)
+				task.footerCache.reset();
 			task.status = latest;
 			if (latest.state != BackgroundTaskStatus::RUNNING)
 				task.monitor = nullptr;
@@ -984,11 +990,11 @@ void Window::updateBackgroundTasks(int deltaTime)
 
 void Window::renderBackgroundTasks()
 {
-	if (mBackgroundTasks.empty() || mRenderScreenSaver)
+	if (mBackgroundTasks.empty() || mRenderScreenSaver ||
+		mBackgroundTaskOverlaySuppressed)
 		return;
 
-	// Rotate between simultaneous running jobs, so neither monopolizes the
-	// notification. Finished jobs remain visible briefly when nothing is running.
+	// Rotate when several operations run concurrently; prefer active jobs.
 	std::vector<std::map<std::string, BackgroundTaskEntry>::iterator> candidates;
 	for (auto it = mBackgroundTasks.begin(); it != mBackgroundTasks.end(); ++it)
 	{
@@ -1000,27 +1006,39 @@ void Window::renderBackgroundTasks()
 		for (auto it = mBackgroundTasks.begin(); it != mBackgroundTasks.end(); ++it)
 			candidates.push_back(it);
 	}
+	if (candidates.empty())
+		return;
+
 	const size_t selectedIndex = (static_cast<size_t>(mBackgroundTaskShowMs / 4500)) % candidates.size();
 	BackgroundTaskEntry& entry = candidates[selectedIndex]->second;
 	const BackgroundTaskStatus& task = entry.status;
+	const bool dark = Settings::getInstance()->getBool("MenuDark");
+	const unsigned int panelColor = dark ? 0x101010EE : 0xF0F0F0EE;
+	const unsigned int textColor = dark ? 0xFFFFFFFF : 0x777777FF;
+	const unsigned int secondaryColor = dark ? 0xCCCCCCFF : 0x666666FF;
+	const unsigned int borderColor = 0x4A90E2FF;
 	std::shared_ptr<Font> font = Font::get(FONT_SIZE_SMALL);
 
+	// Match the floating Skyscraper panel rather than drawing a second,
+	// unrelated notification style. No additional textures or animations.
 	const float sw = (float)Renderer::getScreenWidth();
 	const float sh = (float)Renderer::getScreenHeight();
-	const float width = std::min(sw * 0.40f, 410.0f);
-	const float pad = 12.0f;
-	const float height = (font->getHeight() * 2.0f) + 31.0f;
-	const float x = sw - width - 14.0f;
-	const float y = sh - height - (sh * 0.10f);
-	const float barWidth = width - (pad * 2.0f);
-	const float barY = y + height - 10.0f;
+	const float width = std::min(sw * 0.90f, std::max(270.0f, std::min(sw * 0.30f, 520.0f)));
+	const float height = std::min(sh * 0.38f, std::max(sh * 0.13f, font->getHeight() * 3.0f + 25.0f));
+	const float x = sw - width - (sw * 0.025f);
+	const float y = sh - height - (sh * 0.20f);
+	const float padding = 18.0f;
+	const float iconSize = task.iconPath.empty() ? 0.0f : std::min(sh * 0.052f, height * 0.42f);
+	const float textWidth = std::max(40.0f, width - (padding * 2.0f) -
+		(iconSize > 0.0f ? iconSize + 9.0f : 0.0f));
+	const float lineSpacing = std::min(font->getHeight(), (height - 31.0f) / 3.0f);
 
-	auto fitText = [&](const std::string& textValue) -> std::string
+	auto fitText = [&](const std::string& value) -> std::string
 	{
-		std::string result = textValue;
-		if (font->sizeText(result).x() <= barWidth)
+		std::string result = value;
+		if (font->sizeText(result).x() <= textWidth)
 			return result;
-		while (!result.empty() && font->sizeText(result + "...").x() > barWidth)
+		while (!result.empty() && font->sizeText(result + "...").x() > textWidth)
 		{
 			size_t firstByte = result.size() - 1;
 			while (firstByte > 0 &&
@@ -1031,47 +1049,86 @@ void Window::renderBackgroundTasks()
 		return result + "...";
 	};
 
-	if (!entry.titleCache)
-		entry.titleCache.reset(font->buildTextCache(
-			fitText(task.title), 0.0f, 0.0f, 0xFFFFFFFF));
-	if (!entry.detailCache)
-		entry.detailCache.reset(font->buildTextCache(
-			fitText(task.detail), 0.0f, 0.0f, 0xC8D4DEFF));
-
-	Renderer::setMatrix(Transform4x4f::Identity());
-	Renderer::drawRect(x, y, width, height, 0x14202BEC, 0x14202BEC);
-
-	const float top = y + 5.0f;
-	for (int line = 0; line < 2; ++line)
+	if (!entry.themeCached || entry.cachedDark != dark)
 	{
-		Transform4x4f trans = Transform4x4f::Identity();
-		trans = trans.translate(Vector3f(x + pad, top + (line * font->getHeight()), 0.0f));
-		Renderer::setMatrix(trans);
-		font->renderTextCache(line == 0 ? entry.titleCache.get() : entry.detailCache.get());
+		entry.titleCache.reset();
+		entry.detailCache.reset();
+		entry.footerCache.reset();
+		entry.cachedDark = dark;
+		entry.themeCached = true;
 	}
 
-	Renderer::setMatrix(Transform4x4f::Identity());
-	Renderer::drawRect(x + pad, barY, barWidth, 4.0f, 0x687782AA, 0x687782AA);
+	std::string title = task.title;
+	if (task.current >= 0 && task.total > 0)
+		title = std::to_string(task.current) + "/" + std::to_string(task.total) + " " + title;
 
-	if (task.total > 0 && task.current >= 0)
+	if (!entry.titleCache)
+		entry.titleCache.reset(font->buildTextCache(fitText(title), 0.0f, 0.0f, textColor));
+	if (!entry.detailCache)
+		entry.detailCache.reset(font->buildTextCache(fitText(task.detail), 0.0f, 0.0f, textColor));
+	if (!entry.footerCache && !task.footer.empty())
+		entry.footerCache.reset(font->buildTextCache(fitText(task.footer), 0.0f, 0.0f, secondaryColor));
+
+	// Same translucent body and 2-pixel blue outline as GuiSkyscraperProgress.
+	Renderer::setMatrix(Transform4x4f::Identity());
+	Renderer::drawRect(x, y, width, height, panelColor, panelColor);
+	Renderer::drawRect(x, y, width, 2.0f, borderColor, borderColor);
+	Renderer::drawRect(x, y + height - 2.0f, width, 2.0f, borderColor, borderColor);
+	Renderer::drawRect(x, y, 2.0f, height, borderColor, borderColor);
+	Renderer::drawRect(x + width - 2.0f, y, 2.0f, height, borderColor, borderColor);
+
+	const TextCache* lines[3] = {
+		entry.titleCache.get(), entry.detailCache.get(), entry.footerCache.get()
+	};
+	for (int i = 0; i < 3; ++i)
+	{
+		if (!lines[i])
+			continue;
+		Transform4x4f trans = Transform4x4f::Identity();
+		trans = trans.translate(Vector3f(x + padding, y + 6.0f + i * lineSpacing, 0.0f));
+		Renderer::setMatrix(trans);
+		font->renderTextCache(lines[i]);
+	}
+
+	// One cached icon for the selected task; all task types may supply their own.
+	if (!task.iconPath.empty())
+	{
+		if (!mBackgroundTaskIcon)
+			mBackgroundTaskIcon.reset(new ImageComponent(this));
+		if (mBackgroundTaskIconPath != task.iconPath)
+		{
+			mBackgroundTaskIcon->setImage(task.iconPath);
+			mBackgroundTaskIconPath = task.iconPath;
+		}
+		mBackgroundTaskIcon->setResize(iconSize, iconSize);
+		mBackgroundTaskIcon->setPosition(x + width - iconSize - 12.0f, y + 10.0f);
+		mBackgroundTaskIcon->render(Transform4x4f::Identity());
+	}
+
+	const float barWidth = width - (padding * 2.0f);
+	const float barY = y + height - 9.0f;
+	Renderer::setMatrix(Transform4x4f::Identity());
+	Renderer::drawRect(x + padding, barY, barWidth, 3.0f, 0x77777766, 0x77777766);
+
+	if (task.current >= 0 && task.total > 0)
 	{
 		const float ratio = std::max(0.0f, std::min(1.0f,
 			(float)task.current / (float)task.total));
-		Renderer::drawRect(x + pad, barY, barWidth * ratio, 4.0f,
+		Renderer::drawRect(x + padding, barY, barWidth * ratio, 3.0f,
 			0x4A90E2FF, 0x4A90E2FF);
 	}
 	else if (task.state == BackgroundTaskStatus::RUNNING)
 	{
-		// Indeterminate activity, not an invented percentage.
+		// An undetermined progress segment is activity, never a fake percentage.
 		const float segment = barWidth * 0.24f;
 		const float offset = (barWidth - segment) *
 			((float)mBackgroundTaskAnimMs / 1800.0f);
-		Renderer::drawRect(x + pad + offset, barY, segment, 4.0f,
+		Renderer::drawRect(x + padding + offset, barY, segment, 3.0f,
 			0x4A90E2FF, 0x4A90E2FF);
 	}
 	else if (task.state == BackgroundTaskStatus::SUCCESS)
 	{
-		Renderer::drawRect(x + pad, barY, barWidth, 4.0f,
+		Renderer::drawRect(x + padding, barY, barWidth, 3.0f,
 			0x4A90E2FF, 0x4A90E2FF);
 	}
 }
