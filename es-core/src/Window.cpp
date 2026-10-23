@@ -10,6 +10,7 @@
 #include "Scripting.h"
 
 #include <algorithm>
+#include <utility>
 #include <iomanip>
 #include <ctime>
 #include <sstream>
@@ -602,6 +603,9 @@ void Window::update(int deltaTime)
 	if (peekGui())
 		peekGui()->update(deltaTime);
 
+	// Poll background tasks even after their originating menu has closed.
+	updateBackgroundTasks(deltaTime);
+
 	// Update the screensaver
 	if (mScreenSaver)
 		mScreenSaver->update(deltaTime);
@@ -883,6 +887,9 @@ void Window::render()
 		mBluetoothIcon->render(transform);
 	}
 
+	// Persistent task status is independent of the menu stack.
+	renderBackgroundTasks();
+
 	// Info popup always on top
 	if (mInfoPopup)
 	{
@@ -898,6 +905,169 @@ void Window::render()
 			mSleeping = true;
 			onSleep();
 		}
+	}
+}
+
+
+void Window::observeBackgroundTask(const std::string& id,
+	const std::function<BackgroundTaskStatus()>& monitor)
+{
+	if (id.empty() || !monitor)
+		return;
+
+	BackgroundTaskEntry& task = mBackgroundTasks[id];
+	task.monitor = monitor;
+	task.finishedMs = 0;
+	setBackgroundTask(id, monitor());
+}
+
+void Window::setBackgroundTask(const std::string& id, const BackgroundTaskStatus& status)
+{
+	if (id.empty())
+		return;
+
+	BackgroundTaskEntry& task = mBackgroundTasks[id];
+	if (task.status.title != status.title)
+		task.titleCache.reset();
+	if (task.status.detail != status.detail)
+		task.detailCache.reset();
+
+	task.status = status;
+	if (status.state == BackgroundTaskStatus::RUNNING)
+		task.finishedMs = 0;
+	else
+		task.monitor = nullptr;
+}
+
+void Window::clearBackgroundTask(const std::string& id)
+{
+	mBackgroundTasks.erase(id);
+}
+
+void Window::updateBackgroundTasks(int deltaTime)
+{
+	if (mBackgroundTasks.empty())
+		return;
+
+	mBackgroundTaskAnimMs = (mBackgroundTaskAnimMs + deltaTime) % 1800;
+	mBackgroundTaskPollMs += deltaTime;
+	const bool poll = mBackgroundTaskPollMs >= 750;
+	if (poll)
+		mBackgroundTaskPollMs = 0;
+
+	for (auto it = mBackgroundTasks.begin(); it != mBackgroundTasks.end(); )
+	{
+		BackgroundTaskEntry& task = it->second;
+		if (poll && task.monitor && task.status.state == BackgroundTaskStatus::RUNNING)
+		{
+			// Monitors are fast state readers; never execute downloads here.
+			const BackgroundTaskStatus latest = task.monitor();
+			if (task.status.title != latest.title)
+				task.titleCache.reset();
+			if (task.status.detail != latest.detail)
+				task.detailCache.reset();
+			task.status = latest;
+			if (latest.state != BackgroundTaskStatus::RUNNING)
+				task.monitor = nullptr;
+		}
+
+		if (task.status.state != BackgroundTaskStatus::RUNNING)
+			task.finishedMs += deltaTime;
+
+		if (task.finishedMs >= 3500)
+			it = mBackgroundTasks.erase(it);
+		else
+			++it;
+	}
+}
+
+void Window::renderBackgroundTasks()
+{
+	if (mBackgroundTasks.empty() || mRenderScreenSaver)
+		return;
+
+	// Display one task at a time: prefer ongoing work over completed messages.
+	auto selected = mBackgroundTasks.begin();
+	for (auto it = mBackgroundTasks.begin(); it != mBackgroundTasks.end(); ++it)
+	{
+		if (it->second.status.state == BackgroundTaskStatus::RUNNING)
+		{
+			selected = it;
+			break;
+		}
+	}
+	BackgroundTaskEntry& entry = selected->second;
+	const BackgroundTaskStatus& task = entry.status;
+	std::shared_ptr<Font> font = Font::get(FONT_SIZE_SMALL);
+
+	const float sw = (float)Renderer::getScreenWidth();
+	const float sh = (float)Renderer::getScreenHeight();
+	const float width = std::min(sw * 0.40f, 410.0f);
+	const float pad = 12.0f;
+	const float height = (font->getHeight() * 2.0f) + 31.0f;
+	const float x = sw - width - 14.0f;
+	const float y = sh - height - (sh * 0.10f);
+	const float barWidth = width - (pad * 2.0f);
+	const float barY = y + height - 10.0f;
+
+	auto fitText = [&](const std::string& textValue) -> std::string
+	{
+		std::string result = textValue;
+		if (font->sizeText(result).x() <= barWidth)
+			return result;
+		while (!result.empty() && font->sizeText(result + "...").x() > barWidth)
+		{
+			size_t firstByte = result.size() - 1;
+			while (firstByte > 0 &&
+				(static_cast<unsigned char>(result[firstByte]) & 0xC0) == 0x80)
+				--firstByte;
+			result.resize(firstByte);
+		}
+		return result + "...";
+	};
+
+	if (!entry.titleCache)
+		entry.titleCache.reset(font->buildTextCache(
+			fitText(task.title), 0.0f, 0.0f, 0xFFFFFFFF));
+	if (!entry.detailCache)
+		entry.detailCache.reset(font->buildTextCache(
+			fitText(task.detail), 0.0f, 0.0f, 0xC8D4DEFF));
+
+	Renderer::setMatrix(Transform4x4f::Identity());
+	Renderer::drawRect(x, y, width, height, 0x14202BEC, 0x14202BEC);
+
+	const float top = y + 5.0f;
+	for (int line = 0; line < 2; ++line)
+	{
+		Transform4x4f trans = Transform4x4f::Identity();
+		trans = trans.translate(Vector3f(x + pad, top + (line * font->getHeight()), 0.0f));
+		Renderer::setMatrix(trans);
+		font->renderTextCache(line == 0 ? entry.titleCache.get() : entry.detailCache.get());
+	}
+
+	Renderer::setMatrix(Transform4x4f::Identity());
+	Renderer::drawRect(x + pad, barY, barWidth, 4.0f, 0x687782AA, 0x687782AA);
+
+	if (task.total > 0 && task.current >= 0)
+	{
+		const float ratio = std::max(0.0f, std::min(1.0f,
+			(float)task.current / (float)task.total));
+		Renderer::drawRect(x + pad, barY, barWidth * ratio, 4.0f,
+			0x4A90E2FF, 0x4A90E2FF);
+	}
+	else if (task.state == BackgroundTaskStatus::RUNNING)
+	{
+		// Indeterminate activity, not an invented percentage.
+		const float segment = barWidth * 0.24f;
+		const float offset = (barWidth - segment) *
+			((float)mBackgroundTaskAnimMs / 1800.0f);
+		Renderer::drawRect(x + pad + offset, barY, segment, 4.0f,
+			0x4A90E2FF, 0x4A90E2FF);
+	}
+	else if (task.state == BackgroundTaskStatus::SUCCESS)
+	{
+		Renderer::drawRect(x + pad, barY, barWidth, 4.0f,
+			0x4A90E2FF, 0x4A90E2FF);
 	}
 }
 
