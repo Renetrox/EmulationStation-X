@@ -221,7 +221,8 @@ Window::Window()
 
 Window::~Window()
 {
-	// Destroy the detached worker while the Window and ViewController are alive.
+	// Join UI-owned workers before destroying GUI dependencies.
+	mThemeBrowserBackgroundGui.reset();
 	mBackgroundGui.reset();
 	closeLoadingScreen();
 	delete mBackgroundOverlay;
@@ -299,6 +300,36 @@ void Window::releaseBackgroundGuiAfterUpdate(GuiComponent* gui)
 {
 	if (mBackgroundGui.get() == gui)
 		mBackgroundGuiReleasePending = true;
+}
+
+bool Window::parkThemeBrowserGui(GuiComponent* gui)
+{
+	if (!gui || mThemeBrowserBackgroundGui || peekGui() != gui)
+		return false;
+
+	// Unlike the native scraper, Theme Browser already performs work in a
+	// std::thread capturing its owning GUI. Transferring ownership here keeps
+	// that object alive until the worker has finished and been joined.
+	removeGui(gui);
+	mThemeBrowserBackgroundGui.reset(gui);
+	mThemeBrowserReleasePending = false;
+	return true;
+}
+
+GuiComponent* Window::restoreThemeBrowserGui()
+{
+	if (!mThemeBrowserBackgroundGui || mThemeBrowserReleasePending)
+		return nullptr;
+
+	GuiComponent* gui = mThemeBrowserBackgroundGui.release();
+	pushGui(gui);
+	return gui;
+}
+
+void Window::releaseThemeBrowserGuiAfterUpdate(GuiComponent* gui)
+{
+	if (mThemeBrowserBackgroundGui.get() == gui)
+		mThemeBrowserReleasePending = true;
 }
 
 bool Window::init()
@@ -659,6 +690,19 @@ void Window::update(int deltaTime)
 		{
 			mBackgroundGui.reset();
 			mBackgroundGuiReleasePending = false;
+		}
+	}
+
+	if (mThemeBrowserBackgroundGui)
+	{
+		// Poll worker completion on the UI thread, without rendering its GUI.
+		mThemeBrowserBackgroundGui->update(deltaTime);
+		if (mThemeBrowserReleasePending)
+		{
+			// The GUI destructor joins workers; never destroy it from its own
+			// completion callback or from the download thread.
+			mThemeBrowserBackgroundGui.reset();
+			mThemeBrowserReleasePending = false;
 		}
 	}
 
