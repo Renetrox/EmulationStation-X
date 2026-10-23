@@ -163,6 +163,7 @@ private:
 	bool mBackgroundTaskOverlaySuppressed = false;
 	std::unique_ptr<ImageComponent> mBackgroundTaskIcon;
 	std::string mBackgroundTaskIconPath;
+	float mBackgroundTaskIconSize = 0.0f;
 
 	// =========================
 	// Clock overlay (theme-driven)
