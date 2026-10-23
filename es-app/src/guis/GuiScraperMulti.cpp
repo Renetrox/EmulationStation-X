@@ -11,6 +11,7 @@
 #include "PowerSaver.h"
 #include "SystemData.h"
 #include "Window.h"
+#include "TaskGlyphs.h"
 #include "LocaleESHook.h"
 #include "Settings.h"
 #include <algorithm>
@@ -221,7 +222,7 @@ void GuiScraperMulti::publishBackgroundProgress()
 
 	Window::BackgroundTaskStatus task;
 	task.title = es_translate("SCRAPING IN PROGRESS");
-	task.iconPath = ":/icons/scraper.png";
+	task.iconGlyph = TaskGlyphs::SEARCH;
 	task.current = static_cast<int>(mCurrentGame);
 	task.total = static_cast<int>(mTotalGames);
 	if (!mSearchQueue.empty())
@@ -372,7 +373,7 @@ void GuiScraperMulti::finish()
 	if (mInBackground)
 	{
 		Window::BackgroundTaskStatus task;
-		task.iconPath = ":/icons/scraper.png";
+		task.iconGlyph = TaskGlyphs::SEARCH;
 		task.title = es_translate("NATIVE SCRAPER FINISHED");
 		task.current = static_cast<int>(mCurrentGame);
 		task.total = static_cast<int>(mTotalGames);
