@@ -6,6 +6,7 @@
 #include "guis/GuiScraperMulti.h"
 #include "views/ViewController.h"
 #include "FileData.h"
+#include "Window.h"
 #include "SystemData.h"
 #include "LocaleESHook.h"   // 🔹 Traducción disponible (ruta correcta)
 
@@ -37,7 +38,11 @@ GuiScraperStart::GuiScraperStart(Window* window) : GuiComponent(window),
     mMenu.addWithLabel(es_translate("USER DECIDES ON CONFLICTS"), mApproveResults);
 
     // Buttons
-    mMenu.addButton(es_translate("START"), es_translate("START"), std::bind(&GuiScraperStart::pressedStart, this));
+    // When an unattended scrape is already running, reopen it instead of
+    // launching a second job against the same gamelists.
+    const std::string startLabel = mWindow->hasBackgroundGui() ?
+        es_translate("RESUME SCRAPING") : es_translate("START");
+    mMenu.addButton(startLabel, startLabel, std::bind(&GuiScraperStart::pressedStart, this));
     mMenu.addButton(es_translate("BACK"), es_translate("BACK"), [&] { delete this; });
 
     mMenu.setPosition((Renderer::getScreenWidth() - mMenu.getSize().x()) / 2,
@@ -46,6 +51,11 @@ GuiScraperStart::GuiScraperStart(Window* window) : GuiComponent(window),
 
 void GuiScraperStart::pressedStart()
 {
+    if (mWindow->hasBackgroundGui())
+    {
+        start();
+        return;
+    }
     std::vector<SystemData*> sys = mSystems->getSelectedObjects();
     for(auto it = sys.cbegin(); it != sys.cend(); it++)
     {
@@ -64,6 +74,16 @@ void GuiScraperStart::pressedStart()
 
 void GuiScraperStart::start()
 {
+    if (mWindow->hasBackgroundGui())
+    {
+        GuiComponent* current = mWindow->restoreBackgroundGui();
+        GuiScraperMulti* existing = dynamic_cast<GuiScraperMulti*>(current);
+        if (existing)
+            existing->resumeForeground();
+        delete this;
+        return;
+    }
+
     std::queue<ScraperSearchParams> searches = getSearches(mSystems->getSelectedObjects(), mFilters->getSelected());
 
     if(searches.empty())
