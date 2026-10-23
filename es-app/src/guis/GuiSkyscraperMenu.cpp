@@ -21,6 +21,7 @@
 #include <cctype>
 #include <cstdio>
 #include <functional>
+#include <algorithm>
 
 #define SKY_SCRIPT "$HOME/.emulationstation/scripts/skyscraper-esx.sh"
 #define SKY_STATUS_FILE "/tmp/esx-skyscraper/status"
@@ -486,6 +487,7 @@ namespace
 			, mNoPidMs(0)
 			, mFinishDelayMs(0)
 			, mFinished(false)
+			, mHasMeasuredProgress(false)
 		{
 			setSize(Renderer::getScreenWidth() * 0.28f, Renderer::getScreenHeight() * 0.13f);
 			setPosition(
@@ -576,6 +578,17 @@ namespace
 			Renderer::drawRect(mSize.x() - 2.0f, 0.0f, 2.0f, mSize.y(), borderColor, borderColor);
 
 			GuiComponent::render(parentTrans);
+
+			// Show a determinate bar only when Skyscraper actually reports #n/total.
+			if (mHasMeasuredProgress && mFakeTotal > 0)
+			{
+				const float width = mSize.x() - 36.0f;
+				const float fraction = std::min(1.0f,
+					static_cast<float>(mFakeCurrent) / static_cast<float>(mFakeTotal));
+				Renderer::setMatrix(trans);
+				Renderer::drawRect(18.0f, mSize.y() - 9.0f, width, 3.0f, 0x77777766, 0x77777766);
+				Renderer::drawRect(18.0f, mSize.y() - 9.0f, width * fraction, 3.0f, 0x4A90E2FF, 0x4A90E2FF);
+			}
 		}
 
 		std::vector<HelpPrompt> getHelpPrompts() override
@@ -598,6 +611,7 @@ namespace
 			{
 				mFakeCurrent = logCurrent;
 				mFakeTotal = logTotal;
+				mHasMeasuredProgress = true;
 			}
 
 			mDots = (mDots + 1) % 4;
@@ -688,7 +702,9 @@ namespace
 				dots = ".";
 
 			std::ostringstream line1;
-			line1 << mFakeCurrent << "/" << mFakeTotal << " " << tr("SCRAPING") << dots;
+			if (mHasMeasuredProgress)
+				line1 << mFakeCurrent << "/" << mFakeTotal << " ";
+			line1 << tr("SCRAPING") << dots;
 
 			std::string line2 = tr("SYSTEM") + ": " + mSystem;
 			std::string line3;
@@ -735,6 +751,7 @@ namespace
 		int mNoPidMs;
 		int mFinishDelayMs;
 		bool mFinished;
+		bool mHasMeasuredProgress;
 	};
 }
 
