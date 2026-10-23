@@ -303,27 +303,30 @@ namespace
 			[action, system]() -> Window::BackgroundTaskStatus
 		{
 			Window::BackgroundTaskStatus task;
-			task.title = "SKYSCRAPER - " + system;
+			// Match the existing three-line Skyscraper progress dialog.
+			task.title = tr("SCRAPING");
+			task.detail = tr("SYSTEM") + ": " + system;
+			task.iconPath = ":/icons/scraper.png";
 			const std::string status = getSkyscraperStatus();
 
 			if (startsWith(status, "done:"))
 			{
 				task.state = Window::BackgroundTaskStatus::SUCCESS;
-				task.detail = tr("COMPLETED");
+				task.footer = tr("COMPLETED");
 			}
 			else if (status == "stopped")
 			{
 				task.state = Window::BackgroundTaskStatus::CANCELLED;
-				task.detail = tr("STOPPED");
+				task.footer = tr("STOPPED");
 			}
 			else if (startsWith(status, "error:") || !isSkyscraperJobActive(status))
 			{
 				task.state = Window::BackgroundTaskStatus::FAILED;
-				task.detail = tr("ERROR");
+				task.footer = tr("ERROR");
 			}
 			else
 			{
-				task.detail = action == "generate" ?
+				task.footer = action == "generate" ?
 				tr("GENERATING GAMELIST") : tr("GATHERING RESOURCES");
 			}
 
@@ -335,7 +338,6 @@ namespace
 				{
 					task.current = current;
 					task.total = total;
-					task.detail += "  " + std::to_string(current) + "/" + std::to_string(total);
 				}
 			}
 			return task;
@@ -601,7 +603,14 @@ namespace
 			addChild(&mLine3);
 			addChild(&mIcon);
 
+			// The foreground progress dialog already draws this task.
+			mWindow->setBackgroundTaskOverlaySuppressed(true);
 			refreshText("starting");
+		}
+
+		~GuiSkyscraperProgress() override
+		{
+			mWindow->setBackgroundTaskOverlaySuppressed(false);
 		}
 
 		bool input(InputConfig* config, Input input) override
