@@ -136,9 +136,23 @@ namespace
 
 	inline bool readProgressFromLog(const std::string& path, int& current, int& total)
 	{
-		std::ifstream file(path.c_str());
+		std::ifstream file(path.c_str(), std::ios::binary);
 		if (!file.is_open())
 			return false;
+
+		// Polling the entire file every 900 ms gets increasingly expensive
+		// during long scrapes. Keep the newest complete log lines instead.
+		file.seekg(0, std::ios::end);
+		const std::streamoff size = file.tellg();
+		const std::streamoff tailSize = 128 * 1024;
+		if (size > tailSize)
+		{
+			file.seekg(size - tailSize, std::ios::beg);
+			std::string partialLine;
+			std::getline(file, partialLine);
+		}
+		else
+			file.seekg(0, std::ios::beg);
 
 		std::string line;
 		bool found = false;
