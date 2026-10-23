@@ -857,6 +857,9 @@ void GuiThemeBrowser::finishJobIfDone()
 
 	if (refreshCatalog)
 	{
+		// The version-check thread walks mThemes. Join it before reloading
+		// the catalog vector, otherwise a successful ZIP update races it.
+		stopUpdateCheck();
 		loadThemes();
 		rebuildList();
 		// NEW: re-chequear updates después de refrescar catálogo
