@@ -1,4 +1,5 @@
 #include "Window.h"
+#include "TaskGlyphs.h"
 #include "ThemeSplash.h"
 
 #include "components/HelpComponent.h"
@@ -1088,7 +1089,9 @@ void Window::renderBackgroundTasks()
 	const float x = sw - width - (sw * 0.025f);
 	const float y = sh - height - (sh * 0.20f);
 	const float padding = 18.0f;
-	const float iconSize = task.iconPath.empty() ? 0.0f : std::min(sh * 0.052f, height * 0.42f);
+	const bool drawGlyph = !task.iconGlyph.empty();
+	const float iconSize = (drawGlyph || !task.iconPath.empty()) ?
+		std::min(sh * 0.052f, height * 0.42f) : 0.0f;
 	const float textWidth = std::max(40.0f, width - (padding * 2.0f) -
 		(iconSize > 0.0f ? iconSize + 9.0f : 0.0f));
 	const float lineSpacing = std::min(font->getHeight(), (height - 31.0f) / 3.0f);
@@ -1150,8 +1153,36 @@ void Window::renderBackgroundTasks()
 		font->renderTextCache(lines[i]);
 	}
 
-	// One cached icon for the selected task; all task types may supply their own.
-	if (!task.iconPath.empty())
+	// A glyph identifies the operation while it runs, then the outcome.
+	// Reuse the cached Font Awesome atlas; keep PNG fallback for other clients.
+	if (drawGlyph)
+	{
+		const char* stateGlyph = task.state == BackgroundTaskStatus::SUCCESS ? TaskGlyphs::DONE :
+			task.state == BackgroundTaskStatus::FAILED ? TaskGlyphs::ERROR :
+			task.state == BackgroundTaskStatus::CANCELLED ? TaskGlyphs::CANCEL : nullptr;
+		const std::string glyph = stateGlyph ? stateGlyph : task.iconGlyph;
+		const int glyphSize = std::max(12, static_cast<int>(iconSize * 0.86f));
+		const unsigned int glyphColor = dark ? 0xD3D6D9FF : 0x666666FF;
+		if (!entry.glyphCache || entry.cachedGlyph != glyph ||
+			entry.glyphFontSize != glyphSize || entry.glyphColor != glyphColor)
+		{
+			entry.glyphFont = Font::get(glyphSize, TaskGlyphs::FONT_PATH);
+			entry.glyphCache.reset(entry.glyphFont->buildTextCache(glyph, 0.0f, 0.0f, glyphColor));
+			entry.cachedGlyph = glyph;
+			entry.glyphFontSize = glyphSize;
+			entry.glyphColor = glyphColor;
+		}
+		if (entry.glyphCache)
+		{
+			const float glyphWidth = entry.glyphFont->sizeText(glyph).x();
+			const float glyphX = x + width - iconSize - 12.0f + (iconSize - glyphWidth) * 0.5f;
+			Transform4x4f iconTrans = Transform4x4f::Identity();
+			iconTrans = iconTrans.translate(Vector3f(glyphX, y + 10.0f, 0.0f));
+			Renderer::setMatrix(iconTrans);
+			entry.glyphFont->renderTextCache(entry.glyphCache.get());
+		}
+	}
+	else if (!task.iconPath.empty())
 	{
 		if (!mBackgroundTaskIcon)
 			mBackgroundTaskIcon.reset(new ImageComponent(this));
