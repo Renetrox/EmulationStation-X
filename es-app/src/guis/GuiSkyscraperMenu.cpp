@@ -303,7 +303,8 @@ namespace
 			[action, system]() -> Window::BackgroundTaskStatus
 		{
 			Window::BackgroundTaskStatus task;
-			// Match the existing three-line Skyscraper progress dialog.
+			// Running: keep the familiar three-line progress panel.
+			// Finished in background: show the next step without moving menus.
 			task.title = tr("SCRAPING");
 			task.detail = tr("SYSTEM") + ": " + system;
 			task.iconPath = ":/icons/scraper.png";
@@ -312,26 +313,33 @@ namespace
 			if (startsWith(status, "done:"))
 			{
 				task.state = Window::BackgroundTaskStatus::SUCCESS;
-				task.footer = tr("COMPLETED");
+				task.title = tr("SKYSCRAPER") + " - " + system;
+				task.detail = action == "generate" ?
+				tr("GAMELIST GENERATED") : tr("RESOURCES GATHERED");
+				task.footer = action == "generate" ?
+				tr("PRESS ANY BUTTON TO DISMISS") : tr("NEXT: GENERATE GAMELIST");
+				task.dismissOnInput = true;
 			}
 			else if (status == "stopped")
 			{
 				task.state = Window::BackgroundTaskStatus::CANCELLED;
-				task.footer = tr("STOPPED");
+				task.title = tr("SKYSCRAPER") + " - " + system;
+				task.detail = tr("STOPPED");
+				task.footer = tr("PRESS ANY BUTTON TO DISMISS");
+				task.dismissOnInput = true;
 			}
 			else if (startsWith(status, "error:") || !isSkyscraperJobActive(status))
 			{
 				task.state = Window::BackgroundTaskStatus::FAILED;
-				task.footer = tr("ERROR");
+				task.title = tr("SKYSCRAPER") + " - " + system;
+				task.detail = tr("ERROR");
+				task.footer = tr("CHECK SKYSCRAPER LOG");
+				task.dismissOnInput = true;
 			}
 			else
 			{
 				task.footer = action == "generate" ?
 				tr("GENERATING GAMELIST") : tr("GATHERING RESOURCES");
-			}
-
-			if (task.state == Window::BackgroundTaskStatus::RUNNING)
-			{
 				int current = 0;
 				int total = 0;
 				if (readProgressFromLog(SKY_LOG_FILE, current, total) && current <= total)
@@ -732,6 +740,9 @@ namespace
 					mFakeCurrent = mFakeTotal;
 
 				mFinished = true;
+				// The original foreground view already reports completion.
+				// Its background companion should not also display a second alert.
+				mWindow->clearBackgroundTask("skyscraper");
 				refreshText("done");
 				mWindow->setInfoPopup(new GuiInfoPopup(
 					mWindow,
@@ -744,6 +755,7 @@ namespace
 			if (startsWith(status, "error:"))
 			{
 				mFinished = true;
+				mWindow->clearBackgroundTask("skyscraper");
 				refreshText("error");
 				mWindow->setInfoPopup(new GuiInfoPopup(
 					mWindow,
@@ -756,6 +768,7 @@ namespace
 			if (status == "stopped")
 			{
 				mFinished = true;
+				mWindow->clearBackgroundTask("skyscraper");
 				refreshText("stopped");
 				mWindow->setInfoPopup(new GuiInfoPopup(
 					mWindow,
@@ -772,6 +785,7 @@ namespace
 				if (mStartupGraceMs >= 12000 && mNoPidMs > 15000)
 				{
 					mFinished = true;
+					mWindow->clearBackgroundTask("skyscraper");
 					refreshText("error");
 					mWindow->setInfoPopup(new GuiInfoPopup(
 						mWindow, tr("SKYSCRAPER FAILED: ") + mSystem, 5000));
@@ -796,6 +810,7 @@ namespace
 			if (mNoPidMs > 15000)
 			{
 				mFinished = true;
+				mWindow->clearBackgroundTask("skyscraper");
 				refreshText("error");
 				mWindow->setInfoPopup(new GuiInfoPopup(
 					mWindow,
