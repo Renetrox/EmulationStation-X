@@ -12,6 +12,7 @@
 #include "Window.h"
 #include "LocaleESHook.h"
 #include "Settings.h"
+#include <algorithm>
 
 namespace
 {
@@ -172,6 +173,28 @@ void GuiScraperMulti::onSizeChanged()
 	mGrid.setSize(mSize);
 }
 
+// Draw a small native progress indicator beneath the game counter.
+// This counter is exact: a game advances only after accepting or skipping.
+void GuiScraperMulti::render(const Transform4x4f& parentTrans)
+{
+	GuiComponent::render(parentTrans);
+
+	if (mTotalGames == 0)
+		return;
+
+	const float width = mSize.x() * 0.70f;
+	const float x = (mSize.x() - width) * 0.5f;
+	const float rowHeight = mGrid.getRowHeight(2);
+	const float height = std::min(4.0f, rowHeight * 0.15f);
+	const float y = mGrid.getRowHeight(0) + mGrid.getRowHeight(1) + rowHeight - height;
+	const float portion = std::min(1.0f,
+		static_cast<float>(mCurrentGame) / static_cast<float>(mTotalGames));
+
+	Renderer::setMatrix(parentTrans * getTransform());
+	Renderer::drawRect(x, y, width, height, 0x77777766, 0x77777766);
+	Renderer::drawRect(x, y, width * portion, height, 0x4A90E2FF, 0x4A90E2FF);
+}
+
 void GuiScraperMulti::doNextSearch()
 {
 	if (mSearchQueue.empty())
@@ -244,6 +267,10 @@ void GuiScraperMulti::finish()
 				ss << mTotalSkipped << " " << es_translate("GAMES SKIPPED");
 		}
 	}
+
+	// STOP must also cancel pending HTTP/metadata requests, not only hide the UI.
+	if (mSearchComp)
+		mSearchComp->stop();
 
 	mIsProcessing = false;
 	PowerSaver::resume();
