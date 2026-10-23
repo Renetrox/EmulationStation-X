@@ -215,6 +215,7 @@ void GuiThemeBrowser::resumeForeground()
 	mInBackground = false;
 	mWindow->clearBackgroundTask("theme-browser");
 	setBusyVisible(mJobRunning);
+	updateFooter();
 	updateHelpPrompts();
 }
 
@@ -667,51 +668,73 @@ void GuiThemeBrowser::updateFooter()
 	std::string s = "A ";
 	s += installed ? trTheme("UPDATE") : trTheme("DOWNLOAD");
 	if (installed) s += "    X " + trTheme("UNINSTALL");
-	s += "    B " + trTheme("BACK");
+	s += "    B " + (mJobRunning ?
+		trTheme("THEME CONTINUE IN BACKGROUND") : trTheme("BACK"));
 
 	mFooter.setText(s);
 }
 
 bool GuiThemeBrowser::downloadOrUpdateSilent(const ThemeEntry& e)
 {
-	if (e.repo.empty())
+	if (e.repo.empty() || e.folder.empty())
 		return false;
 
 	Utils::FileSystem::createDirectory(mThemesDir);
 
 	const std::string dst = mThemesDir + "/" + e.folder;
+	const std::string stage = dst + ".esx-download-tmp";
+	const std::string backup = dst + ".esx-update-backup";
 	const bool installed = Utils::FileSystem::exists(dst);
 
-	if (installed)
-		runCmd("rm -rf " + quote(dst));
-
-	// clone
-	const std::string cmd = "git clone --depth 1 " + quote(e.repo) + " " + quote(dst);
-	int rc = runCmd(cmd);
-
-	if (rc == 0)
+	// Preserve any old backup from an interrupted update. Never destroy it
+	// blindly: it may contain the only surviving copy of someone's theme.
+	if (Utils::FileSystem::exists(backup))
 	{
-		// NEW: capturar commit antes de borrar .git
-		std::string head;
-		{
-			// git -C "<dst>" rev-parse HEAD
-			std::string out;
-			std::string c = "sh -c " + quote("git -C " + quote(dst) + " rev-parse HEAD 2>/dev/null");
-			if (runCmdCapture(c, out))
-				head = trim(out);
-		}
-
-		// limpiar .git como siempre
-		runCmd("rm -rf " + quote(dst + "/.git"));
-
-		// NEW: guardar info instalada
-		if (!head.empty())
-			saveInstalledInfo(e, e.repo, head);
-
-		return true;
+		LOG(LogError) << "Theme Browser: previous backup needs recovery: " << backup;
+		return false;
 	}
 
-	return false;
+	// Clone off to the side so a network failure cannot delete an
+	// already-installed theme. Only promote a fully cloned checkout.
+	runCmd("rm -rf " + quote(stage));
+	if (runCmd("git clone --depth 1 " + quote(e.repo) + " " + quote(stage)) != 0 ||
+		!Utils::FileSystem::exists(stage))
+	{
+		runCmd("rm -rf " + quote(stage));
+		return false;
+	}
+
+	// Capture the repository revision before removing Git's metadata.
+	std::string head;
+	std::string out;
+	const std::string revCmd = "sh -c " +
+		quote("git -C " + quote(stage) + " rev-parse HEAD 2>/dev/null");
+	if (runCmdCapture(revCmd, out))
+		head = trim(out);
+
+	if (installed && std::rename(dst.c_str(), backup.c_str()) != 0)
+	{
+		runCmd("rm -rf " + quote(stage));
+		return false;
+	}
+
+	if (std::rename(stage.c_str(), dst.c_str()) != 0)
+	{
+		// Restore the previous installation on failed promotion.
+		if (installed && std::rename(backup.c_str(), dst.c_str()) != 0)
+			LOG(LogError) << "Theme Browser: restore backup manually: " << backup;
+		runCmd("rm -rf " + quote(stage));
+		return false;
+	}
+
+	// Promotion succeeded; the previous version can now be removed.
+	if (installed)
+		runCmd("rm -rf " + quote(backup));
+	runCmd("rm -rf " + quote(dst + "/.git"));
+	if (!head.empty())
+		saveInstalledInfo(e, e.repo, head);
+
+	return true;
 }
 
 bool GuiThemeBrowser::uninstallThemeSilent(const ThemeEntry& e)
@@ -740,6 +763,8 @@ void GuiThemeBrowser::startJob(const std::string& busyMsg, std::function<bool()>
 	mJobRefreshCatalogAfter = refreshCatalogAfter;
 	mJobBusyMsg = busyMsg;
 
+	updateFooter();
+	updateHelpPrompts();
 	setBusyVisible(true);
 	showPopup(busyMsg, 1200);
 
@@ -977,11 +1002,12 @@ std::vector<HelpPrompt> GuiThemeBrowser::getHelpPrompts()
 	const bool hasThemes = !mThemes.empty();
 	const bool installed = (hasThemes ? isInstalled(mThemes[mLastSelectedIndex]) : false);
 
-	p.push_back(HelpPrompt("a", installed ? trTheme("UPDATE") : trTheme("DOWNLOAD")));
-
-	if (installed)
-		p.push_back(HelpPrompt("x", trTheme("UNINSTALL")));
-
+	if (!mJobRunning)
+	{
+		p.push_back(HelpPrompt("a", installed ? trTheme("UPDATE") : trTheme("DOWNLOAD")));
+		if (installed)
+			p.push_back(HelpPrompt("x", trTheme("UNINSTALL")));
+	}
 	p.push_back(HelpPrompt("b", mJobRunning ?
 		trTheme("THEME CONTINUE IN BACKGROUND") : trTheme("BACK")));
 
