@@ -8,6 +8,7 @@
 #include "views/ViewController.h"
 #include "SystemData.h"
 #include "Settings.h"
+#include "Window.h"
 #include "Log.h"
 #include "resources/Font.h"
 #include "renderers/Renderer.h"
@@ -289,6 +290,58 @@ namespace
 		return false;
 	}
 
+
+	// The monitor captures no GUI object. Window continues polling while
+	// Skyscraper runs independently, even after this dialog is closed.
+	inline void observeSkyscraper(Window* window, const std::string& action,
+		const std::string& system)
+	{
+		if (!window)
+			return;
+
+		window->observeBackgroundTask("skyscraper",
+			[action, system]() -> Window::BackgroundTaskStatus
+		{
+			Window::BackgroundTaskStatus task;
+			task.title = "SKYSCRAPER - " + system;
+			const std::string status = getSkyscraperStatus();
+
+			if (startsWith(status, "done:"))
+			{
+				task.state = Window::BackgroundTaskStatus::SUCCESS;
+				task.detail = tr("COMPLETED");
+			}
+			else if (status == "stopped")
+			{
+				task.state = Window::BackgroundTaskStatus::CANCELLED;
+				task.detail = tr("STOPPED");
+			}
+			else if (startsWith(status, "error:") || !isSkyscraperJobActive(status))
+			{
+				task.state = Window::BackgroundTaskStatus::ERROR;
+				task.detail = tr("ERROR");
+			}
+			else
+			{
+				task.detail = action == "generate" ?
+				tr("GENERATING GAMELIST") : tr("GATHERING RESOURCES");
+			}
+
+			if (task.state == Window::BackgroundTaskStatus::RUNNING)
+			{
+				int current = 0;
+				int total = 0;
+				if (readProgressFromLog(SKY_LOG_FILE, current, total) && current <= total)
+				{
+					task.current = current;
+					task.total = total;
+					task.detail += "  " + std::to_string(current) + "/" + std::to_string(total);
+				}
+			}
+			return task;
+		});
+	}
+
 	inline std::string runCommandCapture(const std::string& cmd)
 	{
 		std::string result;
@@ -556,7 +609,14 @@ namespace
 			if (GuiComponent::input(config, input))
 				return true;
 
-			if (config->isMappedTo("b", input) && input.value && !mFinished)
+			if (config->isMappedTo("b", input) && input.value)
+			{
+				// B returns to the carousel without cancelling the external job.
+				delete this;
+				return true;
+			}
+
+			if (config->isMappedTo("y", input) && input.value && !mFinished)
 			{
 				mWindow->pushGui(new GuiMsgBox(
 					mWindow,
@@ -635,7 +695,7 @@ namespace
 			if (mFinished)
 				return {};
 
-			return { { "b", tr("STOP") } };
+			return { { "b", tr("BACK") }, { "y", tr("STOP") } };
 		}
 
 	private:
@@ -960,6 +1020,7 @@ void GuiSkyscraperMenu::runGather()
 			tr("SKYSCRAPER IS ALREADY RUNNING"),
 			4000
 		));
+		observeSkyscraper(mWindow, "gather", system);
 		mWindow->pushGui(new GuiSkyscraperProgress(mWindow, "gather", system, totalGames));
 		delete this;
 		return;
@@ -975,7 +1036,8 @@ void GuiSkyscraperMenu::runGather()
 
 			if (ret == 0)
 			{
-				mWindow->pushGui(new GuiSkyscraperProgress(mWindow, "gather", system, totalGames));
+				observeSkyscraper(mWindow, "gather", system);
+		mWindow->pushGui(new GuiSkyscraperProgress(mWindow, "gather", system, totalGames));
 				delete this;
 			}
 			else
@@ -1016,6 +1078,7 @@ void GuiSkyscraperMenu::runGenerate()
 			tr("SKYSCRAPER IS ALREADY RUNNING"),
 			4000
 		));
+		observeSkyscraper(mWindow, "generate", system);
 		mWindow->pushGui(new GuiSkyscraperProgress(mWindow, "generate", system, totalGames));
 		delete this;
 		return;
@@ -1025,6 +1088,7 @@ void GuiSkyscraperMenu::runGenerate()
 
 	if (ret == 0)
 	{
+		observeSkyscraper(mWindow, "generate", system);
 		mWindow->pushGui(new GuiSkyscraperProgress(mWindow, "generate", system, totalGames));
 		delete this;
 	}
