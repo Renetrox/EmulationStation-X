@@ -533,6 +533,21 @@ void Window::input(InputConfig* config, Input input)
 	if (input.value != 0 && cancelScreenSaver())
 		return;
 
+	// A completed background task can leave a useful message on screen until
+	// the next configured button/key press. Do not consume the input: navigation
+	// continues normally, and there is no automatic screen transition.
+	if (input.configured && input.value != 0 && input.type != TYPE_COUNT)
+	{
+		for (auto it = mBackgroundTasks.begin(); it != mBackgroundTasks.end(); )
+		{
+			const BackgroundTaskStatus& state = it->second.status;
+			if (state.state != BackgroundTaskStatus::RUNNING && state.dismissOnInput)
+				it = mBackgroundTasks.erase(it);
+			else
+				++it;
+		}
+	}
+
 	bool dbg_keyboard_key_press = Settings::getInstance()->getBool("Debug") && config->getDeviceId() == DEVICE_KEYBOARD && input.value;
 
 	if (dbg_keyboard_key_press && input.id == SDLK_g && SDL_GetModState() & KMOD_LCTRL)
@@ -981,7 +996,9 @@ void Window::updateBackgroundTasks(int deltaTime)
 		if (task.status.state != BackgroundTaskStatus::RUNNING)
 			task.finishedMs += deltaTime;
 
-		if (task.finishedMs >= 3500)
+		// Most tasks use the original 3.5s timeout. Opt-in terminal
+		// notices instead wait for the next user button/key press.
+		if (task.finishedMs >= 3500 && !task.status.dismissOnInput)
 			it = mBackgroundTasks.erase(it);
 		else
 			++it;
