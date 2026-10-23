@@ -220,6 +220,8 @@ Window::Window()
 
 Window::~Window()
 {
+	// Destroy the detached worker while the Window and ViewController are alive.
+	mBackgroundGui.reset();
 	closeLoadingScreen();
 	delete mBackgroundOverlay;
 
@@ -267,6 +269,35 @@ GuiComponent* Window::peekGui()
 		return NULL;
 
 	return mGuiStack.back();
+}
+
+bool Window::parkGuiInBackground(GuiComponent* gui)
+{
+	if (!gui || mBackgroundGui || peekGui() != gui)
+		return false;
+
+	// Detach without deleting it. The UI thread continues polling its
+	// in-flight HTTP/metadata requests after normal navigation resumes.
+	removeGui(gui);
+	mBackgroundGui.reset(gui);
+	mBackgroundGuiReleasePending = false;
+	return true;
+}
+
+GuiComponent* Window::restoreBackgroundGui()
+{
+	if (!mBackgroundGui || mBackgroundGuiReleasePending)
+		return nullptr;
+
+	GuiComponent* gui = mBackgroundGui.release();
+	pushGui(gui);
+	return gui;
+}
+
+void Window::releaseBackgroundGuiAfterUpdate(GuiComponent* gui)
+{
+	if (mBackgroundGui.get() == gui)
+		mBackgroundGuiReleasePending = true;
 }
 
 bool Window::init()
@@ -618,6 +649,17 @@ void Window::update(int deltaTime)
 
 	if (peekGui())
 		peekGui()->update(deltaTime);
+
+	if (mBackgroundGui)
+	{
+		mBackgroundGui->update(deltaTime);
+		// Never delete inside the scraper's update/callback stack.
+		if (mBackgroundGuiReleasePending)
+		{
+			mBackgroundGui.reset();
+			mBackgroundGuiReleasePending = false;
+		}
+	}
 
 	// Poll background tasks even after their originating menu has closed.
 	updateBackgroundTasks(deltaTime);
