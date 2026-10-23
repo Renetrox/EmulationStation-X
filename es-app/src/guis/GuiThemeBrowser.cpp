@@ -312,21 +312,48 @@ bool GuiThemeBrowser::updateCatalogZipSilent()
 
 	int rc = runCmd(dlCmd);
 	if (rc != 0 || !Utils::FileSystem::exists(zipPath))
+	{
+		runCmd("rm -f " + quote(zipPath));
 		return false;
+	}
+
+	// Extract first. Never erase a working local catalog before confirming
+	// a complete download and successful unzip.
+	const std::string backup = mCatalogDir + ".esx-update-backup";
+	if (Utils::FileSystem::exists(backup))
+	{
+		runCmd("rm -f " + quote(zipPath));
+		LOG(LogError) << "Theme Browser: catalog backup needs recovery: " << backup;
+		return false;
+	}
 
 	runCmd("rm -rf " + quote(extracted));
-	runCmd("rm -rf " + quote(mCatalogDir));
-
 	rc = runCmd("unzip -q -o " + quote(zipPath) + " -d " + quote(esxDir));
 	runCmd("rm -f " + quote(zipPath));
 
 	if (rc != 0 || !Utils::FileSystem::exists(extracted))
+	{
+		runCmd("rm -rf " + quote(extracted));
 		return false;
+	}
 
-	rc = runCmd("mv " + quote(extracted) + " " + quote(mCatalogDir));
-	if (rc != 0 || !Utils::FileSystem::exists(mCatalogDir))
+	const bool hadCatalog = Utils::FileSystem::exists(mCatalogDir);
+	if (hadCatalog && std::rename(mCatalogDir.c_str(), backup.c_str()) != 0)
+	{
+		runCmd("rm -rf " + quote(extracted));
 		return false;
+	}
 
+	if (std::rename(extracted.c_str(), mCatalogDir.c_str()) != 0)
+	{
+		if (hadCatalog && std::rename(backup.c_str(), mCatalogDir.c_str()) != 0)
+			LOG(LogError) << "Theme Browser: restore catalog manually: " << backup;
+		runCmd("rm -rf " + quote(extracted));
+		return false;
+	}
+
+	if (hadCatalog)
+		runCmd("rm -rf " + quote(backup));
 	return true;
 }
 
