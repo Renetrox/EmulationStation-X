@@ -81,6 +81,8 @@ public:
 		enum State { RUNNING, SUCCESS, FAILED, CANCELLED };
 		std::string title;
 		std::string detail;
+		std::string footer; // optional third line (stage, status)
+		std::string iconPath; // optional resource icon (e.g. :/icons/scraper.png)
 		int current = -1; // <0: progress cannot be measured
 		int total = 0;
 		State state = RUNNING;
@@ -90,6 +92,10 @@ public:
 		const std::function<BackgroundTaskStatus()>& monitor);
 	void setBackgroundTask(const std::string& id, const BackgroundTaskStatus& status);
 	void clearBackgroundTask(const std::string& id);
+	void setBackgroundTaskOverlaySuppressed(bool suppress)
+	{
+		mBackgroundTaskOverlaySuppressed = suppress;
+	}
 
 	void renderHelpPromptsEarly();
 	void setHelpPrompts(const std::vector<HelpPrompt>& prompts, const HelpStyle& style);
@@ -145,12 +151,18 @@ private:
 		std::function<BackgroundTaskStatus()> monitor;
 		std::unique_ptr<TextCache> titleCache;
 		std::unique_ptr<TextCache> detailCache;
+		std::unique_ptr<TextCache> footerCache;
+		bool themeCached = false;
+		bool cachedDark = false;
 		int finishedMs = 0;
 	};
 	std::map<std::string, BackgroundTaskEntry> mBackgroundTasks;
 	int mBackgroundTaskPollMs = 0;
 	int mBackgroundTaskAnimMs = 0;
 	int mBackgroundTaskShowMs = 0;
+	bool mBackgroundTaskOverlaySuppressed = false;
+	std::unique_ptr<ImageComponent> mBackgroundTaskIcon;
+	std::string mBackgroundTaskIconPath;
 
 	// =========================
 	// Clock overlay (theme-driven)
