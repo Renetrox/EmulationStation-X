@@ -29,6 +29,10 @@ public:
 	void search(const ScraperSearchParams& params);
 	void openInputScreen(ScraperSearchParams& from);
 	void stop();
+	// A detached automatic scraper must never open a modal above unrelated menus.
+	void setBackgroundMode(bool enable) { mBackgroundMode = enable; if (enable) mThumbnailReq.reset(); }
+	void setBackgroundErrorCallback(const std::function<void(const std::string&)>& callback)
+	{ mBackgroundErrorCallback = callback; }
 	inline SearchType getSearchType() const { return mSearchType; }
 
 	// Metadata assets will be resolved before calling the accept callback (e.g. result.mdl's "image" is automatically downloaded and properly set).
@@ -93,6 +97,8 @@ private:
 	std::function<void()> mSkipCallback;
 	std::function<void()> mCancelCallback;
 	bool mBlockAccept;
+	bool mBackgroundMode = false;
+	std::function<void(const std::string&)> mBackgroundErrorCallback;
 
 	std::unique_ptr<ScraperSearchHandle> mSearchHandle;
 	std::unique_ptr<MDResolveHandle> mMDResolveHandle;
