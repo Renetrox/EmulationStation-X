@@ -86,6 +86,9 @@ public:
 		int current = -1; // <0: progress cannot be measured
 		int total = 0;
 		State state = RUNNING;
+		// Keep terminal feedback visible until the next configured button press.
+		// It is dismissed without consuming that input or changing screens.
+		bool dismissOnInput = false;
 	};
 
 	void observeBackgroundTask(const std::string& id,
