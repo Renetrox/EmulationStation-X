@@ -227,6 +227,13 @@ void ScraperSearchComponent::search(const ScraperSearchParams& params)
 	mSearchHandle = startScraperSearch(params);
 }
 
+void ScraperSearchComponent::setBackgroundMode(bool enable)
+{
+	mBackgroundMode = enable;
+	if (enable)
+		mThumbnailReq.reset();
+}
+
 void ScraperSearchComponent::stop()
 {
 	mThumbnailReq.reset();
