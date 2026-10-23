@@ -1077,7 +1077,7 @@ void Window::renderBackgroundTasks()
 	Renderer::drawRect(x, y, 2.0f, height, borderColor, borderColor);
 	Renderer::drawRect(x + width - 2.0f, y, 2.0f, height, borderColor, borderColor);
 
-	const TextCache* lines[3] = {
+	TextCache* lines[3] = {
 		entry.titleCache.get(), entry.detailCache.get(), entry.footerCache.get()
 	};
 	for (int i = 0; i < 3; ++i)
