@@ -46,7 +46,9 @@ GuiScraperMulti::GuiScraperMulti(Window* window, const std::queue<ScraperSearchP
 	GuiComponent(window),
 	mBackground(window, getFramePath()),
 	mGrid(window, Vector2i(1, 5)),
-	mSearchQueue(searches)
+	mSearchQueue(searches),
+	mBackgroundAllowed(!approveResults),
+	mInBackground(false)
 {
 	assert(mSearchQueue.size());
 
@@ -100,6 +102,8 @@ GuiScraperMulti::GuiScraperMulti(Window* window, const std::queue<ScraperSearchP
 	mSearchComp->setAcceptCallback(std::bind(&GuiScraperMulti::acceptResult, this, std::placeholders::_1));
 	mSearchComp->setSkipCallback(std::bind(&GuiScraperMulti::skip, this));
 	mSearchComp->setCancelCallback(std::bind(&GuiScraperMulti::finish, this));
+	mSearchComp->setBackgroundErrorCallback(
+		std::bind(&GuiScraperMulti::backgroundError, this, std::placeholders::_1));
 
 	mGrid.setEntry(
 		mSearchComp,
@@ -130,6 +134,15 @@ GuiScraperMulti::GuiScraperMulti(Window* window, const std::queue<ScraperSearchP
 				skip();
 				mGrid.resetCursor();
 			}));
+	}
+
+	// Only unattended automatic results can safely continue away from this
+	// screen. Manual confirmation is never silently bypassed.
+	if (mBackgroundAllowed)
+	{
+		buttons.push_back(std::make_shared<ButtonComponent>(
+			mWindow, es_translate("BACKGROUND"), es_translate("BACKGROUND"),
+			std::bind(&GuiScraperMulti::goBackground, this)));
 	}
 
 	// STOP
@@ -171,6 +184,79 @@ void GuiScraperMulti::onSizeChanged()
 	mGrid.setRowHeightPerc(2, mSubtitle->getFont()->getHeight() * 1.75f / mSize.y(), false);
 	mGrid.setRowHeightPerc(4, mButtonGrid->getSize().y() / mSize.y(), false);
 	mGrid.setSize(mSize);
+}
+
+void GuiScraperMulti::update(int deltaTime)
+{
+	// Detached search: keep processing async HTTP and metadata callbacks,
+	// but do not update the unrendered scraper window's decorative UI.
+	if (mInBackground)
+	{
+		if (mSearchComp)
+			mSearchComp->update(deltaTime);
+		return;
+	}
+	GuiComponent::update(deltaTime);
+}
+
+bool GuiScraperMulti::input(InputConfig* config, Input input)
+{
+	if (mBackgroundAllowed && mIsProcessing && input.value &&
+		config->isMappedTo("b", input))
+	{
+		goBackground();
+		return true;
+	}
+	return GuiComponent::input(config, input);
+}
+
+void GuiScraperMulti::publishBackgroundProgress()
+{
+	if (!mInBackground)
+		return;
+
+	Window::BackgroundTaskStatus task;
+	task.title = es_translate("SCRAPING IN PROGRESS");
+	task.iconPath = ":/icons/scraper.png";
+	task.current = static_cast<int>(mCurrentGame);
+	task.total = static_cast<int>(mTotalGames);
+	if (!mSearchQueue.empty())
+	{
+		const ScraperSearchParams& item = mSearchQueue.front();
+		task.detail = item.system->getFullName();
+		task.footer = Utils::FileSystem::getFileName(item.game->getPath());
+	}
+	mWindow->setBackgroundTask("native-scraper", task);
+}
+
+void GuiScraperMulti::goBackground()
+{
+	if (!mBackgroundAllowed || !mIsProcessing || mInBackground)
+		return;
+
+	if (!mWindow->parkGuiInBackground(this))
+		return;
+
+	mInBackground = true;
+	mSearchComp->setBackgroundMode(true);
+	publishBackgroundProgress();
+}
+
+void GuiScraperMulti::resumeForeground()
+{
+	if (!mInBackground)
+		return;
+	mInBackground = false;
+	mSearchComp->setBackgroundMode(false);
+	mWindow->clearBackgroundTask("native-scraper");
+}
+
+void GuiScraperMulti::backgroundError(const std::string& reason)
+{
+	// Never open a modal from a detached GUI; end safely with a persistent
+	// error notification while keeping all previously saved game metadata.
+	mBackgroundError = reason;
+	finish();
 }
 
 // Draw a small native progress indicator beneath the game counter.
@@ -216,6 +302,7 @@ void GuiScraperMulti::doNextSearch()
 
 	mSubtitle->setText(ss.str());
 
+	publishBackgroundProgress();
 	mSearchComp->search(mSearchQueue.front());
 }
 
@@ -278,6 +365,42 @@ void GuiScraperMulti::finish()
 	if (mWindow)
 		mWindow->setAllowSleep(true);
 
+	if (mInBackground)
+	{
+		Window::BackgroundTaskStatus task;
+		task.iconPath = ":/icons/scraper.png";
+		task.title = es_translate("NATIVE SCRAPER FINISHED");
+		task.current = static_cast<int>(mCurrentGame);
+		task.total = static_cast<int>(mTotalGames);
+		task.dismissOnInput = true;
+		if (!mBackgroundError.empty())
+		{
+			task.state = Window::BackgroundTaskStatus::FAILED;
+			task.title = es_translate("NATIVE SCRAPER FAILED");
+			task.detail = mBackgroundError;
+		}
+		else if (!mSearchQueue.empty())
+		{
+			task.state = Window::BackgroundTaskStatus::CANCELLED;
+			task.title = es_translate("NATIVE SCRAPER STOPPED");
+			task.detail = ss.str();
+		}
+		else
+		{
+			task.state = Window::BackgroundTaskStatus::SUCCESS;
+			task.detail = std::to_string(mTotalSuccessful) + " " +
+			(mTotalSuccessful == 1 ? es_translate("GAME SCRAPED") : es_translate("GAMES SCRAPED"));
+			if (mTotalSkipped)
+				task.footer = std::to_string(mTotalSkipped) + " " +
+					(mTotalSkipped == 1 ? es_translate("GAME SKIPPED") : es_translate("GAMES SKIPPED"));
+		}
+		if (task.footer.empty())
+			task.footer = es_translate("PRESS ANY BUTTON TO DISMISS");
+		mWindow->setBackgroundTask("native-scraper", task);
+		mWindow->releaseBackgroundGuiAfterUpdate(this);
+		return;
+	}
+
 	mWindow->pushGui(new GuiMsgBox(
 		mWindow,
 		ss.str(),
@@ -287,5 +410,8 @@ void GuiScraperMulti::finish()
 
 std::vector<HelpPrompt> GuiScraperMulti::getHelpPrompts()
 {
-	return mGrid.getHelpPrompts();
+	std::vector<HelpPrompt> prompts = mGrid.getHelpPrompts();
+	if (mBackgroundAllowed && mIsProcessing)
+		prompts.push_back(HelpPrompt("b", es_translate("BACKGROUND")));
+	return prompts;
 }
