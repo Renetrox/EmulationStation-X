@@ -29,6 +29,7 @@ public:
 
     std::vector<HelpPrompt> getHelpPrompts() override;
     void updateHelpPrompts();
+    void resumeForeground();
 
 private:
     struct PortEntry
@@ -83,6 +84,8 @@ private:
 
     void updateJobProgress();
     void finishJobIfDone();
+    void moveToBackground();
+    void publishBackgroundStatus();
 
 private:
     NinePatchComponent mFrame;
@@ -124,4 +127,8 @@ private:
     std::string mJobStageLabel;
     std::string mJobPortId;
     std::string mJobDoneMsg;
+    bool mInBackground = false;
+    bool mJobCanBackground = false;
+    std::string mJobTargetName;
+    std::string mJobGlyph;
 };
