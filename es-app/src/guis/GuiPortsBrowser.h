@@ -89,6 +89,8 @@ private:
     void finishJobIfDone();
     void moveToBackground();
     void publishBackgroundStatus();
+    void refreshOperationText();
+    void setWorkerStage(const std::string& stage);
 
 private:
     NinePatchComponent mFrame;
@@ -130,6 +132,8 @@ private:
     std::string mJobStageLabel;
     std::string mJobPortId;
     std::string mJobDoneMsg;
+    std::string mWorkerStage; // protected by mJobMutex; written by download worker
+    bool mJobIsGame = false;
     bool mInBackground = false;
     bool mJobCanBackground = false;
     std::string mJobTargetName;
