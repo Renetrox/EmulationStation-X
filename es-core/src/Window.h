@@ -86,6 +86,10 @@ public:
 		std::string iconGlyph; // Font Awesome UTF-8 glyph; terminal state selects its own icon
 		int current = -1; // <0: progress cannot be measured
 		int total = 0;
+		// Certain backends provide progress for a named stage, not the whole
+		// operation. Allow that percentage on the bar without implying
+		// an overall X/Y count in the title.
+		bool showProgressInTitle = true;
 		State state = RUNNING;
 		// Keep terminal feedback visible until the next configured button press.
 		// It is dismissed without consuming that input or changing screens.
