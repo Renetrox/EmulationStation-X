@@ -782,3 +782,33 @@ The unmodified `md_players` text remains available for themes that want it.
 
 This is opt-in. Other `image` elements and all existing theme paths are
 unaffected. ES-X does not implement general Batocera expression bindings.
+
+---
+
+## TEST: system hardware tabs (ES-X)
+
+An opt-in `<text extra="true">` in the `system` view can be highlighted
+once per system without Batocera's expression evaluator:
+
+```xml
+<text name="platform_console" extra="true">
+    <pos>0.24 0.041</pos>
+    <size>0.11 0.05</size>
+    <text>Consoles</text>
+    <fontPath>./resources/fonts/OpenSans-Light.ttf</fontPath>
+    <color>BEBEBEFF</color>
+    <activeFor>console</activeFor>
+    <activeFontPath>./resources/fonts/OpenSans-SemiBold.ttf</activeFontPath>
+    <activeColor>FFFFFFFF</activeColor>
+</text>
+```
+
+Supported: `arcade`, `computer`, `console`, `extension`, `pinball`,
+`port`, `portable`. ES-X chooses the category using RetroPie special system
+names, optional theme `systemHardwareType` variables (PS5/Swatch-style),
+`<platform>` IDs, and common system aliases. Generic `Folder` /
+`Collection` types are not assumed to be a hardware category. An unknown
+system keeps all labels in their inactive style. No runtime polling.
+
+**TEST:** visual placement, edge-case platform classifications and build
+behavior are pending evaluation on PC / Orange Pi 4A.

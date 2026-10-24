@@ -9,6 +9,7 @@
 #include "Scripting.h"
 #include "Settings.h"
 #include "SystemData.h"
+#include "PlatformId.h"
 #include "Window.h"
 #include "LocaleES.h"
 #include "Sound.h"
@@ -32,6 +33,8 @@
 #include <unordered_map>
 #include <limits>
 #include <memory>
+#include <cctype>
+#include <initializer_list>
 
 // Opt-in label over a missing per-system logo's existing fallback image.
 // Unlike itemTemplate, this derives from the normal ImageComponent and keeps
@@ -101,6 +104,104 @@ private:
     Vector2f mPositionFraction;
     Vector2f mSizeFraction;
 };
+}
+
+
+namespace {
+std::string hardwareKey(std::string value)
+{
+    value = Utils::String::trim(value);
+    std::transform(value.begin(), value.end(), value.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return value;
+}
+bool aliasIs(const std::string& value, std::initializer_list<const char*> aliases)
+{
+    for (const char* alias : aliases)
+        if (value == alias) return true;
+    return false;
+}
+// Category tabs are resolved once for each system; no XML expression engine.
+std::string systemCategory(SystemData* system, const std::shared_ptr<ThemeData>& theme)
+{
+    if (!system) return "";
+    const std::string name = hardwareKey(system->getName());
+    if (aliasIs(name, {"ports","portmaster","openbor","solarus","cavestory"})) return "port";
+    if (aliasIs(name, {"pinball","vpinball","fpinball","visualpinball"})) return "pinball";
+    if (aliasIs(name, {"retropie","emulators","tools","apps","applications","desktop",
+                        "kodi","settings","custom-collections"}) ||
+        name.compare(0, 5, "auto-") == 0) return "extension";
+    if (aliasIs(name, {"arcade","mame","mame-advmame","fba","fbneo","cps","cps1",
+                        "cps2","cps3","naomi","naomi2","atomiswave","model2",
+                        "model3","daphne"})) return "arcade";
+
+    // PS5/Swatch-style per-system metadata is optional; Folder and Collection
+    // are storage categories, so never treat those as hardware types.
+    const std::string hardware = theme
+        ? hardwareKey(theme->getVariable("systemHardwareType")) : "";
+    if (hardware.find("portab") == 0 || hardware.find("handheld") == 0) return "portable";
+    if (hardware.find("consol") == 0) return "console";
+    if (hardware.find("comput") == 0 || hardware.find("ordenad") == 0) return "computer";
+    if (hardware.find("arcad") == 0) return "arcade";
+    if (hardware.find("pinball") == 0 || hardware.find("flipper") == 0) return "pinball";
+    if (hardware == "port" || hardware == "ports") return "port";
+    if (hardware.find("extens") == 0) return "extension";
+
+    for (PlatformIds::PlatformId id : system->getPlatformIds())
+    {
+        switch (id)
+        {
+            case PlatformIds::ARCADE: case PlatformIds::DAPHNE:
+                return "arcade";
+            case PlatformIds::ATARI_LYNX: case PlatformIds::NEOGEO_POCKET:
+            case PlatformIds::NEOGEO_POCKET_COLOR: case PlatformIds::NINTENDO_3DS:
+            case PlatformIds::NINTENDO_DS: case PlatformIds::NINTENDO_POKEMON_MINI:
+            case PlatformIds::GAME_BOY: case PlatformIds::GAME_BOY_ADVANCE:
+            case PlatformIds::GAME_BOY_COLOR: case PlatformIds::NINTENDO_GAME_AND_WATCH:
+            case PlatformIds::SEGA_GAME_GEAR: case PlatformIds::PLAYSTATION_VITA:
+            case PlatformIds::PLAYSTATION_PORTABLE: case PlatformIds::WONDERSWAN:
+            case PlatformIds::WONDERSWAN_COLOR:
+                return "portable";
+            case PlatformIds::AMIGA: case PlatformIds::AMSTRAD_CPC:
+            case PlatformIds::APPLE_II: case PlatformIds::ATARI_800:
+            case PlatformIds::ATARI_ST: case PlatformIds::ATARI_XE:
+            case PlatformIds::BBC_MICRO: case PlatformIds::COMMODORE_64:
+            case PlatformIds::J2ME: case PlatformIds::MAC_OS: case PlatformIds::MSX:
+            case PlatformIds::PC: case PlatformIds::SAM_COUPE:
+            case PlatformIds::SHARP_X1: case PlatformIds::SHARP_X6800:
+            case PlatformIds::THOMSON_MOTO: case PlatformIds::NEC_PC_8801:
+            case PlatformIds::NEC_PC_9801: case PlatformIds::ZX_SPECTRUM:
+            case PlatformIds::ZX81_SINCLAR: case PlatformIds::TRS80_COLOR_COMPUTER:
+            case PlatformIds::TANDY: case PlatformIds::TI_99:
+            case PlatformIds::DRAGON32: case PlatformIds::FMTOWNS:
+                return "computer";
+            case PlatformIds::OPENBOR: case PlatformIds::SOLARUS:
+                return "port";
+            case PlatformIds::PLATFORM_UNKNOWN: case PlatformIds::PLATFORM_IGNORE:
+                break;
+            default:
+                return "console";
+        }
+    }
+    // Most common RetroPie system names when <platform> is absent.
+    if (aliasIs(name, {"psp","psvita","gb","gbc","gba","gbh","gbch","gbah",
+                        "nds","n3ds","gamegear","atarilynx","ngp","ngpc",
+                        "wonderswan","wonderswancolor","wswan","wswanc",
+                        "pokemini","gameandwatch"})) return "portable";
+    if (aliasIs(name, {"pc","dos","windows","macintosh","amiga","amiga500",
+                        "amiga1200","amstradcpc","c64","c128","vic20","msx",
+                        "msx2","apple2","zxspectrum","pc88","pc98","x68000",
+                        "fmtowns","atarist","atari800","bbcmicro","tic80",
+                        "pico8","j2me"})) return "computer";
+    if (aliasIs(name, {"nes","snes","n64","gc","wii","wiiu","switch",
+                        "psx","ps1","ps2","ps3","ps4","xbox","xbox360",
+                        "genesis","megadrive","mastersystem","saturn",
+                        "dreamcast","segacd","sega32x","sg-1000",
+                        "atari2600","atari5200","atari7800","colecovision",
+                        "intellivision","3do","pcengine","pcenginecd","pcfx",
+                        "neogeo","neogeocd"})) return "console";
+    return ""; // Unknown -> retain original style, not a guessed category.
+}
 }
 
 // buffer values for scrolling velocity (left, stopped, right)
@@ -554,7 +655,25 @@ void SystemView::populate()
 			e.data.backgroundExtras.clear();
 
 			// make background extras
-			e.data.backgroundExtras = ThemeData::makeExtras((*it)->getTheme(), "system", mWindow);
+
+			const std::string category = systemCategory(*it, theme);
+			for (const auto& extra : ThemeData::makeExtrasWithMetadata(theme, "system", mWindow))
+			{
+				const auto* elem = theme->getElement("system", extra.name, "text");
+				if (elem && elem->has("activeFor") && !category.empty() &&
+				    hardwareKey(elem->get<std::string>("activeFor")) == category)
+				{
+					if (TextComponent* tab = dynamic_cast<TextComponent*>(extra.component))
+					{
+						if (elem->has("activeColor"))
+							tab->setColor(elem->get<unsigned int>("activeColor"));
+						if (elem->has("activeFontPath") && tab->getFont())
+							tab->setFont(Font::get(tab->getFont()->getSize(),
+								elem->get<std::string>("activeFontPath")));
+					}
+				}
+				e.data.backgroundExtras.push_back(extra.component);
+			}
 
 			// ─────────────────────────────────────────────
 			// Descripción: dato completo + visual limitado/recortado.
