@@ -222,6 +222,7 @@ Window::Window()
 Window::~Window()
 {
 	// Join UI-owned workers before destroying GUI dependencies.
+	mPortsBrowserBackgroundGui.reset();
 	mThemeBrowserBackgroundGui.reset();
 	mBackgroundGui.reset();
 	closeLoadingScreen();
@@ -330,6 +331,35 @@ void Window::releaseThemeBrowserGuiAfterUpdate(GuiComponent* gui)
 {
 	if (mThemeBrowserBackgroundGui.get() == gui)
 		mThemeBrowserReleasePending = true;
+}
+
+bool Window::parkPortsBrowserGui(GuiComponent* gui)
+{
+	if (!gui || mPortsBrowserBackgroundGui || peekGui() != gui)
+		return false;
+
+	// The X-TRAS worker captures its GUI. Window owns it after detaching
+	// so downloads or scripted installs finish without dangling references.
+	removeGui(gui);
+	mPortsBrowserBackgroundGui.reset(gui);
+	mPortsBrowserReleasePending = false;
+	return true;
+}
+
+GuiComponent* Window::restorePortsBrowserGui()
+{
+	if (!mPortsBrowserBackgroundGui || mPortsBrowserReleasePending)
+		return nullptr;
+
+	GuiComponent* gui = mPortsBrowserBackgroundGui.release();
+	pushGui(gui);
+	return gui;
+}
+
+void Window::releasePortsBrowserGuiAfterUpdate(GuiComponent* gui)
+{
+	if (mPortsBrowserBackgroundGui.get() == gui)
+		mPortsBrowserReleasePending = true;
 }
 
 bool Window::init()
@@ -703,6 +733,18 @@ void Window::update(int deltaTime)
 			// completion callback or from the download thread.
 			mThemeBrowserBackgroundGui.reset();
 			mThemeBrowserReleasePending = false;
+		}
+	}
+
+	if (mPortsBrowserBackgroundGui)
+	{
+		mPortsBrowserBackgroundGui->update(deltaTime);
+		if (mPortsBrowserReleasePending)
+		{
+			// Only release after update returns to avoid deleting this from
+			// its completion callback.
+			mPortsBrowserBackgroundGui.reset();
+			mPortsBrowserReleasePending = false;
 		}
 	}
 
