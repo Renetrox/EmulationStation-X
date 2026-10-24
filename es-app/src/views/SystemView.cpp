@@ -139,12 +139,13 @@ std::string systemCategory(SystemData* system, const std::shared_ptr<ThemeData>&
     // are storage categories, so never treat those as hardware types.
     const std::string hardware = theme
         ? hardwareKey(theme->getVariable("systemHardwareType")) : "";
-    if (hardware.find("portab") == 0 || hardware.find("handheld") == 0) return "portable";
+    if (hardware == "port" || hardware == "ports") return "port";
+    // "Portable", "Portátil", "Portatile" etc. use a shared prefix.
+    if (hardware.find("port") == 0 || hardware.find("handheld") == 0) return "portable";
     if (hardware.find("consol") == 0) return "console";
     if (hardware.find("comput") == 0 || hardware.find("ordenad") == 0) return "computer";
     if (hardware.find("arcad") == 0) return "arcade";
     if (hardware.find("pinball") == 0 || hardware.find("flipper") == 0) return "pinball";
-    if (hardware == "port" || hardware == "ports") return "port";
     if (hardware.find("extens") == 0) return "extension";
 
     for (PlatformIds::PlatformId id : system->getPlatformIds())
