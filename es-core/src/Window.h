@@ -108,6 +108,12 @@ public:
 	bool hasParkedThemeBrowser() const { return mThemeBrowserBackgroundGui != nullptr; }
 	GuiComponent* restoreThemeBrowserGui();
 	void releaseThemeBrowserGuiAfterUpdate(GuiComponent* gui);
+	// X-TRAS operations also use GUI-owned noninteractive workers; keep their
+	// controller alive independently of Theme Browser and both scrapers.
+	bool parkPortsBrowserGui(GuiComponent* gui);
+	bool hasParkedPortsBrowser() const { return mPortsBrowserBackgroundGui != nullptr; }
+	GuiComponent* restorePortsBrowserGui();
+	void releasePortsBrowserGuiAfterUpdate(GuiComponent* gui);
 	void setBackgroundTaskOverlaySuppressed(bool suppress)
 	{
 		mBackgroundTaskOverlaySuppressed = suppress;
@@ -186,6 +192,8 @@ private:
 	bool mBackgroundGuiReleasePending = false;
 	std::unique_ptr<GuiComponent> mThemeBrowserBackgroundGui;
 	bool mThemeBrowserReleasePending = false;
+	std::unique_ptr<GuiComponent> mPortsBrowserBackgroundGui;
+	bool mPortsBrowserReleasePending = false;
 	std::unique_ptr<ImageComponent> mBackgroundTaskIcon;
 	std::string mBackgroundTaskIconPath;
 	float mBackgroundTaskIconSize = 0.0f;
