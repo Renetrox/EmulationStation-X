@@ -51,6 +51,27 @@ static inline std::string ellipsizePorts(const std::string& s, size_t maxLen)
     return s.substr(0, maxLen - 3) + "...";
 }
 
+static inline std::string portNameForStatus(const std::string& id,
+                                            const std::string& description)
+{
+    // Module descriptions originate in RetroPie-Setup and are not translated.
+    // Preserve proper capitalization (e.g. GZDoom vs gzdoom) when the first
+    // word of the description matches the canonical module ID.
+    if (!id.empty() && description.size() >= id.size())
+    {
+        const bool matches = std::equal(id.begin(), id.end(),
+            description.begin(), [](unsigned char lhs, unsigned char rhs)
+            {
+                return std::tolower(lhs) == std::tolower(rhs);
+            });
+        const bool boundary = description.size() == id.size() ||
+            !std::isalnum(static_cast<unsigned char>(description[id.size()]));
+        if (matches && boundary)
+            return description.substr(0, id.size());
+    }
+    return id;
+}
+
 static inline std::string quotePorts(const std::string& s)
 {
     std::string out = "'";
@@ -1348,9 +1369,8 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
             trPorts("RETROPIE-SETUP ACTION FAILED."),
             true,
             true,
-            // RetroPie module descriptions are not localized. Show the
-            // module name instead of a long English sentence in the overlay.
-            current.id,
+            // Module names remain legible even when descriptions are English.
+            portNameForStatus(current.id, current.description),
             current.installed ? TaskGlyphs::UPDATE : TaskGlyphs::INSTALL);
 
         return true;
