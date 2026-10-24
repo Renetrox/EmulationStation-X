@@ -207,6 +207,7 @@ void GuiPortsBrowser::resumeForeground()
     mInBackground = false;
     mWindow->clearBackgroundTask("xtras-browser");
     setBusyVisible(mJobRunning);
+    refreshOperationText();
     updateFooter();
     updateHelpPrompts();
 }
@@ -217,21 +218,29 @@ void GuiPortsBrowser::publishBackgroundStatus()
         return;
 
     Window::BackgroundTaskStatus task;
-    task.title = mJobInitialLabel.empty() ? trPorts("X-TRAS") : mJobInitialLabel;
+    // Show the active stage, not the original "Installing port..." message
+    // for the entire job. Free games expose their own verified stages.
+    task.title = !mJobStageLabel.empty() ? mJobStageLabel :
+        (mJobInitialLabel.empty() ? trPorts("X-TRAS") : mJobInitialLabel);
     task.detail = mJobTargetName;
-    if (!mJobStageLabel.empty())
-    {
-        task.footer = mJobStageLabel;
-        if (!mJobPortId.empty())
-            task.footer += " · " + ellipsizePorts(mJobPortId, 24);
-    }
-    else
-        task.footer = trPorts("X-TRAS TASK CONTINUES IN BACKGROUND");
-
+    task.footer = trPorts("X-TRAS TASK CONTINUES IN BACKGROUND");
     task.iconGlyph = mJobGlyph.empty() ? TaskGlyphs::DOWNLOAD : mJobGlyph;
-    // The percentages in RetroPie-Setup logs describe individual stages,
-    // not end-to-end install progress. Use an indeterminate progress bar.
+    // RetroPie log percentages cover individual steps, not the full job.
     mWindow->setBackgroundTask("xtras-browser", task);
+}
+
+void GuiPortsBrowser::refreshOperationText()
+{
+    if (mJobRunning)
+        mSubHeader.setText(!mJobStageLabel.empty() ?
+            mJobStageLabel : mJobInitialLabel);
+}
+
+void GuiPortsBrowser::setWorkerStage(const std::string& stage)
+{
+    // Download workers must not touch GUI components or locale state.
+    std::lock_guard<std::mutex> lock(mJobMutex);
+    mWorkerStage = stage;
 }
 
 void GuiPortsBrowser::setBusyVisible(bool visible)
@@ -591,6 +600,7 @@ bool GuiPortsBrowser::downloadGame(const PortEntry& game)
     const std::string dstDir = Utils::FileSystem::getParent(dst);
     const std::string tmp = dst + ".part";
 
+    setWorkerStage("DOWNLOADING");
     Utils::FileSystem::createDirectory(dstDir);
     Utils::FileSystem::createDirectory(
         Utils::FileSystem::getParent(mLogPath));
@@ -625,6 +635,7 @@ bool GuiPortsBrowser::downloadGame(const PortEntry& game)
     }
 
     // Reject an empty response before replacing an existing ROM.
+    setWorkerStage("VERIFYING DOWNLOAD");
     std::ifstream check(tmp, std::ios::binary | std::ios::ate);
     if (!check.is_open() || check.tellg() <= 0)
     {
@@ -636,6 +647,7 @@ bool GuiPortsBrowser::downloadGame(const PortEntry& game)
 
     // Atomic-enough final step for a local filesystem:
     // the old ROM is only replaced after a successful download.
+    setWorkerStage("INSTALLING FILES");
     if (::rename(tmp.c_str(), dst.c_str()) != 0)
     {
         ::unlink(tmp.c_str());
@@ -665,6 +677,7 @@ void GuiPortsBrowser::selectTab(int tab)
         return;
 
     mActiveTab = tab;
+    mSubHeader.setText(trPorts("PORTS AND FREE GAMES"));
     // Choose the first visible item in the new tab, not an arbitrary
     // index from the complete source catalog.
     mLastSelectedIndex = -1;
@@ -974,7 +987,8 @@ void GuiPortsBrowser::startJob(const std::string& busyMsg,
                                bool refreshPorts,
                                bool allowBackground,
                                const std::string& targetName,
-                               const std::string& iconGlyph)
+                               const std::string& iconGlyph,
+                               bool isGameJob)
 {
     if (mJobRunning)
         return;
@@ -986,6 +1000,11 @@ void GuiPortsBrowser::startJob(const std::string& busyMsg,
     mJobCanBackground = allowBackground;
     mJobTargetName = targetName;
     mJobGlyph = iconGlyph;
+    mJobIsGame = isGameJob;
+    {
+        std::lock_guard<std::mutex> lock(mJobMutex);
+        mWorkerStage.clear();
+    }
 
     mProgressPollMs = 0;
     mJobInitialLabel = busyMsg;
@@ -1010,6 +1029,7 @@ void GuiPortsBrowser::startJob(const std::string& busyMsg,
     }
 
     setBusyVisible(true);
+    refreshOperationText();
     updateFooter();
     updateHelpPrompts();
     showPopup(busyMsg, 1200);
@@ -1036,6 +1056,27 @@ void GuiPortsBrowser::updateJobProgress()
 {
     if (!mJobRunning || !mBusy)
         return;
+
+    if (mJobIsGame)
+    {
+        std::string stageKey;
+        {
+            std::lock_guard<std::mutex> lock(mJobMutex);
+            stageKey = mWorkerStage;
+        }
+        if (!stageKey.empty())
+        {
+            const std::string stage = trPorts(stageKey);
+            if (stage != mJobStageLabel)
+            {
+                mJobStageLabel = stage;
+                mBusy->setText(stage);
+                refreshOperationText();
+                publishBackgroundStatus();
+            }
+        }
+        return;
+    }
 
     std::ifstream log(mLogPath, std::ios::binary);
     if (!log.is_open())
@@ -1147,6 +1188,7 @@ void GuiPortsBrowser::updateJobProgress()
         label += "  " + std::to_string(percent) + "%";
 
     mBusy->setText(label);
+    refreshOperationText();
     if (mInBackground)
         publishBackgroundStatus();
 }
@@ -1174,6 +1216,11 @@ void GuiPortsBrowser::finishJobIfDone()
 
     if (!ok)
         msg += "\n" + trPorts("SEE LOG") + ": " + mLogPath;
+
+    // In the foreground the subtitle must reflect the outcome, rather
+    // than being stuck at "Installing port..." or "Downloading game...".
+    const size_t newline = msg.find('\n');
+    mSubHeader.setText(msg.substr(0, newline));
 
     if (mInBackground)
     {
@@ -1290,7 +1337,8 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
                 true,
                 true,
                 current.description.empty() ? current.id : current.description,
-                TaskGlyphs::DOWNLOAD);
+                TaskGlyphs::DOWNLOAD,
+                true);
 
             return true;
         }
@@ -1311,7 +1359,7 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
             trPorts("RETROPIE-SETUP ACTION FAILED."),
             true,
             true,
-            current.description.empty() ? current.id : current.description,
+            current.id,
             current.installed ? TaskGlyphs::UPDATE : TaskGlyphs::INSTALL);
 
         return true;
