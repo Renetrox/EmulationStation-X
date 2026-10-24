@@ -43,6 +43,37 @@ The catalog is intentionally small and curated rather than trying to become a ma
 
 <img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/d87cca37-3d72-4bbb-894f-8c5fe8ca0865" />
 
+## Background tasks — keep browsing while ES-X works
+
+ES-X now supports a lightweight, shared **background-task notification panel**
+for long-running operations. It reports progress or the current stage using
+Font Awesome glyphs, without requiring a separate service or abandoning
+RetroPie compatibility.
+
+- **Native scraper:** automatic-result scraping can run in the background,
+  and its original dialog can be restored. Manual conflict review remains
+  foreground-only.
+- **Skyscraper:** resource gathering and gamelist generation expose their
+  running/completed state; use **B** to return to the frontend and the
+  dialog's stop control when needed.
+- **Theme Browser:** continue downloading or updating themes while browsing;
+  reopening the browser resumes an active operation. Updates stage the new
+  download before replacing an existing theme.
+- **X-TRAS:** free-game downloads and noninteractive RetroPie-Setup port
+  installs/updates can continue while browsing. The status panel shows a
+  short port name and log-derived installation stages. Port removal stays
+  foreground-only.
+
+A displayed percentage is a true scraper count or a *single RetroPie-Setup
+stage*, not an invented total for downloads or port installation. Theme
+downloads use an animated indeterminate bar.
+
+**Manual validation:** native scraping continued after entering/leaving a
+game, downloaded and updated themes were applied successfully, and a GZDoom
+port installation completed in the background with a success notification.
+Further ARM64, failure-path and simultaneous-job checks remain useful.
+
+**Controls, details and test checklist:** [Background Tasks](docs/BACKGROUND_TASKS.md).
 
 ## Example Theme Gallery
 <img width="1366" height="768" alt="Captura de pantalla_2026-01-09_19-20-24" src="https://github.com/user-attachments/assets/07912879-ca8d-4122-a640-d32cd15c6fd9" />
@@ -266,6 +297,7 @@ Beautiful themes should not require engine hacks.
 | System descriptions / Info viewer | ✅ Stable |
 | Quick System Select | ✅ Stable |
 | Integrated Skyscraper interface | ✅ Available |
+| Background task notifications (scrapers / themes / X-TRAS) | ✅ Manually validated; further regression tests recommended |
 | X-TRAS free games catalog | ✅ Available |
 | Gamelist carousel | ✅ Stable |
 | Enhanced Grid layouts | ✅ Stable |
