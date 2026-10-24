@@ -32,9 +32,9 @@ public:
     void setLabels(const std::string& gamesLabel,
                    const std::string& portsLabel)
     {
-        if (mGames.getText() != gamesLabel)
+        if (mGames.getValue() != gamesLabel)
             mGames.setText(gamesLabel);
-        if (mPorts.getText() != portsLabel)
+        if (mPorts.getValue() != portsLabel)
             mPorts.setText(portsLabel);
     }
 
