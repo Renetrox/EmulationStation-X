@@ -1348,7 +1348,9 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
             trPorts("RETROPIE-SETUP ACTION FAILED."),
             true,
             true,
-            current.description.empty() ? current.id : current.description,
+            // RetroPie module descriptions are not localized. Show the
+            // module name instead of a long English sentence in the overlay.
+            current.id,
             current.installed ? TaskGlyphs::UPDATE : TaskGlyphs::INSTALL);
 
         return true;
