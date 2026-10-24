@@ -80,7 +80,10 @@ private:
                   std::function<bool()> fn,
                   const std::string& okMsg,
                   const std::string& failMsg,
-                  bool refreshPorts);
+                  bool refreshPorts,
+                  bool allowBackground = false,
+                  const std::string& targetName = "",
+                  const std::string& iconGlyph = "");
 
     void updateJobProgress();
     void finishJobIfDone();
