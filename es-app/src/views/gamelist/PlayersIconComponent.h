@@ -43,6 +43,8 @@ public:
 		ImageComponent::applyTheme(theme, view, "md_players_icon",
 			ThemeFlags::ALL & ~ThemeFlags::PATH);
 		setVisible(!elem->has("visible") || elem->get<bool>("visible"));
+		// Initialize a generic fallback even before a valid player count exists.
+		setImage("");
 	}
 
 	void setPlayers(const std::string& rawPlayers)
