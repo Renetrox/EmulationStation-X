@@ -12,6 +12,7 @@
 #include "guis/GuiInfoPopup.h"
 #include "guis/GuiMsgBox.h"
 #include "LocaleES.h"
+#include "Settings.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -124,6 +125,9 @@ GuiPortsBrowser::GuiPortsBrowser(Window* window)
 
     const std::string home = Utils::FileSystem::getHomePath();
     mLogPath = home + "/.emulationstation/esx/ports-browser.log";
+    mLoadedLanguage = Settings::getInstance()->getString("Language");
+    if (mLoadedLanguage.empty())
+        mLoadedLanguage = "en";
 
     const float sw = (float)Renderer::getScreenWidth();
     const float sh = (float)Renderer::getScreenHeight();
@@ -207,6 +211,7 @@ void GuiPortsBrowser::resumeForeground()
     mInBackground = false;
     mWindow->clearBackgroundTask("xtras-browser");
     setBusyVisible(mJobRunning);
+    refreshLanguage();
     updateFooter();
     updateHelpPrompts();
 }
@@ -790,6 +795,24 @@ void GuiPortsBrowser::rebuildList()
 
     updateFooter();
     updateHelpPrompts();
+}
+
+void GuiPortsBrowser::refreshLanguage()
+{
+    std::string language = Settings::getInstance()->getString("Language");
+    if (language.empty())
+        language = "en";
+
+    if (language == mLoadedLanguage)
+        return;
+
+    mLoadedLanguage = language;
+    mTabs.setLabels(trPorts("FREE GAMES"), trPorts("PORTS"));
+    mHeader.setText(trPorts("X-TRAS"));
+    mSubHeader.setText(trPorts("PORTS AND FREE GAMES"));
+    // Section headings, buttons and status strings also use the current
+    // locale and must be rebuilt after restoring a background browser.
+    rebuildList();
 }
 
 void GuiPortsBrowser::updateFooter()
@@ -1389,6 +1412,9 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
 
 void GuiPortsBrowser::update(int deltaTime)
 {
+    if (!mInBackground)
+        refreshLanguage();
+
     if (mInBackground)
     {
         if (mJobRunning)
