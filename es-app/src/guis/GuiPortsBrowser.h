@@ -130,6 +130,7 @@ private:
     long long mJobLogStart;
     std::string mJobInitialLabel;
     std::string mJobStageLabel;
+    int mJobStagePercent = -1; // current RetroPie-Setup stage only, never overall
     std::string mJobPortId;
     std::string mJobDoneMsg;
     bool mInBackground = false;
