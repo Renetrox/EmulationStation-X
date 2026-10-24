@@ -1041,7 +1041,11 @@ void ThemeData::parseElement(const pugi::xml_node& root, const std::map<std::str
 		case PATH:
 		{
 			std::string path = Utils::FileSystem::resolveRelativePath(str, mPaths.back(), true, false);
-			if (!ResourceManager::getInstance()->fileExists(path))
+			// Player-count image templates resolve at game selection time.
+			const bool isPlayersTemplate =
+				std::string(root.attribute("name").as_string()) == "md_players_icon" &&
+				str.find("{game:players}") != std::string::npos;
+			if (!isPlayersTemplate && !ResourceManager::getInstance()->fileExists(path))
 			{
 				std::stringstream ss;
 				ss << "ThemeData: could not find file \"" << node.text().get() << "\" ";
