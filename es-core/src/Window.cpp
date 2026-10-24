@@ -1208,7 +1208,7 @@ void Window::renderBackgroundTasks()
 	}
 
 	std::string title = task.title;
-	if (task.current >= 0 && task.total > 0)
+	if (task.showProgressInTitle && task.current >= 0 && task.total > 0)
 		title = std::to_string(task.current) + "/" + std::to_string(task.total) + " " + title;
 
 	if (!entry.titleCache)
