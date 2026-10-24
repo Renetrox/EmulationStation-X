@@ -26,6 +26,18 @@ public:
     {
     }
 
+    // Existing X-TRAS windows may survive a language change while a
+    // download is parked in the background. Update the visible tab labels
+    // without rebuilding the entire tab component or changing selection.
+    void setLabels(const std::string& gamesLabel,
+                   const std::string& portsLabel)
+    {
+        if (mGames.getText() != gamesLabel)
+            mGames.setText(gamesLabel);
+        if (mPorts.getText() != portsLabel)
+            mPorts.setText(portsLabel);
+    }
+
     void setAvailable(bool games, bool ports)
     {
         if (games == mGamesAvailable && ports == mPortsAvailable)
