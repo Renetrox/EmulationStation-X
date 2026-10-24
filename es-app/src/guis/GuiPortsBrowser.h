@@ -55,6 +55,7 @@ private:
     void rebuildList();
     void selectTab(int tab);
     void updateFooter();
+    void refreshLanguage(); // handles the GUI restored after an ES-X language change
 
     bool findRetroPieSetup();
     bool loadPorts();
@@ -102,6 +103,7 @@ private:
     std::string mPackagesScript;
     std::string mPortsModulesDir;
     std::string mLogPath;
+    std::string mLoadedLanguage;
 
     std::vector<PortEntry> mPorts;
     std::vector<int> mVisiblePortIndices;
