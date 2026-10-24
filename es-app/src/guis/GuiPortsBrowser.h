@@ -83,7 +83,8 @@ private:
                   bool refreshPorts,
                   bool allowBackground = false,
                   const std::string& targetName = "",
-                  const std::string& iconGlyph = "");
+                  const std::string& iconGlyph = "",
+                  bool isGameJob = false);
 
     void updateJobProgress();
     void finishJobIfDone();
