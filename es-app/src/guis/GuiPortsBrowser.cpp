@@ -1,6 +1,7 @@
 // es-app/src/guis/GuiPortsBrowser.cpp
 #include "guis/GuiPortsBrowser.h"
 #include "guis/CompactBrowserStyle.h"
+#include "TaskGlyphs.h"
 
 #include "Log.h"
 #include "Window.h"
@@ -185,6 +186,52 @@ GuiPortsBrowser::~GuiPortsBrowser()
 {
     if (mJobThread.joinable())
         mJobThread.join();
+}
+
+void GuiPortsBrowser::moveToBackground()
+{
+    if (mInBackground || !mJobRunning || !mJobCanBackground)
+        return;
+    if (!mWindow->parkPortsBrowserGui(this))
+        return;
+
+    mInBackground = true;
+    setBusyVisible(false);
+    publishBackgroundStatus();
+}
+
+void GuiPortsBrowser::resumeForeground()
+{
+    if (!mInBackground)
+        return;
+    mInBackground = false;
+    mWindow->clearBackgroundTask("xtras-browser");
+    setBusyVisible(mJobRunning);
+    updateFooter();
+    updateHelpPrompts();
+}
+
+void GuiPortsBrowser::publishBackgroundStatus()
+{
+    if (!mInBackground)
+        return;
+
+    Window::BackgroundTaskStatus task;
+    task.title = mJobInitialLabel.empty() ? trPorts("X-TRAS") : mJobInitialLabel;
+    task.detail = mJobTargetName;
+    if (!mJobStageLabel.empty())
+    {
+        task.footer = mJobStageLabel;
+        if (!mJobPortId.empty())
+            task.footer += " · " + ellipsizePorts(mJobPortId, 24);
+    }
+    else
+        task.footer = trPorts("X-TRAS TASK CONTINUES IN BACKGROUND");
+
+    task.iconGlyph = mJobGlyph.empty() ? TaskGlyphs::DOWNLOAD : mJobGlyph;
+    // The percentages in RetroPie-Setup logs describe individual stages,
+    // not end-to-end install progress. Use an indeterminate progress bar.
+    mWindow->setBackgroundTask("xtras-browser", task);
 }
 
 void GuiPortsBrowser::setBusyVisible(bool visible)
@@ -761,7 +808,13 @@ void GuiPortsBrowser::updateFooter()
     if (port.installed)
         footer += "    X " + trPorts("REMOVE");
 
-    footer += "    Y " + trPorts("REFRESH") + "    B " + trPorts("BACK");
+    if (!mJobRunning)
+        footer += "    Y " + trPorts("REFRESH") + "    B " + trPorts("BACK");
+    else if (mJobCanBackground)
+        footer = "B " + trPorts("X-TRAS CONTINUE IN BACKGROUND");
+    else
+        footer = mJobInitialLabel;
+
     mFooter.setText(footer);
 }
 
@@ -918,7 +971,10 @@ void GuiPortsBrowser::startJob(const std::string& busyMsg,
                                std::function<bool()> fn,
                                const std::string& okMsg,
                                const std::string& failMsg,
-                               bool refreshPorts)
+                               bool refreshPorts,
+                               bool allowBackground,
+                               const std::string& targetName,
+                               const std::string& iconGlyph)
 {
     if (mJobRunning)
         return;
@@ -927,6 +983,9 @@ void GuiPortsBrowser::startJob(const std::string& busyMsg,
     mJobDone = false;
     mJobOk = false;
     mJobRefreshPorts = refreshPorts;
+    mJobCanBackground = allowBackground;
+    mJobTargetName = targetName;
+    mJobGlyph = iconGlyph;
 
     mProgressPollMs = 0;
     mJobInitialLabel = busyMsg;
@@ -951,6 +1010,8 @@ void GuiPortsBrowser::startJob(const std::string& busyMsg,
     }
 
     setBusyVisible(true);
+    updateFooter();
+    updateHelpPrompts();
     showPopup(busyMsg, 1200);
 
     if (mJobThread.joinable())
@@ -1086,6 +1147,8 @@ void GuiPortsBrowser::updateJobProgress()
         label += "  " + std::to_string(percent) + "%";
 
     mBusy->setText(label);
+    if (mInBackground)
+        publishBackgroundStatus();
 }
 
 void GuiPortsBrowser::finishJobIfDone()
@@ -1112,6 +1175,22 @@ void GuiPortsBrowser::finishJobIfDone()
     if (!ok)
         msg += "\n" + trPorts("SEE LOG") + ": " + mLogPath;
 
+    if (mInBackground)
+    {
+        Window::BackgroundTaskStatus task;
+        task.title = trPorts("X-TRAS");
+        task.detail = mJobTargetName;
+        task.footer = msg;
+        task.iconGlyph = mJobGlyph.empty() ? TaskGlyphs::DOWNLOAD : mJobGlyph;
+        task.state = ok ? Window::BackgroundTaskStatus::SUCCESS :
+            Window::BackgroundTaskStatus::FAILED;
+        task.dismissOnInput = true;
+        mWindow->setBackgroundTask("xtras-browser", task);
+        mJobDone = false;
+        mWindow->releasePortsBrowserGuiAfterUpdate(this);
+        return;
+    }
+
     showPopup(msg, ok ? 2500 : 5000);
 
     if (refresh)
@@ -1126,15 +1205,22 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
     if (input.value == 0)
         return GuiComponent::input(config, input);
 
-    if (mJobRunning)
-        return true;
-
     if (config->isMappedTo("b", input) ||
         config->isMappedTo("back", input))
     {
-        mWindow->removeGui(this);
+        if (mJobRunning)
+        {
+            if (mJobCanBackground)
+                moveToBackground();
+        }
+        else
+            delete this;
         return true;
     }
+
+    // No concurrent or destructive operations while a worker is running.
+    if (mJobRunning)
+        return true;
 
     if (mPorts.empty())
     {
@@ -1201,7 +1287,10 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
                 trPorts("GAME DOWNLOADED.") + "\n" +
                     trPorts("RESTART ES-X TO REFRESH THE GAME LIST."),
                 trPorts("GAME DOWNLOAD FAILED."),
-                true);
+                true,
+                true,
+                current.description.empty() ? current.id : current.description,
+                TaskGlyphs::DOWNLOAD);
 
             return true;
         }
@@ -1220,7 +1309,10 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
             [this, current]() { return installOrUpdatePort(current); },
             current.installed ? trPorts("PORT IS UP TO DATE / UPDATED.") : trPorts("PORT INSTALLED."),
             trPorts("RETROPIE-SETUP ACTION FAILED."),
-            true);
+            true,
+            true,
+            current.description.empty() ? current.id : current.description,
+            current.installed ? TaskGlyphs::UPDATE : TaskGlyphs::INSTALL);
 
         return true;
     }
@@ -1297,6 +1389,21 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
 
 void GuiPortsBrowser::update(int deltaTime)
 {
+    if (mInBackground)
+    {
+        if (mJobRunning)
+        {
+            mProgressPollMs += deltaTime;
+            if (mProgressPollMs >= 350)
+            {
+                mProgressPollMs = 0;
+                updateJobProgress();
+            }
+        }
+        finishJobIfDone();
+        return;
+    }
+
     GuiComponent::update(deltaTime);
 
     mFrame.update(deltaTime);
@@ -1338,24 +1445,25 @@ std::vector<HelpPrompt> GuiPortsBrowser::getHelpPrompts()
 {
     std::vector<HelpPrompt> prompts;
 
-    prompts.push_back(HelpPrompt("up/down", trPorts("MOVE")));
-    if (mHasGames && mHasPorts)
-        prompts.push_back(HelpPrompt("left/right", trPorts("CHANGE TAB")));
-
-    if (!mPorts.empty())
+    if (!mJobRunning)
     {
-        const bool installed = mPorts[mLastSelectedIndex].installed;
+        prompts.push_back(HelpPrompt("up/down", trPorts("MOVE")));
+        if (mHasGames && mHasPorts)
+            prompts.push_back(HelpPrompt("left/right", trPorts("CHANGE TAB")));
 
-        prompts.push_back(
-            HelpPrompt("a", installed ? trPorts("UPDATE") : trPorts("INSTALL")));
-
-        if (installed)
-            prompts.push_back(HelpPrompt("x", trPorts("REMOVE")));
-
-        prompts.push_back(HelpPrompt("y", trPorts("REFRESH")));
+        if (!mPorts.empty())
+        {
+            const bool installed = mPorts[mLastSelectedIndex].installed;
+            prompts.push_back(
+                HelpPrompt("a", installed ? trPorts("UPDATE") : trPorts("INSTALL")));
+            if (installed)
+                prompts.push_back(HelpPrompt("x", trPorts("REMOVE")));
+            prompts.push_back(HelpPrompt("y", trPorts("REFRESH")));
+        }
+        prompts.push_back(HelpPrompt("b", trPorts("BACK")));
     }
-
-    prompts.push_back(HelpPrompt("b", trPorts("BACK")));
+    else if (mJobCanBackground)
+        prompts.push_back(HelpPrompt("b", trPorts("X-TRAS CONTINUE IN BACKGROUND")));
 
     return prompts;
 }
