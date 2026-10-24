@@ -13,6 +13,7 @@ DetailedGameListView::DetailedGameListView(Window* window, FileData* root) :
 	mThumbnail(window),
 	mMarquee(window),
 	mImage(window),
+	mPlayersIcon(window),
 
 	mLblRating(window), mLblReleaseDate(window), mLblDeveloper(window), mLblPublisher(window),
 	mLblGenre(window), mLblPlayers(window), mLblLastPlayed(window), mLblPlayCount(window),
@@ -49,6 +50,10 @@ DetailedGameListView::DetailedGameListView(Window* window, FileData* root) :
 	mImage.setMaxSize(mSize.x() * (0.50f - 2 * padding), mSize.y() * 0.4f);
 	mImage.setDefaultZIndex(30);
 	addChild(&mImage);
+
+	// Metadata-controlled badge; invisible for themes that do not opt in.
+	mPlayersIcon.setDefaultZIndex(105);
+	addChild(&mPlayersIcon);
 
 	// Thumbnail
 	mThumbnail.setOrigin(0.5f, 0.5f);
@@ -141,6 +146,7 @@ void DetailedGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& them
 	mThumbnail.applyTheme(theme, getName(), "md_thumbnail", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
 	mMarquee.applyTheme(theme, getName(), "md_marquee", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
 	mImage.applyTheme(theme, getName(), "md_image", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
+	mPlayersIcon.applyPlayersTheme(theme, getName());
 	mName.applyTheme(theme, getName(), "md_name", ALL);
 	mGameCounter.applyTheme(theme, getName(), "md_gamecounter", ALL);
 
@@ -170,6 +176,8 @@ void DetailedGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& them
 	mDescription.setSize(mDescContainer.getSize().x(), 0);
 	mDescription.applyTheme(theme, getName(), "md_description", ALL ^ (POSITION | ThemeFlags::SIZE | ThemeFlags::ORIGIN | TEXT | ROTATION));
 
+	mPlayersIcon.setPlayers(mList.getSelected() && !mList.getSelected()->isPlaceHolder()
+		? mList.getSelected()->metadata.get("players") : "");
 	sortChildren();
 }
 
@@ -329,6 +337,7 @@ void DetailedGameListView::updateInfoPanel()
 	bool fadingOut;
 	if (file == NULL)
 	{
+		mPlayersIcon.setPlayers("");
 		fadingOut = true;
 		mBackground.setImage("");
 		mBackground.setVisible(false);
@@ -360,6 +369,7 @@ void DetailedGameListView::updateInfoPanel()
 		mPublisher.setValue(file->metadata.get("publisher"));
 		mGenre.setValue(file->metadata.get("genre"));
 		mPlayers.setValue(file->metadata.get("players"));
+		mPlayersIcon.setPlayers(file->metadata.get("players"));
 		mName.setValue(file->metadata.get("name"));
 
 		const int total = (int)mList.size();
@@ -386,6 +396,7 @@ void DetailedGameListView::updateInfoPanel()
 	}
 
 	std::vector<GuiComponent*> comps = getMDValues();
+	comps.push_back(&mPlayersIcon);
 	comps.push_back(&mBackground);
 	comps.push_back(&mThumbnail);
 	comps.push_back(&mMarquee);

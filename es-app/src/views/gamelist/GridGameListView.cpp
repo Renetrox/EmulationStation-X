@@ -61,6 +61,7 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	mVideo(nullptr),
 	mVideoPlaying(false),
 	mImage(window),
+	mPlayersIcon(window),
 	mRating(window),
 	mReleaseDate(window),
 	mDeveloper(window),
@@ -163,6 +164,10 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	mImage.setVisible(false);
 	addChild(&mImage);
 
+	// Metadata-controlled badge; invisible for themes that do not opt in.
+	mPlayersIcon.setDefaultZIndex(105);
+	addChild(&mPlayersIcon);
+
 	// Video
 	mVideo->setOrigin(0.5f, 0.5f);
 	mVideo->setPosition(2.0f, 2.0f);
@@ -215,6 +220,7 @@ void GridGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
 	mBackground.applyTheme(theme, getName(), "md_background", POSITION | SIZE | Z_INDEX | ROTATION | VISIBLE);
 	mMarquee.applyTheme(theme, getName(), "md_marquee", POSITION | SIZE | Z_INDEX | ROTATION | VISIBLE);
 	mImage.applyTheme(theme, getName(), "md_image", POSITION | SIZE | Z_INDEX | ROTATION | VISIBLE);
+	mPlayersIcon.applyPlayersTheme(theme, getName());
 	mVideo->applyTheme(theme, getName(), "md_video", POSITION | SIZE | DELAY | Z_INDEX | ROTATION | VISIBLE);
 
 	initMDLabels();
@@ -260,6 +266,8 @@ void GridGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
 	if (file && !file->isPlaceHolder())
 		mGrid.setCursor(file);
 
+	mPlayersIcon.setPlayers(mGrid.getSelected() && !mGrid.getSelected()->isPlaceHolder()
+		? mGrid.getSelected()->metadata.get("players") : "");
 	sortChildren();
 }
 
@@ -435,6 +443,7 @@ void GridGameListView::updateInfoPanel()
 	bool fadingOut;
 	if (file == nullptr)
 	{
+		mPlayersIcon.setPlayers("");
 		mBackground.setImage("");
 		mBackground.setVisible(false);
 
@@ -478,6 +487,7 @@ void GridGameListView::updateInfoPanel()
 		if (mPublisher.isVisible())   mPublisher.setValue(file->metadata.get("publisher"));
 		if (mGenre.isVisible())       mGenre.setValue(file->metadata.get("genre"));
 		if (mPlayers.isVisible())     mPlayers.setValue(file->metadata.get("players"));
+		mPlayersIcon.setPlayers(file->metadata.get("players"));
 
 		std::string displayName = file->metadata.get("name");
 		if (displayName.empty())
@@ -497,6 +507,7 @@ void GridGameListView::updateInfoPanel()
 
 	// El fondo no entra en el fade del panel
 	std::vector<GuiComponent*> comps = getMDValues();
+	comps.push_back(&mPlayersIcon);
 	comps.push_back(&mDescription);
 	comps.push_back(&mName);
 	comps.push_back(&mMarquee);

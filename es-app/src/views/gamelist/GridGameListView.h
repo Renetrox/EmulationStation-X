@@ -7,6 +7,7 @@
 #include "components/ScrollableContainer.h"
 #include "components/ImageGridComponent.h"
 #include "components/VideoComponent.h"
+#include "views/gamelist/PlayersIconComponent.h"
 #include "views/gamelist/ISimpleGameListView.h"
 
 class GridGameListView : public ISimpleGameListView
@@ -58,6 +59,7 @@ private:
 	VideoComponent* mVideo;
 	bool mVideoPlaying;
 	ImageComponent mImage;
+	PlayersIconComponent mPlayersIcon;
 	RatingComponent mRating;
 	DateTimeComponent mReleaseDate;
 	TextComponent mDeveloper;

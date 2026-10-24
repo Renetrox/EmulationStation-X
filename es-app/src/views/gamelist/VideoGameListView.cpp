@@ -25,6 +25,7 @@ mThumbnail(window),
 mMarquee(window),
 mVideo(nullptr),
 mImage(window),
+	mPlayersIcon(window),
 mCover(window),
 mScreenshot(window),
 mWheel(window),
@@ -71,6 +72,10 @@ mVideoPlaying(false),
 	mImage.setDefaultZIndex(30);
 	mImage.setVisible(false);
 	addChild(&mImage);
+
+	// Metadata-controlled badge; invisible for themes that do not opt in.
+	mPlayersIcon.setDefaultZIndex(105);
+	addChild(&mPlayersIcon);
 
 	// Video
 	mVideo->setOrigin(0.5f, 0.5f);
@@ -206,6 +211,7 @@ void VideoGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
 	mThumbnail.applyTheme(theme, getName(), "md_thumbnail", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
 	mMarquee.applyTheme(theme, getName(), "md_marquee", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
 	mImage.applyTheme(theme, getName(), "md_image", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
+	mPlayersIcon.applyPlayersTheme(theme, getName());
 	mVideo->applyTheme(theme, getName(), "md_video", POSITION | ThemeFlags::SIZE | ThemeFlags::DELAY | Z_INDEX | ROTATION | VISIBLE);
 	mName.applyTheme(theme, getName(), "md_name", ALL);
 	mCover.applyTheme(theme, getName(), "md_cover", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
@@ -240,6 +246,8 @@ void VideoGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
 	mDescription.setSize(mDescContainer.getSize().x(), 0);
 	mDescription.applyTheme(theme, getName(), "md_description", ALL ^ (POSITION | ThemeFlags::SIZE | ThemeFlags::ORIGIN | TEXT | ROTATION));
 
+	mPlayersIcon.setPlayers(mList.getSelected() && !mList.getSelected()->isPlaceHolder()
+		? mList.getSelected()->metadata.get("players") : "");
 	sortChildren();
 }
 
@@ -314,6 +322,7 @@ void VideoGameListView::updateInfoPanel()
 	bool fadingOut;
 	if (file == NULL)
 	{
+		mPlayersIcon.setPlayers("");
 				mCover.setImage("");
 		mScreenshot.setImage("");
 		mWheel.setImage("");
@@ -399,6 +408,7 @@ void VideoGameListView::updateInfoPanel()
 		mPublisher.setValue(file->metadata.get("publisher"));
 		mGenre.setValue(file->metadata.get("genre"));
 		mPlayers.setValue(file->metadata.get("players"));
+		mPlayersIcon.setPlayers(file->metadata.get("players"));
 		mName.setValue(file->metadata.get("name"));
 
 		if (file->getType() == GAME)
@@ -416,6 +426,7 @@ void VideoGameListView::updateInfoPanel()
 	}
 
 	std::vector<GuiComponent*> comps = getMDValues();
+	comps.push_back(&mPlayersIcon);
 		comps.push_back(&mBackground);
 	comps.push_back(&mThumbnail);
 	comps.push_back(&mMarquee);

@@ -753,3 +753,32 @@ sound
 ninepatch
 imagegrid
 ```
+
+---
+
+## Dynamic player-count image (ES-X)
+
+A theme may opt into a **per-game player badge** in the `detailed`, `video`,
+or `grid` view. Declare a regular `image` called `md_players_icon`:
+
+```xml
+<view name="detailed, video">
+  <image name="md_players_icon">
+    <origin>0 0.5</origin>
+    <pos>0.733 0.8095</pos>
+    <maxSize>0.032 0.032</maxSize>
+    <path>./resources/systemicons/{game:players}p.png</path>
+    <default>./resources/icons/Controllers.png</default>
+    <zIndex>105</zIndex>
+  </image>
+</view>
+```
+
+On selection changes, ES-X resolves **only** `{game:players}` in this image's
+path against the game's existing `players` gamelist metadata. For example:
+`2` loads `2p.png`; a range such as `1-4` uses `4p.png`. Missing or
+unrecognized metadata, and missing icons, use `<default>` when configured.
+The unmodified `md_players` text remains available for themes that want it.
+
+This is opt-in. Other `image` elements and all existing theme paths are
+unaffected. ES-X does not implement general Batocera expression bindings.
