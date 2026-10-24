@@ -112,6 +112,9 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "fontPath", PATH },
 		{ "fontSize", RESOLUTION_FLOAT },
 		{ "color", COLOR },
+		{ "activeFor", STRING },     // opt-in system category (no 'if' parser)
+		{ "activeColor", COLOR },    // selected system's tab color
+		{ "activeFontPath", PATH },  // selected system's tab font
 		{ "alignment", STRING },
 		{ "verticalAlignment", STRING },
 		{ "glowColor", COLOR },

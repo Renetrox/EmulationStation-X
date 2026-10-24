@@ -176,6 +176,12 @@ public:
 	};
 
 	bool hasView(const std::string& view);
+	// Reuse theme-defined hardware metadata without importing another database.
+	std::string getVariable(const std::string& key) const
+	{
+		const auto it = mVariables.find(key);
+		return it != mVariables.end() ? it->second : "";
+	}
 
 	// If expectedType is an empty string, will do no type checking.
 	const ThemeElement* getElement(const std::string& view, const std::string& element, const std::string& expectedType) const;
