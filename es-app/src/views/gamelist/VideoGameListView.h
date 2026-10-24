@@ -5,6 +5,7 @@
 #include "components/DateTimeComponent.h"
 #include "components/RatingComponent.h"
 #include "components/ScrollableContainer.h"
+#include "views/gamelist/PlayersIconComponent.h"
 #include "views/gamelist/BasicGameListView.h"
 
 class VideoComponent;
@@ -38,6 +39,7 @@ private:
 	ImageComponent mMarquee;
 	VideoComponent* mVideo;
 	ImageComponent mImage;
+	PlayersIconComponent mPlayersIcon;
 
 	// ES-X extended media slots
 	ImageComponent mCover;

@@ -5,6 +5,7 @@
 #include "components/DateTimeComponent.h"
 #include "components/RatingComponent.h"
 #include "components/ScrollableContainer.h"
+#include "views/gamelist/PlayersIconComponent.h"
 #include "views/gamelist/BasicGameListView.h"
 
 class DetailedGameListView : public BasicGameListView
@@ -35,6 +36,7 @@ private:
 	ImageComponent mThumbnail;
 	ImageComponent mMarquee;
 	ImageComponent mImage;
+	PlayersIconComponent mPlayersIcon;
 
 	TextComponent mLblRating, mLblReleaseDate, mLblDeveloper, mLblPublisher, mLblGenre, mLblPlayers, mLblLastPlayed, mLblPlayCount;
 
