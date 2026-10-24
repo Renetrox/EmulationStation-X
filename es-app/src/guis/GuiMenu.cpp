@@ -161,7 +161,16 @@ if (isFullUI)
 	addEntry(menuLabel("🌐", "SKYSCRAPER"), menuColor, true, [this] { openSkyscraperMenu(); });
 
 	addEntry(menuLabel("📦", "X-TRAS"), menuColor, true, [this] {
-		mWindow->pushGui(new GuiPortsBrowser(mWindow));
+		// Restore the running worker GUI rather than starting a second
+		// RetroPie-Setup command with the same log/status files.
+		if (mWindow->hasParkedPortsBrowser())
+		{
+			GuiComponent* gui = mWindow->restorePortsBrowserGui();
+			if (gui)
+				static_cast<GuiPortsBrowser*>(gui)->resumeForeground();
+		}
+		else
+			mWindow->pushGui(new GuiPortsBrowser(mWindow));
 	});
 
 	// Organización y sistema.
@@ -532,7 +541,16 @@ void GuiMenu::openUISettings()
 		theme_dl_row.addElement(std::make_shared<TextComponent>(mWindow, _("THEME DOWNLOADER"), Font::get(FONT_SIZE_MEDIUM), getMenuTextColor()), true);
 		theme_dl_row.addElement(makeArrow(mWindow), false);
 		theme_dl_row.makeAcceptInputHandler([this] {
-			mWindow->pushGui(new GuiThemeBrowser(mWindow));
+			// Resume the existing download UI instead of creating a second
+			// instance and racing on the same theme directory.
+			if (mWindow->hasParkedThemeBrowser())
+			{
+				GuiComponent* gui = mWindow->restoreThemeBrowserGui();
+				if (gui)
+					static_cast<GuiThemeBrowser*>(gui)->resumeForeground();
+			}
+			else
+				mWindow->pushGui(new GuiThemeBrowser(mWindow));
 		});
 		s->addRow(theme_dl_row);
 	}

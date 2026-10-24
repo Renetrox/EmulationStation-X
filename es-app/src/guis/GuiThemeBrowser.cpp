@@ -1,6 +1,7 @@
 // es-app/src/guis/GuiThemeBrowser.cpp
 #include "guis/GuiThemeBrowser.h"
 #include "guis/CompactBrowserStyle.h"
+#include "TaskGlyphs.h"
 
 #include "Log.h"
 #include "Window.h"
@@ -77,6 +78,8 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	, mUpdateStop(false)
 	, mUpdateDirty(false)
 {
+	mJobTargetTitle = trTheme("THEME DOWNLOADER");
+	mJobGlyph = TaskGlyphs::UPDATE;
 	const std::string home = Utils::FileSystem::getHomePath();
 
 	// Catálogo local (snapshot ZIP) en ~/.emulationstation/esx/theme-catalog
@@ -193,6 +196,43 @@ GuiThemeBrowser::~GuiThemeBrowser()
 		mJobThread.join();
 }
 
+void GuiThemeBrowser::moveToBackground()
+{
+	if (mInBackground || !mJobRunning)
+		return;
+	if (!mWindow->parkThemeBrowserGui(this))
+		return;
+
+	mInBackground = true;
+	setBusyVisible(false);
+	publishBackgroundStatus();
+}
+
+void GuiThemeBrowser::resumeForeground()
+{
+	if (!mInBackground)
+		return;
+	mInBackground = false;
+	mWindow->clearBackgroundTask("theme-browser");
+	setBusyVisible(mJobRunning);
+	updateFooter();
+	updateHelpPrompts();
+}
+
+void GuiThemeBrowser::publishBackgroundStatus()
+{
+	if (!mInBackground)
+		return;
+	Window::BackgroundTaskStatus task;
+	task.title = mJobBusyMsg.empty() ? trTheme("THEME DOWNLOADER") : mJobBusyMsg;
+	task.detail = mJobTargetTitle;
+	task.footer = trTheme("THEME TASK CONTINUES IN BACKGROUND");
+	task.iconGlyph = mJobGlyph.empty() ? TaskGlyphs::DOWNLOAD : mJobGlyph;
+	// git clone does not provide reliable progress through this job runner.
+	// Let Window animate its indeterminate bar instead of inventing a percent.
+	mWindow->setBackgroundTask("theme-browser", task);
+}
+
 void GuiThemeBrowser::setBusyVisible(bool v)
 {
 	mBusyVisible = v;
@@ -272,21 +312,48 @@ bool GuiThemeBrowser::updateCatalogZipSilent()
 
 	int rc = runCmd(dlCmd);
 	if (rc != 0 || !Utils::FileSystem::exists(zipPath))
+	{
+		runCmd("rm -f " + quote(zipPath));
 		return false;
+	}
+
+	// Extract first. Never erase a working local catalog before confirming
+	// a complete download and successful unzip.
+	const std::string backup = mCatalogDir + ".esx-update-backup";
+	if (Utils::FileSystem::exists(backup))
+	{
+		runCmd("rm -f " + quote(zipPath));
+		LOG(LogError) << "Theme Browser: catalog backup needs recovery: " << backup;
+		return false;
+	}
 
 	runCmd("rm -rf " + quote(extracted));
-	runCmd("rm -rf " + quote(mCatalogDir));
-
 	rc = runCmd("unzip -q -o " + quote(zipPath) + " -d " + quote(esxDir));
 	runCmd("rm -f " + quote(zipPath));
 
 	if (rc != 0 || !Utils::FileSystem::exists(extracted))
+	{
+		runCmd("rm -rf " + quote(extracted));
 		return false;
+	}
 
-	rc = runCmd("mv " + quote(extracted) + " " + quote(mCatalogDir));
-	if (rc != 0 || !Utils::FileSystem::exists(mCatalogDir))
+	const bool hadCatalog = Utils::FileSystem::exists(mCatalogDir);
+	if (hadCatalog && std::rename(mCatalogDir.c_str(), backup.c_str()) != 0)
+	{
+		runCmd("rm -rf " + quote(extracted));
 		return false;
+	}
 
+	if (std::rename(extracted.c_str(), mCatalogDir.c_str()) != 0)
+	{
+		if (hadCatalog && std::rename(backup.c_str(), mCatalogDir.c_str()) != 0)
+			LOG(LogError) << "Theme Browser: restore catalog manually: " << backup;
+		runCmd("rm -rf " + quote(extracted));
+		return false;
+	}
+
+	if (hadCatalog)
+		runCmd("rm -rf " + quote(backup));
 	return true;
 }
 
@@ -628,51 +695,73 @@ void GuiThemeBrowser::updateFooter()
 	std::string s = "A ";
 	s += installed ? trTheme("UPDATE") : trTheme("DOWNLOAD");
 	if (installed) s += "    X " + trTheme("UNINSTALL");
-	s += "    B " + trTheme("BACK");
+	s += "    B " + (mJobRunning ?
+		trTheme("THEME CONTINUE IN BACKGROUND") : trTheme("BACK"));
 
 	mFooter.setText(s);
 }
 
 bool GuiThemeBrowser::downloadOrUpdateSilent(const ThemeEntry& e)
 {
-	if (e.repo.empty())
+	if (e.repo.empty() || e.folder.empty())
 		return false;
 
 	Utils::FileSystem::createDirectory(mThemesDir);
 
 	const std::string dst = mThemesDir + "/" + e.folder;
+	const std::string stage = dst + ".esx-download-tmp";
+	const std::string backup = dst + ".esx-update-backup";
 	const bool installed = Utils::FileSystem::exists(dst);
 
-	if (installed)
-		runCmd("rm -rf " + quote(dst));
-
-	// clone
-	const std::string cmd = "git clone --depth 1 " + quote(e.repo) + " " + quote(dst);
-	int rc = runCmd(cmd);
-
-	if (rc == 0)
+	// Preserve any old backup from an interrupted update. Never destroy it
+	// blindly: it may contain the only surviving copy of someone's theme.
+	if (Utils::FileSystem::exists(backup))
 	{
-		// NEW: capturar commit antes de borrar .git
-		std::string head;
-		{
-			// git -C "<dst>" rev-parse HEAD
-			std::string out;
-			std::string c = "sh -c " + quote("git -C " + quote(dst) + " rev-parse HEAD 2>/dev/null");
-			if (runCmdCapture(c, out))
-				head = trim(out);
-		}
-
-		// limpiar .git como siempre
-		runCmd("rm -rf " + quote(dst + "/.git"));
-
-		// NEW: guardar info instalada
-		if (!head.empty())
-			saveInstalledInfo(e, e.repo, head);
-
-		return true;
+		LOG(LogError) << "Theme Browser: previous backup needs recovery: " << backup;
+		return false;
 	}
 
-	return false;
+	// Clone off to the side so a network failure cannot delete an
+	// already-installed theme. Only promote a fully cloned checkout.
+	runCmd("rm -rf " + quote(stage));
+	if (runCmd("git clone --depth 1 " + quote(e.repo) + " " + quote(stage)) != 0 ||
+		!Utils::FileSystem::exists(stage))
+	{
+		runCmd("rm -rf " + quote(stage));
+		return false;
+	}
+
+	// Capture the repository revision before removing Git's metadata.
+	std::string head;
+	std::string out;
+	const std::string revCmd = "sh -c " +
+		quote("git -C " + quote(stage) + " rev-parse HEAD 2>/dev/null");
+	if (runCmdCapture(revCmd, out))
+		head = trim(out);
+
+	if (installed && std::rename(dst.c_str(), backup.c_str()) != 0)
+	{
+		runCmd("rm -rf " + quote(stage));
+		return false;
+	}
+
+	if (std::rename(stage.c_str(), dst.c_str()) != 0)
+	{
+		// Restore the previous installation on failed promotion.
+		if (installed && std::rename(backup.c_str(), dst.c_str()) != 0)
+			LOG(LogError) << "Theme Browser: restore backup manually: " << backup;
+		runCmd("rm -rf " + quote(stage));
+		return false;
+	}
+
+	// Promotion succeeded; the previous version can now be removed.
+	if (installed)
+		runCmd("rm -rf " + quote(backup));
+	runCmd("rm -rf " + quote(dst + "/.git"));
+	if (!head.empty())
+		saveInstalledInfo(e, e.repo, head);
+
+	return true;
 }
 
 bool GuiThemeBrowser::uninstallThemeSilent(const ThemeEntry& e)
@@ -699,7 +788,10 @@ void GuiThemeBrowser::startJob(const std::string& busyMsg, std::function<bool()>
 	mJobDone = false;
 	mJobOk = false;
 	mJobRefreshCatalogAfter = refreshCatalogAfter;
+	mJobBusyMsg = busyMsg;
 
+	updateFooter();
+	updateHelpPrompts();
 	setBusyVisible(true);
 	showPopup(busyMsg, 1200);
 
@@ -741,10 +833,33 @@ void GuiThemeBrowser::finishJobIfDone()
 		refreshCatalog = mJobRefreshCatalogAfter;
 	}
 
+	if (mInBackground)
+	{
+		// A background task must not open another popup or recreate the
+		// browser UI while the user is browsing systems or playing games.
+		Window::BackgroundTaskStatus task;
+		task.title = trTheme("THEME DOWNLOADER");
+		task.detail = msg;
+		task.footer = mJobTargetTitle;
+		task.iconGlyph = mJobGlyph.empty() ? TaskGlyphs::DOWNLOAD : mJobGlyph;
+		task.state = ok ? Window::BackgroundTaskStatus::SUCCESS :
+			Window::BackgroundTaskStatus::FAILED;
+		task.dismissOnInput = true;
+		mWindow->setBackgroundTask("theme-browser", task);
+		mJobDone = false;
+		// Let Window delete the hidden GUI after returning from update().
+		// Its destructor joins the catalog version-check thread safely.
+		mWindow->releaseThemeBrowserGuiAfterUpdate(this);
+		return;
+	}
+
 	showPopup(msg, ok ? 2500 : 4500);
 
 	if (refreshCatalog)
 	{
+		// The version-check thread walks mThemes. Join it before reloading
+		// the catalog vector, otherwise a successful ZIP update races it.
+		stopUpdateCheck();
 		loadThemes();
 		rebuildList();
 		// NEW: re-chequear updates después de refrescar catálogo
@@ -768,15 +883,20 @@ bool GuiThemeBrowser::input(InputConfig* config, Input input)
 	if (input.value == 0)
 		return GuiComponent::input(config, input);
 
-	// Mientras hay un trabajo en segundo plano, bloqueamos acciones.
-	if (mJobRunning)
-		return true;
-
+	// B minimizes a running job; the worker must outlive this window.
+	// With no job running, B closes the GUI and releases its resources.
 	if (config->isMappedTo("b", input) || config->isMappedTo("back", input))
 	{
-		mWindow->removeGui(this);
+		if (mJobRunning)
+			moveToBackground();
+		else
+			delete this;
 		return true;
 	}
+
+	// Do not allow simultaneous downloads or destructive actions while busy.
+	if (mJobRunning)
+		return true;
 
 	if (mThemes.empty())
 		return GuiComponent::input(config, input);
@@ -817,6 +937,8 @@ bool GuiThemeBrowser::input(InputConfig* config, Input input)
 		const ThemeEntry cur = mThemes[mLastSelectedIndex];
 		const bool installed = isInstalled(cur);
 
+		mJobTargetTitle = cur.title.empty() ? cur.id : cur.title;
+		mJobGlyph = installed ? TaskGlyphs::UPDATE : TaskGlyphs::DOWNLOAD;
 		startJob(installed ? trTheme("UPDATING THEME...") : trTheme("DOWNLOADING THEME..."),
 			[this, cur]() { return downloadOrUpdateSilent(cur); },
 			trTheme("THEME READY."),
@@ -836,6 +958,8 @@ bool GuiThemeBrowser::input(InputConfig* config, Input input)
 			return true;
 		}
 
+		mJobTargetTitle = cur.title.empty() ? cur.id : cur.title;
+		mJobGlyph = TaskGlyphs::INSTALL;
 		startJob(trTheme("REMOVING THEME..."),
 			[this, cur]() { return uninstallThemeSilent(cur); },
 			trTheme("THEME REMOVED."),
@@ -853,6 +977,13 @@ bool GuiThemeBrowser::input(InputConfig* config, Input input)
 
 void GuiThemeBrowser::update(int deltaTime)
 {
+	// Window keeps this hidden GUI alive so its worker can finish safely.
+	// No need to repaint thumbnails or rebuild lists off-screen.
+	if (mInBackground)
+	{
+		finishJobIfDone();
+		return;
+	}
 	GuiComponent::update(deltaTime);
 
 	mFrame.update(deltaTime);
@@ -901,12 +1032,14 @@ std::vector<HelpPrompt> GuiThemeBrowser::getHelpPrompts()
 	const bool hasThemes = !mThemes.empty();
 	const bool installed = (hasThemes ? isInstalled(mThemes[mLastSelectedIndex]) : false);
 
-	p.push_back(HelpPrompt("a", installed ? trTheme("UPDATE") : trTheme("DOWNLOAD")));
-
-	if (installed)
-		p.push_back(HelpPrompt("x", trTheme("UNINSTALL")));
-
-	p.push_back(HelpPrompt("b", trTheme("BACK")));
+	if (!mJobRunning)
+	{
+		p.push_back(HelpPrompt("a", installed ? trTheme("UPDATE") : trTheme("DOWNLOAD")));
+		if (installed)
+			p.push_back(HelpPrompt("x", trTheme("UNINSTALL")));
+	}
+	p.push_back(HelpPrompt("b", mJobRunning ?
+		trTheme("THEME CONTINUE IN BACKGROUND") : trTheme("BACK")));
 
 	return p;
 }

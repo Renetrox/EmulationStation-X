@@ -227,6 +227,13 @@ void ScraperSearchComponent::search(const ScraperSearchParams& params)
 	mSearchHandle = startScraperSearch(params);
 }
 
+void ScraperSearchComponent::setBackgroundMode(bool enable)
+{
+	mBackgroundMode = enable;
+	if (enable)
+		mThumbnailReq.reset();
+}
+
 void ScraperSearchComponent::stop()
 {
 	mThumbnailReq.reset();
@@ -252,6 +259,11 @@ void ScraperSearchComponent::onSearchDone(const std::vector<ScraperSearchResult>
 		// Check if the scraper used is still valid
 		if (!isValidConfiguredScraper())
 		{
+			if (mBackgroundMode && mBackgroundErrorCallback)
+			{
+				mBackgroundErrorCallback(tr("CONFIGURED SCRAPER NO LONGER AVAILABLE"));
+				return;
+			}
 			mWindow->pushGui(new GuiMsgBox(
 				mWindow,
 				Utils::String::toUpper(tr("CONFIGURED SCRAPER NO LONGER AVAILABLE")),
@@ -306,6 +318,11 @@ void ScraperSearchComponent::onSearchError(const std::string& error)
 	};
 
 	LOG(LogInfo) << "ScraperSearchComponent search error: " << error;
+	if (mBackgroundMode && mBackgroundErrorCallback)
+	{
+		mBackgroundErrorCallback(error);
+		return;
+	}
 	mWindow->pushGui(new GuiMsgBox(mWindow, Utils::String::toUpper(error),
 		tr("RETRY"), std::bind(&ScraperSearchComponent::search, this, mLastSearch),
 		tr("SKIP"), mSkipCallback,
@@ -336,7 +353,7 @@ void ScraperSearchComponent::updateInfoPane()
 
 		mResultThumbnail->setImage("");
 		const std::string& thumb = res.thumbnailUrl.empty() ? res.imageUrl : res.thumbnailUrl;
-		if(!thumb.empty())
+		if(!mBackgroundMode && !thumb.empty())
 			mThumbnailReq = std::unique_ptr<HttpReq>(new HttpReq(thumb));
 		else
 			mThumbnailReq.reset();

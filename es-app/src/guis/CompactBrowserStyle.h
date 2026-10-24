@@ -4,6 +4,7 @@
 #pragma once
 
 #include "Window.h"
+#include "TaskGlyphs.h"
 #include "components/ComponentGrid.h"
 #include "components/TextComponent.h"
 #include "resources/Font.h"
@@ -33,13 +34,13 @@ namespace CompactBrowserStyle
     inline std::shared_ptr<Font> iconFont()
     {
         // Font Awesome is already bundled in ES-X.
-        return Font::get(titleSize(), ":/fonts/fontawesome-webfont.ttf");
+        return Font::get(titleSize(), TaskGlyphs::FONT_PATH);
     }
 
     inline std::shared_ptr<Font> detailFont()
     {
         // Icons use Font Awesome; Latin text uses the usual fallback faces.
-        return Font::get(detailSize(), ":/fonts/fontawesome-webfont.ttf");
+        return Font::get(detailSize(), TaskGlyphs::FONT_PATH);
     }
 
 
@@ -58,8 +59,8 @@ namespace CompactBrowserStyle
 
         grid->setColWidthPerc(0, 0.085f, false);
 
-        const char* glyph = updateAvailable ? u8"\uf021" :
-            (installed ? u8"\uf058" : u8"\uf019");
+        const char* glyph = updateAvailable ? TaskGlyphs::UPDATE :
+            (installed ? TaskGlyphs::DONE : TaskGlyphs::DOWNLOAD);
         auto status = std::make_shared<TextComponent>(
             window, glyph, iconFont(), 0xD3D6D9FF, ALIGN_CENTER);
         status->setVerticalAlignment(ALIGN_CENTER);
@@ -90,8 +91,8 @@ namespace CompactBrowserStyle
         grid->setColWidthPerc(0, 0.085f, false);
         grid->setRowHeightPerc(0, 0.55f, false);
 
-        const char* glyph = updateAvailable ? u8"\uf021" :
-            (installed ? u8"\uf058" : u8"\uf019");
+        const char* glyph = updateAvailable ? TaskGlyphs::UPDATE :
+            (installed ? TaskGlyphs::DONE : TaskGlyphs::DOWNLOAD);
         auto status = std::make_shared<TextComponent>(
             window, glyph, iconFont(), 0xD3D6D9FF, ALIGN_CENTER);
         status->setVerticalAlignment(ALIGN_CENTER);

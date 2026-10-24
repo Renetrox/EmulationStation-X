@@ -8,6 +8,8 @@
 #include "math/Vector2f.h"
 
 #include <memory>
+#include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -72,6 +74,55 @@ public:
 
 	void closeLoadingScreen();
 
+	// Small reusable status overlay for long-running frontend tasks. All calls
+	// and monitors run on the UI thread; worker threads must marshal updates.
+	struct BackgroundTaskStatus
+	{
+		enum State { RUNNING, SUCCESS, FAILED, CANCELLED };
+		std::string title;
+		std::string detail;
+		std::string footer; // optional third line (stage, status)
+		std::string iconPath; // legacy image icon fallback (still supported)
+		std::string iconGlyph; // Font Awesome UTF-8 glyph; terminal state selects its own icon
+		int current = -1; // <0: progress cannot be measured
+		int total = 0;
+		// Certain backends provide progress for a named stage, not the whole
+		// operation. Allow that percentage on the bar without implying
+		// an overall X/Y count in the title.
+		bool showProgressInTitle = true;
+		State state = RUNNING;
+		// Keep terminal feedback visible until the next configured button press.
+		// It is dismissed without consuming that input or changing screens.
+		bool dismissOnInput = false;
+	};
+
+	void observeBackgroundTask(const std::string& id,
+		const std::function<BackgroundTaskStatus()>& monitor);
+	void setBackgroundTask(const std::string& id, const BackgroundTaskStatus& status);
+	void clearBackgroundTask(const std::string& id);
+	// A GUI doing async work can leave the stack while the Window keeps
+	// updating it on the main thread; this avoids threads touching game data.
+	bool parkGuiInBackground(GuiComponent* gui);
+	bool hasBackgroundGui() const { return mBackgroundGui != nullptr; }
+	GuiComponent* restoreBackgroundGui();
+	void releaseBackgroundGuiAfterUpdate(GuiComponent* gui);
+	// Theme Browser downloads own a GUI-scoped worker thread. Keep that GUI
+	// alive independently of the native scraper while its job completes.
+	bool parkThemeBrowserGui(GuiComponent* gui);
+	bool hasParkedThemeBrowser() const { return mThemeBrowserBackgroundGui != nullptr; }
+	GuiComponent* restoreThemeBrowserGui();
+	void releaseThemeBrowserGuiAfterUpdate(GuiComponent* gui);
+	// X-TRAS operations also use GUI-owned noninteractive workers; keep their
+	// controller alive independently of Theme Browser and both scrapers.
+	bool parkPortsBrowserGui(GuiComponent* gui);
+	bool hasParkedPortsBrowser() const { return mPortsBrowserBackgroundGui != nullptr; }
+	GuiComponent* restorePortsBrowserGui();
+	void releasePortsBrowserGuiAfterUpdate(GuiComponent* gui);
+	void setBackgroundTaskOverlaySuppressed(bool suppress)
+	{
+		mBackgroundTaskOverlaySuppressed = suppress;
+	}
+
 	void renderHelpPromptsEarly();
 	void setHelpPrompts(const std::vector<HelpPrompt>& prompts, const HelpStyle& style);
 
@@ -89,6 +140,8 @@ public:
 private:
 	void onSleep();
 	void onWake();
+	void updateBackgroundTasks(int deltaTime);
+	void renderBackgroundTasks();
 
 	bool isProcessing();
 
@@ -117,6 +170,37 @@ private:
 	unsigned int mTimeSinceLastInput;
 
 	bool mRenderedHelpPrompts;
+
+	struct BackgroundTaskEntry
+	{
+		BackgroundTaskStatus status;
+		std::function<BackgroundTaskStatus()> monitor;
+		std::unique_ptr<TextCache> titleCache;
+		std::unique_ptr<TextCache> detailCache;
+		std::unique_ptr<TextCache> footerCache;
+		std::unique_ptr<TextCache> glyphCache;
+		std::shared_ptr<Font> glyphFont;
+		std::string cachedGlyph;
+		int glyphFontSize = 0;
+		unsigned int glyphColor = 0;
+		bool themeCached = false;
+		bool cachedDark = false;
+		int finishedMs = 0;
+	};
+	std::map<std::string, BackgroundTaskEntry> mBackgroundTasks;
+	int mBackgroundTaskPollMs = 0;
+	int mBackgroundTaskAnimMs = 0;
+	int mBackgroundTaskShowMs = 0;
+	bool mBackgroundTaskOverlaySuppressed = false;
+	std::unique_ptr<GuiComponent> mBackgroundGui;
+	bool mBackgroundGuiReleasePending = false;
+	std::unique_ptr<GuiComponent> mThemeBrowserBackgroundGui;
+	bool mThemeBrowserReleasePending = false;
+	std::unique_ptr<GuiComponent> mPortsBrowserBackgroundGui;
+	bool mPortsBrowserReleasePending = false;
+	std::unique_ptr<ImageComponent> mBackgroundTaskIcon;
+	std::string mBackgroundTaskIconPath;
+	float mBackgroundTaskIconSize = 0.0f;
 
 	// =========================
 	// Clock overlay (theme-driven)

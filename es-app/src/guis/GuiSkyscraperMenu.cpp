@@ -8,6 +8,8 @@
 #include "views/ViewController.h"
 #include "SystemData.h"
 #include "Settings.h"
+#include "Window.h"
+#include "TaskGlyphs.h"
 #include "Log.h"
 #include "resources/Font.h"
 #include "renderers/Renderer.h"
@@ -21,6 +23,11 @@
 #include <cctype>
 #include <cstdio>
 #include <functional>
+#include <algorithm>
+#include <cerrno>
+#include <climits>
+#include <csignal>
+#include <ctime>
 
 #define SKY_SCRIPT "$HOME/.emulationstation/scripts/skyscraper-esx.sh"
 #define SKY_STATUS_FILE "/tmp/esx-skyscraper/status"
@@ -135,9 +142,23 @@ namespace
 
 	inline bool readProgressFromLog(const std::string& path, int& current, int& total)
 	{
-		std::ifstream file(path.c_str());
+		std::ifstream file(path.c_str(), std::ios::binary);
 		if (!file.is_open())
 			return false;
+
+		// Polling the entire file every 900 ms gets increasingly expensive
+		// during long scrapes. Keep the newest complete log lines instead.
+		file.seekg(0, std::ios::end);
+		const std::streamoff size = file.tellg();
+		const std::streamoff tailSize = 128 * 1024;
+		if (size > tailSize)
+		{
+			file.seekg(size - tailSize, std::ios::beg);
+			std::string partialLine;
+			std::getline(file, partialLine);
+		}
+		else
+			file.seekg(0, std::ios::beg);
 
 		std::string line;
 		bool found = false;
@@ -232,21 +253,104 @@ namespace
 		return readFirstLine(SKY_STATUS_FILE);
 	}
 
+	inline bool isSkyscraperPidAlive()
+	{
+		const std::string pidLine = readFirstLine(SKY_PID_FILE);
+		if (pidLine.empty())
+			return false;
+
+		char* end = nullptr;
+		const long value = std::strtol(pidLine.c_str(), &end, 10);
+		if (end == pidLine.c_str() || *end != '\0' || value <= 1 || value > INT_MAX)
+			return false;
+
+		errno = 0;
+		return ::kill(static_cast<pid_t>(value), 0) == 0 || errno == EPERM;
+	}
+
 	inline bool isSkyscraperJobActive(const std::string& status)
 	{
-		if (status.empty())
-			return false;
+		if (startsWith(status, "running:"))
+			return isSkyscraperPidAlive();
 
-		if (!fileExists(SKY_PID_FILE) &&
-			!startsWith(status, "done:") &&
-			!startsWith(status, "error:") &&
-			status != "stopped")
+		// The start script writes 'starting' shortly before creating the PID.
+		// Accept only a recent start marker, not one left behind by a crash.
+		if (startsWith(status, "starting:"))
 		{
-			return false;
+			if (isSkyscraperPidAlive())
+				return true;
+
+			struct stat st;
+			if (stat(SKY_STATUS_FILE, &st) == 0)
+			{
+				const std::time_t age = std::time(nullptr) - st.st_mtime;
+				return age >= 0 && age < 15;
+			}
 		}
 
-		return startsWith(status, "starting:") ||
-			   startsWith(status, "running:");
+		return false;
+	}
+
+
+	// The monitor captures no GUI object. Window continues polling while
+	// Skyscraper runs independently, even after this dialog is closed.
+	inline void observeSkyscraper(Window* window, const std::string& action,
+		const std::string& system)
+	{
+		if (!window)
+			return;
+
+		window->observeBackgroundTask("skyscraper",
+			[action, system]() -> Window::BackgroundTaskStatus
+		{
+			Window::BackgroundTaskStatus task;
+			// Running: keep the familiar three-line progress panel.
+			// Finished in background: show the next step without moving menus.
+			task.title = tr("SCRAPING");
+			task.detail = tr("SYSTEM") + ": " + system;
+			task.iconGlyph = action == "generate" ? TaskGlyphs::GAMELIST : TaskGlyphs::GATHER;
+			const std::string status = getSkyscraperStatus();
+
+			if (startsWith(status, "done:"))
+			{
+				task.state = Window::BackgroundTaskStatus::SUCCESS;
+				task.title = tr("SKYSCRAPER") + " - " + system;
+				task.detail = action == "generate" ?
+				tr("GAMELIST GENERATED") : tr("RESOURCES GATHERED");
+				task.footer = action == "generate" ?
+				tr("PRESS ANY BUTTON TO DISMISS") : tr("NEXT: GENERATE GAMELIST");
+				task.dismissOnInput = true;
+			}
+			else if (status == "stopped")
+			{
+				task.state = Window::BackgroundTaskStatus::CANCELLED;
+				task.title = tr("SKYSCRAPER") + " - " + system;
+				task.detail = tr("STOPPED");
+				task.footer = tr("PRESS ANY BUTTON TO DISMISS");
+				task.dismissOnInput = true;
+			}
+			else if (startsWith(status, "error:") || !isSkyscraperJobActive(status))
+			{
+				task.state = Window::BackgroundTaskStatus::FAILED;
+				task.title = tr("SKYSCRAPER") + " - " + system;
+				task.detail = tr("ERROR");
+				task.footer = tr("CHECK SKYSCRAPER LOG");
+				task.dismissOnInput = true;
+			}
+			else
+			{
+				task.footer = action == "generate" ?
+				tr("GENERATING GAMELIST") : tr("GATHERING RESOURCES");
+				int current = 0;
+				int total = 0;
+				if (readProgressFromLog(SKY_LOG_FILE, current, total) && current <= total)
+				{
+					task.current = current;
+					task.total = total;
+				}
+			}
+			return task;
+		});
 	}
 
 	inline std::string runCommandCapture(const std::string& cmd)
@@ -477,7 +581,11 @@ namespace
 			, mLine1(window, "", Font::get(FONT_SIZE_SMALL), getMenuTextColor())
 			, mLine2(window, "", Font::get(FONT_SIZE_SMALL), getMenuTextColor())
 			, mLine3(window, "", Font::get(FONT_SIZE_SMALL), getMenuTextColor())
-			, mIcon(window)
+			, mIcon(window, action == "generate" ? TaskGlyphs::GAMELIST : TaskGlyphs::GATHER,
+				Font::get(static_cast<int>(Renderer::getScreenHeight() * 0.043f),
+					TaskGlyphs::FONT_PATH),
+				Settings::getInstance()->getBool("MenuDark") ? 0xD3D6D9FF : 0x666666FF,
+				ALIGN_CENTER)
 			, mFakeCurrent(0)
 			, mFakeTotal(total > 0 ? total : 0)
 			, mDots(0)
@@ -486,6 +594,7 @@ namespace
 			, mNoPidMs(0)
 			, mFinishDelayMs(0)
 			, mFinished(false)
+			, mHasMeasuredProgress(false)
 		{
 			setSize(Renderer::getScreenWidth() * 0.28f, Renderer::getScreenHeight() * 0.13f);
 			setPosition(
@@ -498,8 +607,8 @@ namespace
 			mLine3.setPosition(18, 60);
 
 			const float iconSize = Renderer::getScreenHeight() * 0.052f;
-			mIcon.setImage(":/icons/scraper.png");
-			mIcon.setResize(iconSize, iconSize);
+			mIcon.setSize(iconSize, iconSize);
+			mIcon.setVerticalAlignment(ALIGN_CENTER);
 			mIcon.setPosition(mSize.x() - iconSize - 12.0f, 10.0f);
 
 			addChild(&mLine1);
@@ -507,7 +616,14 @@ namespace
 			addChild(&mLine3);
 			addChild(&mIcon);
 
+			// The foreground progress dialog already draws this task.
+			mWindow->setBackgroundTaskOverlaySuppressed(true);
 			refreshText("starting");
+		}
+
+		~GuiSkyscraperProgress() override
+		{
+			mWindow->setBackgroundTaskOverlaySuppressed(false);
 		}
 
 		bool input(InputConfig* config, Input input) override
@@ -515,7 +631,16 @@ namespace
 			if (GuiComponent::input(config, input))
 				return true;
 
-			if (config->isMappedTo("b", input) && input.value && !mFinished)
+			if (config->isMappedTo("b", input) && input.value)
+			{
+				// B returns to the carousel without cancelling the external job.
+				mWindow->setInfoPopup(new GuiInfoPopup(
+					mWindow, tr("SKYSCRAPER CONTINUES IN BACKGROUND"), 2500));
+				delete this;
+				return true;
+			}
+
+			if (config->isMappedTo("y", input) && input.value && !mFinished)
 			{
 				mWindow->pushGui(new GuiMsgBox(
 					mWindow,
@@ -576,6 +701,17 @@ namespace
 			Renderer::drawRect(mSize.x() - 2.0f, 0.0f, 2.0f, mSize.y(), borderColor, borderColor);
 
 			GuiComponent::render(parentTrans);
+
+			// Show a determinate bar only when Skyscraper actually reports #n/total.
+			if (mHasMeasuredProgress && mFakeTotal > 0)
+			{
+				const float width = mSize.x() - 36.0f;
+				const float fraction = std::min(1.0f,
+					static_cast<float>(mFakeCurrent) / static_cast<float>(mFakeTotal));
+				Renderer::setMatrix(trans);
+				Renderer::drawRect(18.0f, mSize.y() - 9.0f, width, 3.0f, 0x77777766, 0x77777766);
+				Renderer::drawRect(18.0f, mSize.y() - 9.0f, width * fraction, 3.0f, 0x4A90E2FF, 0x4A90E2FF);
+			}
 		}
 
 		std::vector<HelpPrompt> getHelpPrompts() override
@@ -583,14 +719,14 @@ namespace
 			if (mFinished)
 				return {};
 
-			return { { "b", tr("STOP") } };
+			return { { "b", tr("BACKGROUND") }, { "y", tr("STOP") } };
 		}
 
 	private:
 		void pollState(int stepMs)
 		{
 			const std::string status = readFirstLine(SKY_STATUS_FILE);
-			const bool pidExists = fileExists(SKY_PID_FILE);
+			const bool pidExists = isSkyscraperPidAlive();
 
 			int logCurrent = 0;
 			int logTotal = 0;
@@ -598,6 +734,7 @@ namespace
 			{
 				mFakeCurrent = logCurrent;
 				mFakeTotal = logTotal;
+				mHasMeasuredProgress = true;
 			}
 
 			mDots = (mDots + 1) % 4;
@@ -608,6 +745,9 @@ namespace
 					mFakeCurrent = mFakeTotal;
 
 				mFinished = true;
+				// The original foreground view already reports completion.
+				// Its background companion should not also display a second alert.
+				mWindow->clearBackgroundTask("skyscraper");
 				refreshText("done");
 				mWindow->setInfoPopup(new GuiInfoPopup(
 					mWindow,
@@ -620,6 +760,7 @@ namespace
 			if (startsWith(status, "error:"))
 			{
 				mFinished = true;
+				mWindow->clearBackgroundTask("skyscraper");
 				refreshText("error");
 				mWindow->setInfoPopup(new GuiInfoPopup(
 					mWindow,
@@ -632,6 +773,7 @@ namespace
 			if (status == "stopped")
 			{
 				mFinished = true;
+				mWindow->clearBackgroundTask("skyscraper");
 				refreshText("stopped");
 				mWindow->setInfoPopup(new GuiInfoPopup(
 					mWindow,
@@ -641,17 +783,21 @@ namespace
 				return;
 			}
 
-			if (startsWith(status, "running:"))
+			if (startsWith(status, "running:") || startsWith(status, "starting:"))
 			{
-				mNoPidMs = 0;
-				refreshText(status);
-				return;
-			}
+				// A stale 'running' status must not leave the panel spinning forever.
+				mNoPidMs = pidExists ? 0 : (mNoPidMs + stepMs);
+				if (mStartupGraceMs >= 12000 && mNoPidMs > 15000)
+				{
+					mFinished = true;
+					mWindow->clearBackgroundTask("skyscraper");
+					refreshText("error");
+					mWindow->setInfoPopup(new GuiInfoPopup(
+						mWindow, tr("SKYSCRAPER FAILED: ") + mSystem, 5000));
+					return;
+				}
 
-			if (startsWith(status, "starting:"))
-			{
-				mNoPidMs = 0;
-				refreshText("starting");
+				refreshText(startsWith(status, "running:") ? status : "starting");
 				return;
 			}
 
@@ -669,6 +815,7 @@ namespace
 			if (mNoPidMs > 15000)
 			{
 				mFinished = true;
+				mWindow->clearBackgroundTask("skyscraper");
 				refreshText("error");
 				mWindow->setInfoPopup(new GuiInfoPopup(
 					mWindow,
@@ -688,17 +835,28 @@ namespace
 				dots = ".";
 
 			std::ostringstream line1;
-			line1 << mFakeCurrent << "/" << mFakeTotal << " " << tr("SCRAPING") << dots;
+			if (mHasMeasuredProgress)
+				line1 << mFakeCurrent << "/" << mFakeTotal << " ";
+			line1 << tr("SCRAPING") << dots;
 
 			std::string line2 = tr("SYSTEM") + ": " + mSystem;
 			std::string line3;
 
 			if (status == "done")
+			{
 				line3 = tr("COMPLETED");
+				mIcon.setText(TaskGlyphs::DONE);
+			}
 			else if (status == "error")
+			{
 				line3 = tr("ERROR");
+				mIcon.setText(TaskGlyphs::ERROR);
+			}
 			else if (status == "stopped")
+			{
 				line3 = tr("STOPPED");
+				mIcon.setText(TaskGlyphs::CANCEL);
+			}
 			else if (startsWith(status, "running:gather:") || mAction == "gather")
 				line3 = tr("GATHERING RESOURCES") + dots;
 			else if (startsWith(status, "running:generate:") || mAction == "generate")
@@ -725,7 +883,7 @@ namespace
 		TextComponent mLine1;
 		TextComponent mLine2;
 		TextComponent mLine3;
-		ImageComponent mIcon;
+		TextComponent mIcon;
 
 		int mFakeCurrent;
 		int mFakeTotal;
@@ -735,6 +893,7 @@ namespace
 		int mNoPidMs;
 		int mFinishDelayMs;
 		bool mFinished;
+		bool mHasMeasuredProgress;
 	};
 }
 
@@ -901,6 +1060,7 @@ void GuiSkyscraperMenu::runGather()
 			tr("SKYSCRAPER IS ALREADY RUNNING"),
 			4000
 		));
+		observeSkyscraper(mWindow, "gather", system);
 		mWindow->pushGui(new GuiSkyscraperProgress(mWindow, "gather", system, totalGames));
 		delete this;
 		return;
@@ -916,7 +1076,8 @@ void GuiSkyscraperMenu::runGather()
 
 			if (ret == 0)
 			{
-				mWindow->pushGui(new GuiSkyscraperProgress(mWindow, "gather", system, totalGames));
+				observeSkyscraper(mWindow, "gather", system);
+		mWindow->pushGui(new GuiSkyscraperProgress(mWindow, "gather", system, totalGames));
 				delete this;
 			}
 			else
@@ -957,6 +1118,7 @@ void GuiSkyscraperMenu::runGenerate()
 			tr("SKYSCRAPER IS ALREADY RUNNING"),
 			4000
 		));
+		observeSkyscraper(mWindow, "generate", system);
 		mWindow->pushGui(new GuiSkyscraperProgress(mWindow, "generate", system, totalGames));
 		delete this;
 		return;
@@ -966,6 +1128,7 @@ void GuiSkyscraperMenu::runGenerate()
 
 	if (ret == 0)
 	{
+		observeSkyscraper(mWindow, "generate", system);
 		mWindow->pushGui(new GuiSkyscraperProgress(mWindow, "generate", system, totalGames));
 		delete this;
 	}

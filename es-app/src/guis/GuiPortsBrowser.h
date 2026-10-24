@@ -29,6 +29,7 @@ public:
 
     std::vector<HelpPrompt> getHelpPrompts() override;
     void updateHelpPrompts();
+    void resumeForeground();
 
 private:
     struct PortEntry
@@ -54,6 +55,7 @@ private:
     void rebuildList();
     void selectTab(int tab);
     void updateFooter();
+    void refreshLanguage(); // handles the GUI restored after an ES-X language change
 
     bool findRetroPieSetup();
     bool loadPorts();
@@ -79,10 +81,15 @@ private:
                   std::function<bool()> fn,
                   const std::string& okMsg,
                   const std::string& failMsg,
-                  bool refreshPorts);
+                  bool refreshPorts,
+                  bool allowBackground = false,
+                  const std::string& targetName = "",
+                  const std::string& iconGlyph = "");
 
     void updateJobProgress();
     void finishJobIfDone();
+    void moveToBackground();
+    void publishBackgroundStatus();
 
 private:
     NinePatchComponent mFrame;
@@ -96,6 +103,7 @@ private:
     std::string mPackagesScript;
     std::string mPortsModulesDir;
     std::string mLogPath;
+    std::string mLoadedLanguage;
 
     std::vector<PortEntry> mPorts;
     std::vector<int> mVisiblePortIndices;
@@ -122,6 +130,11 @@ private:
     long long mJobLogStart;
     std::string mJobInitialLabel;
     std::string mJobStageLabel;
+    int mJobStagePercent = -1; // current RetroPie-Setup stage only, never overall
     std::string mJobPortId;
     std::string mJobDoneMsg;
+    bool mInBackground = false;
+    bool mJobCanBackground = false;
+    std::string mJobTargetName;
+    std::string mJobGlyph;
 };

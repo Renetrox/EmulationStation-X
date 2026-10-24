@@ -1,6 +1,7 @@
 // es-app/src/guis/GuiPortsBrowser.cpp
 #include "guis/GuiPortsBrowser.h"
 #include "guis/CompactBrowserStyle.h"
+#include "TaskGlyphs.h"
 
 #include "Log.h"
 #include "Window.h"
@@ -11,6 +12,7 @@
 #include "guis/GuiInfoPopup.h"
 #include "guis/GuiMsgBox.h"
 #include "LocaleES.h"
+#include "Settings.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -47,6 +49,27 @@ static inline std::string ellipsizePorts(const std::string& s, size_t maxLen)
         return s.substr(0, maxLen);
 
     return s.substr(0, maxLen - 3) + "...";
+}
+
+static inline std::string portNameForStatus(const std::string& id,
+                                            const std::string& description)
+{
+    // Module descriptions originate in RetroPie-Setup and are not translated.
+    // Preserve proper capitalization (e.g. GZDoom vs gzdoom) when the first
+    // word of the description matches the canonical module ID.
+    if (!id.empty() && description.size() >= id.size())
+    {
+        const bool matches = std::equal(id.begin(), id.end(),
+            description.begin(), [](unsigned char lhs, unsigned char rhs)
+            {
+                return std::tolower(lhs) == std::tolower(rhs);
+            });
+        const bool boundary = description.size() == id.size() ||
+            !std::isalnum(static_cast<unsigned char>(description[id.size()]));
+        if (matches && boundary)
+            return description.substr(0, id.size());
+    }
+    return id;
 }
 
 static inline std::string quotePorts(const std::string& s)
@@ -123,6 +146,9 @@ GuiPortsBrowser::GuiPortsBrowser(Window* window)
 
     const std::string home = Utils::FileSystem::getHomePath();
     mLogPath = home + "/.emulationstation/esx/ports-browser.log";
+    mLoadedLanguage = Settings::getInstance()->getString("Language");
+    if (mLoadedLanguage.empty())
+        mLoadedLanguage = "en";
 
     const float sw = (float)Renderer::getScreenWidth();
     const float sh = (float)Renderer::getScreenHeight();
@@ -185,6 +211,61 @@ GuiPortsBrowser::~GuiPortsBrowser()
 {
     if (mJobThread.joinable())
         mJobThread.join();
+}
+
+void GuiPortsBrowser::moveToBackground()
+{
+    if (mInBackground || !mJobRunning || !mJobCanBackground)
+        return;
+    if (!mWindow->parkPortsBrowserGui(this))
+        return;
+
+    mInBackground = true;
+    setBusyVisible(false);
+    publishBackgroundStatus();
+}
+
+void GuiPortsBrowser::resumeForeground()
+{
+    if (!mInBackground)
+        return;
+    mInBackground = false;
+    mWindow->clearBackgroundTask("xtras-browser");
+    setBusyVisible(mJobRunning);
+    refreshLanguage();
+    updateFooter();
+    updateHelpPrompts();
+}
+
+void GuiPortsBrowser::publishBackgroundStatus()
+{
+    if (!mInBackground)
+        return;
+
+    Window::BackgroundTaskStatus task;
+    task.title = mJobInitialLabel.empty() ? trPorts("X-TRAS") : mJobInitialLabel;
+    task.detail = mJobTargetName;
+    if (!mJobStageLabel.empty())
+    {
+        // Explicitly identify the scope: this bar represents the *current
+        // RetroPie-Setup stage*, not the complete port installation.
+        task.footer = trPorts("STAGE") + ": " + mJobStageLabel;
+        if (mJobStagePercent >= 0)
+        {
+            task.current = mJobStagePercent;
+            task.total = 100;
+            task.showProgressInTitle = false; // No misleading "60/100 ports".
+            task.footer += " · " + std::to_string(mJobStagePercent) + "%";
+        }
+        else if (!mJobPortId.empty())
+            task.footer += " · " + ellipsizePorts(mJobPortId, 24);
+    }
+    else
+        task.footer = trPorts("X-TRAS TASK CONTINUES IN BACKGROUND");
+
+    task.iconGlyph = mJobGlyph.empty() ? TaskGlyphs::DOWNLOAD : mJobGlyph;
+    // Unknown stage progress remains the existing animated activity bar.
+    mWindow->setBackgroundTask("xtras-browser", task);
 }
 
 void GuiPortsBrowser::setBusyVisible(bool visible)
@@ -745,6 +826,24 @@ void GuiPortsBrowser::rebuildList()
     updateHelpPrompts();
 }
 
+void GuiPortsBrowser::refreshLanguage()
+{
+    std::string language = Settings::getInstance()->getString("Language");
+    if (language.empty())
+        language = "en";
+
+    if (language == mLoadedLanguage)
+        return;
+
+    mLoadedLanguage = language;
+    mTabs.setLabels(trPorts("FREE GAMES"), trPorts("PORTS"));
+    mHeader.setText(trPorts("X-TRAS"));
+    mSubHeader.setText(trPorts("PORTS AND FREE GAMES"));
+    // Section headings, buttons and status strings also use the current
+    // locale and must be rebuilt after restoring a background browser.
+    rebuildList();
+}
+
 void GuiPortsBrowser::updateFooter()
 {
     if (mPorts.empty())
@@ -761,7 +860,13 @@ void GuiPortsBrowser::updateFooter()
     if (port.installed)
         footer += "    X " + trPorts("REMOVE");
 
-    footer += "    Y " + trPorts("REFRESH") + "    B " + trPorts("BACK");
+    if (!mJobRunning)
+        footer += "    Y " + trPorts("REFRESH") + "    B " + trPorts("BACK");
+    else if (mJobCanBackground)
+        footer = "B " + trPorts("X-TRAS CONTINUE IN BACKGROUND");
+    else
+        footer = mJobInitialLabel;
+
     mFooter.setText(footer);
 }
 
@@ -918,7 +1023,10 @@ void GuiPortsBrowser::startJob(const std::string& busyMsg,
                                std::function<bool()> fn,
                                const std::string& okMsg,
                                const std::string& failMsg,
-                               bool refreshPorts)
+                               bool refreshPorts,
+                               bool allowBackground,
+                               const std::string& targetName,
+                               const std::string& iconGlyph)
 {
     if (mJobRunning)
         return;
@@ -927,10 +1035,14 @@ void GuiPortsBrowser::startJob(const std::string& busyMsg,
     mJobDone = false;
     mJobOk = false;
     mJobRefreshPorts = refreshPorts;
+    mJobCanBackground = allowBackground;
+    mJobTargetName = targetName;
+    mJobGlyph = iconGlyph;
 
     mProgressPollMs = 0;
     mJobInitialLabel = busyMsg;
     mJobStageLabel.clear();
+    mJobStagePercent = -1;
     mJobPortId.clear();
     mJobLogStart = 0;
 
@@ -951,6 +1063,8 @@ void GuiPortsBrowser::startJob(const std::string& busyMsg,
     }
 
     setBusyVisible(true);
+    updateFooter();
+    updateHelpPrompts();
     showPopup(busyMsg, 1200);
 
     if (mJobThread.joinable())
@@ -1045,6 +1159,7 @@ void GuiPortsBrowser::updateJobProgress()
 
     if (mJobStageLabel.empty())
     {
+        mJobStagePercent = -1;
         if (!mJobInitialLabel.empty())
             mBusy->setText(mJobInitialLabel);
         return;
@@ -1085,7 +1200,13 @@ void GuiPortsBrowser::updateJobProgress()
     if (percent >= 0)
         label += "  " + std::to_string(percent) + "%";
 
+    // With no current stage marker in the bounded log tail, the percentage
+    // could belong to a previous step. Never reuse it for the floating bar.
+    mJobStagePercent = (bestPos == std::string::npos) ? -1 : percent;
+
     mBusy->setText(label);
+    if (mInBackground)
+        publishBackgroundStatus();
 }
 
 void GuiPortsBrowser::finishJobIfDone()
@@ -1112,6 +1233,22 @@ void GuiPortsBrowser::finishJobIfDone()
     if (!ok)
         msg += "\n" + trPorts("SEE LOG") + ": " + mLogPath;
 
+    if (mInBackground)
+    {
+        Window::BackgroundTaskStatus task;
+        task.title = trPorts("X-TRAS");
+        task.detail = mJobTargetName;
+        task.footer = msg;
+        task.iconGlyph = mJobGlyph.empty() ? TaskGlyphs::DOWNLOAD : mJobGlyph;
+        task.state = ok ? Window::BackgroundTaskStatus::SUCCESS :
+            Window::BackgroundTaskStatus::FAILED;
+        task.dismissOnInput = true;
+        mWindow->setBackgroundTask("xtras-browser", task);
+        mJobDone = false;
+        mWindow->releasePortsBrowserGuiAfterUpdate(this);
+        return;
+    }
+
     showPopup(msg, ok ? 2500 : 5000);
 
     if (refresh)
@@ -1126,15 +1263,22 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
     if (input.value == 0)
         return GuiComponent::input(config, input);
 
-    if (mJobRunning)
-        return true;
-
     if (config->isMappedTo("b", input) ||
         config->isMappedTo("back", input))
     {
-        mWindow->removeGui(this);
+        if (mJobRunning)
+        {
+            if (mJobCanBackground)
+                moveToBackground();
+        }
+        else
+            delete this;
         return true;
     }
+
+    // No concurrent or destructive operations while a worker is running.
+    if (mJobRunning)
+        return true;
 
     if (mPorts.empty())
     {
@@ -1201,7 +1345,10 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
                 trPorts("GAME DOWNLOADED.") + "\n" +
                     trPorts("RESTART ES-X TO REFRESH THE GAME LIST."),
                 trPorts("GAME DOWNLOAD FAILED."),
-                true);
+                true,
+                true,
+                current.description.empty() ? current.id : current.description,
+                TaskGlyphs::DOWNLOAD);
 
             return true;
         }
@@ -1220,7 +1367,11 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
             [this, current]() { return installOrUpdatePort(current); },
             current.installed ? trPorts("PORT IS UP TO DATE / UPDATED.") : trPorts("PORT INSTALLED."),
             trPorts("RETROPIE-SETUP ACTION FAILED."),
-            true);
+            true,
+            true,
+            // Module names remain legible even when descriptions are English.
+            portNameForStatus(current.id, current.description),
+            current.installed ? TaskGlyphs::UPDATE : TaskGlyphs::INSTALL);
 
         return true;
     }
@@ -1297,6 +1448,24 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
 
 void GuiPortsBrowser::update(int deltaTime)
 {
+    if (!mInBackground)
+        refreshLanguage();
+
+    if (mInBackground)
+    {
+        if (mJobRunning)
+        {
+            mProgressPollMs += deltaTime;
+            if (mProgressPollMs >= 350)
+            {
+                mProgressPollMs = 0;
+                updateJobProgress();
+            }
+        }
+        finishJobIfDone();
+        return;
+    }
+
     GuiComponent::update(deltaTime);
 
     mFrame.update(deltaTime);
@@ -1338,24 +1507,25 @@ std::vector<HelpPrompt> GuiPortsBrowser::getHelpPrompts()
 {
     std::vector<HelpPrompt> prompts;
 
-    prompts.push_back(HelpPrompt("up/down", trPorts("MOVE")));
-    if (mHasGames && mHasPorts)
-        prompts.push_back(HelpPrompt("left/right", trPorts("CHANGE TAB")));
-
-    if (!mPorts.empty())
+    if (!mJobRunning)
     {
-        const bool installed = mPorts[mLastSelectedIndex].installed;
+        prompts.push_back(HelpPrompt("up/down", trPorts("MOVE")));
+        if (mHasGames && mHasPorts)
+            prompts.push_back(HelpPrompt("left/right", trPorts("CHANGE TAB")));
 
-        prompts.push_back(
-            HelpPrompt("a", installed ? trPorts("UPDATE") : trPorts("INSTALL")));
-
-        if (installed)
-            prompts.push_back(HelpPrompt("x", trPorts("REMOVE")));
-
-        prompts.push_back(HelpPrompt("y", trPorts("REFRESH")));
+        if (!mPorts.empty())
+        {
+            const bool installed = mPorts[mLastSelectedIndex].installed;
+            prompts.push_back(
+                HelpPrompt("a", installed ? trPorts("UPDATE") : trPorts("INSTALL")));
+            if (installed)
+                prompts.push_back(HelpPrompt("x", trPorts("REMOVE")));
+            prompts.push_back(HelpPrompt("y", trPorts("REFRESH")));
+        }
+        prompts.push_back(HelpPrompt("b", trPorts("BACK")));
     }
-
-    prompts.push_back(HelpPrompt("b", trPorts("BACK")));
+    else if (mJobCanBackground)
+        prompts.push_back(HelpPrompt("b", trPorts("X-TRAS CONTINUE IN BACKGROUND")));
 
     return prompts;
 }

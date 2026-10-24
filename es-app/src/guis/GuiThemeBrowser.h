@@ -32,6 +32,7 @@ public:
 	// Help prompts
 	std::vector<HelpPrompt> getHelpPrompts() override;
 	void updateHelpPrompts();
+	void resumeForeground();
 
 private:
 	// -----------------------------
@@ -78,6 +79,8 @@ private:
 	              bool refreshCatalogAfter);
 
 	void finishJobIfDone();
+	void moveToBackground();
+	void publishBackgroundStatus();
 
 	// Command helpers
 	int  runCmd(const std::string& cmd);
@@ -152,6 +155,10 @@ private:
 	bool mJobOk;
 	bool mJobRefreshCatalogAfter;
 	std::string mJobDoneMsg;
+	bool mInBackground = false;
+	std::string mJobBusyMsg;
+	std::string mJobTargetTitle;
+	std::string mJobGlyph;
 
 	// Update check thread (NEW)
 	std::thread mUpdateThread;

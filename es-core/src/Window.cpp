@@ -1,4 +1,5 @@
 #include "Window.h"
+#include "TaskGlyphs.h"
 #include "ThemeSplash.h"
 
 #include "components/HelpComponent.h"
@@ -10,6 +11,7 @@
 #include "Scripting.h"
 
 #include <algorithm>
+#include <utility>
 #include <iomanip>
 #include <ctime>
 #include <sstream>
@@ -219,6 +221,10 @@ Window::Window()
 
 Window::~Window()
 {
+	// Join UI-owned workers before destroying GUI dependencies.
+	mPortsBrowserBackgroundGui.reset();
+	mThemeBrowserBackgroundGui.reset();
+	mBackgroundGui.reset();
 	closeLoadingScreen();
 	delete mBackgroundOverlay;
 
@@ -266,6 +272,94 @@ GuiComponent* Window::peekGui()
 		return NULL;
 
 	return mGuiStack.back();
+}
+
+bool Window::parkGuiInBackground(GuiComponent* gui)
+{
+	if (!gui || mBackgroundGui || peekGui() != gui)
+		return false;
+
+	// Detach without deleting it. The UI thread continues polling its
+	// in-flight HTTP/metadata requests after normal navigation resumes.
+	removeGui(gui);
+	mBackgroundGui.reset(gui);
+	mBackgroundGuiReleasePending = false;
+	return true;
+}
+
+GuiComponent* Window::restoreBackgroundGui()
+{
+	if (!mBackgroundGui || mBackgroundGuiReleasePending)
+		return nullptr;
+
+	GuiComponent* gui = mBackgroundGui.release();
+	pushGui(gui);
+	return gui;
+}
+
+void Window::releaseBackgroundGuiAfterUpdate(GuiComponent* gui)
+{
+	if (mBackgroundGui.get() == gui)
+		mBackgroundGuiReleasePending = true;
+}
+
+bool Window::parkThemeBrowserGui(GuiComponent* gui)
+{
+	if (!gui || mThemeBrowserBackgroundGui || peekGui() != gui)
+		return false;
+
+	// Unlike the native scraper, Theme Browser already performs work in a
+	// std::thread capturing its owning GUI. Transferring ownership here keeps
+	// that object alive until the worker has finished and been joined.
+	removeGui(gui);
+	mThemeBrowserBackgroundGui.reset(gui);
+	mThemeBrowserReleasePending = false;
+	return true;
+}
+
+GuiComponent* Window::restoreThemeBrowserGui()
+{
+	if (!mThemeBrowserBackgroundGui || mThemeBrowserReleasePending)
+		return nullptr;
+
+	GuiComponent* gui = mThemeBrowserBackgroundGui.release();
+	pushGui(gui);
+	return gui;
+}
+
+void Window::releaseThemeBrowserGuiAfterUpdate(GuiComponent* gui)
+{
+	if (mThemeBrowserBackgroundGui.get() == gui)
+		mThemeBrowserReleasePending = true;
+}
+
+bool Window::parkPortsBrowserGui(GuiComponent* gui)
+{
+	if (!gui || mPortsBrowserBackgroundGui || peekGui() != gui)
+		return false;
+
+	// The X-TRAS worker captures its GUI. Window owns it after detaching
+	// so downloads or scripted installs finish without dangling references.
+	removeGui(gui);
+	mPortsBrowserBackgroundGui.reset(gui);
+	mPortsBrowserReleasePending = false;
+	return true;
+}
+
+GuiComponent* Window::restorePortsBrowserGui()
+{
+	if (!mPortsBrowserBackgroundGui || mPortsBrowserReleasePending)
+		return nullptr;
+
+	GuiComponent* gui = mPortsBrowserBackgroundGui.release();
+	pushGui(gui);
+	return gui;
+}
+
+void Window::releasePortsBrowserGuiAfterUpdate(GuiComponent* gui)
+{
+	if (mPortsBrowserBackgroundGui.get() == gui)
+		mPortsBrowserReleasePending = true;
 }
 
 bool Window::init()
@@ -532,6 +626,22 @@ void Window::input(InputConfig* config, Input input)
 	if (input.value != 0 && cancelScreenSaver())
 		return;
 
+	// A completed background task can leave a useful message on screen until
+	// the next mapped button/key/navigation press. Runtime SDL Input instances
+	// have configured=false; the mapping belongs to InputConfig, not the event.
+	// Do not consume input or navigate to any menu automatically.
+	if (input.value != 0 && config && !config->getMappedTo(input).empty())
+	{
+		for (auto it = mBackgroundTasks.begin(); it != mBackgroundTasks.end(); )
+		{
+			const BackgroundTaskStatus& state = it->second.status;
+			if (state.state != BackgroundTaskStatus::RUNNING && state.dismissOnInput)
+				it = mBackgroundTasks.erase(it);
+			else
+				++it;
+		}
+	}
+
 	bool dbg_keyboard_key_press = Settings::getInstance()->getBool("Debug") && config->getDeviceId() == DEVICE_KEYBOARD && input.value;
 
 	if (dbg_keyboard_key_press && input.id == SDLK_g && SDL_GetModState() & KMOD_LCTRL)
@@ -601,6 +711,45 @@ void Window::update(int deltaTime)
 
 	if (peekGui())
 		peekGui()->update(deltaTime);
+
+	if (mBackgroundGui)
+	{
+		mBackgroundGui->update(deltaTime);
+		// Never delete inside the scraper's update/callback stack.
+		if (mBackgroundGuiReleasePending)
+		{
+			mBackgroundGui.reset();
+			mBackgroundGuiReleasePending = false;
+		}
+	}
+
+	if (mThemeBrowserBackgroundGui)
+	{
+		// Poll worker completion on the UI thread, without rendering its GUI.
+		mThemeBrowserBackgroundGui->update(deltaTime);
+		if (mThemeBrowserReleasePending)
+		{
+			// The GUI destructor joins workers; never destroy it from its own
+			// completion callback or from the download thread.
+			mThemeBrowserBackgroundGui.reset();
+			mThemeBrowserReleasePending = false;
+		}
+	}
+
+	if (mPortsBrowserBackgroundGui)
+	{
+		mPortsBrowserBackgroundGui->update(deltaTime);
+		if (mPortsBrowserReleasePending)
+		{
+			// Only release after update returns to avoid deleting this from
+			// its completion callback.
+			mPortsBrowserBackgroundGui.reset();
+			mPortsBrowserReleasePending = false;
+		}
+	}
+
+	// Poll background tasks even after their originating menu has closed.
+	updateBackgroundTasks(deltaTime);
 
 	// Update the screensaver
 	if (mScreenSaver)
@@ -883,6 +1032,9 @@ void Window::render()
 		mBluetoothIcon->render(transform);
 	}
 
+	// Persistent task status is independent of the menu stack.
+	renderBackgroundTasks();
+
 	// Info popup always on top
 	if (mInfoPopup)
 	{
@@ -898,6 +1050,267 @@ void Window::render()
 			mSleeping = true;
 			onSleep();
 		}
+	}
+}
+
+
+void Window::observeBackgroundTask(const std::string& id,
+	const std::function<BackgroundTaskStatus()>& monitor)
+{
+	if (id.empty() || !monitor)
+		return;
+
+	BackgroundTaskEntry& task = mBackgroundTasks[id];
+	task.monitor = monitor;
+	task.finishedMs = 0;
+	setBackgroundTask(id, monitor());
+}
+
+void Window::setBackgroundTask(const std::string& id, const BackgroundTaskStatus& status)
+{
+	if (id.empty())
+		return;
+
+	BackgroundTaskEntry& task = mBackgroundTasks[id];
+	if (task.status.title != status.title ||
+		task.status.current != status.current || task.status.total != status.total)
+		task.titleCache.reset();
+	if (task.status.detail != status.detail)
+		task.detailCache.reset();
+	if (task.status.footer != status.footer)
+		task.footerCache.reset();
+
+	task.status = status;
+	if (status.state == BackgroundTaskStatus::RUNNING)
+		task.finishedMs = 0;
+	else
+		task.monitor = nullptr;
+}
+
+void Window::clearBackgroundTask(const std::string& id)
+{
+	mBackgroundTasks.erase(id);
+}
+
+void Window::updateBackgroundTasks(int deltaTime)
+{
+	if (mBackgroundTasks.empty())
+		return;
+
+	mBackgroundTaskAnimMs = (mBackgroundTaskAnimMs + deltaTime) % 1800;
+	mBackgroundTaskShowMs = (mBackgroundTaskShowMs + deltaTime) % 3600000;
+	mBackgroundTaskPollMs += deltaTime;
+	const bool poll = mBackgroundTaskPollMs >= 750;
+	if (poll)
+		mBackgroundTaskPollMs = 0;
+
+	for (auto it = mBackgroundTasks.begin(); it != mBackgroundTasks.end(); )
+	{
+		BackgroundTaskEntry& task = it->second;
+		if (poll && task.monitor && task.status.state == BackgroundTaskStatus::RUNNING)
+		{
+			// Monitors are fast state readers; never execute downloads here.
+			const BackgroundTaskStatus latest = task.monitor();
+			if (task.status.title != latest.title ||
+				task.status.current != latest.current || task.status.total != latest.total)
+				task.titleCache.reset();
+			if (task.status.detail != latest.detail)
+				task.detailCache.reset();
+			if (task.status.footer != latest.footer)
+				task.footerCache.reset();
+			task.status = latest;
+			if (latest.state != BackgroundTaskStatus::RUNNING)
+				task.monitor = nullptr;
+		}
+
+		if (task.status.state != BackgroundTaskStatus::RUNNING)
+			task.finishedMs += deltaTime;
+
+		// Most tasks use the original 3.5s timeout. Opt-in terminal
+		// notices instead wait for the next user button/key press.
+		if (task.finishedMs >= 3500 && !task.status.dismissOnInput)
+			it = mBackgroundTasks.erase(it);
+		else
+			++it;
+	}
+}
+
+void Window::renderBackgroundTasks()
+{
+	if (mBackgroundTasks.empty() || mRenderScreenSaver ||
+		mBackgroundTaskOverlaySuppressed)
+		return;
+
+	// Rotate when several operations run concurrently; prefer active jobs.
+	std::vector<std::map<std::string, BackgroundTaskEntry>::iterator> candidates;
+	for (auto it = mBackgroundTasks.begin(); it != mBackgroundTasks.end(); ++it)
+	{
+		if (it->second.status.state == BackgroundTaskStatus::RUNNING)
+			candidates.push_back(it);
+	}
+	if (candidates.empty())
+	{
+		for (auto it = mBackgroundTasks.begin(); it != mBackgroundTasks.end(); ++it)
+			candidates.push_back(it);
+	}
+	if (candidates.empty())
+		return;
+
+	const size_t selectedIndex = (static_cast<size_t>(mBackgroundTaskShowMs / 4500)) % candidates.size();
+	BackgroundTaskEntry& entry = candidates[selectedIndex]->second;
+	const BackgroundTaskStatus& task = entry.status;
+	const bool dark = Settings::getInstance()->getBool("MenuDark");
+	const unsigned int panelColor = dark ? 0x101010EE : 0xF0F0F0EE;
+	const unsigned int textColor = dark ? 0xFFFFFFFF : 0x777777FF;
+	const unsigned int secondaryColor = dark ? 0xCCCCCCFF : 0x666666FF;
+	const unsigned int borderColor = 0x4A90E2FF;
+	std::shared_ptr<Font> font = Font::get(FONT_SIZE_SMALL);
+
+	// Match the floating Skyscraper panel rather than drawing a second,
+	// unrelated notification style. No additional textures or animations.
+	const float sw = (float)Renderer::getScreenWidth();
+	const float sh = (float)Renderer::getScreenHeight();
+	const float width = std::min(sw * 0.90f, std::max(270.0f, std::min(sw * 0.30f, 520.0f)));
+	const float height = std::min(sh * 0.38f, std::max(sh * 0.13f, font->getHeight() * 3.0f + 25.0f));
+	const float x = sw - width - (sw * 0.025f);
+	const float y = sh - height - (sh * 0.20f);
+	const float padding = 18.0f;
+	const bool drawGlyph = !task.iconGlyph.empty();
+	const float iconSize = (drawGlyph || !task.iconPath.empty()) ?
+		std::min(sh * 0.052f, height * 0.42f) : 0.0f;
+	const float textWidth = std::max(40.0f, width - (padding * 2.0f) -
+		(iconSize > 0.0f ? iconSize + 9.0f : 0.0f));
+	const float lineSpacing = std::min(font->getHeight(), (height - 31.0f) / 3.0f);
+
+	auto fitText = [&](const std::string& value) -> std::string
+	{
+		std::string result = value;
+		if (font->sizeText(result).x() <= textWidth)
+			return result;
+		while (!result.empty() && font->sizeText(result + "...").x() > textWidth)
+		{
+			size_t firstByte = result.size() - 1;
+			while (firstByte > 0 &&
+				(static_cast<unsigned char>(result[firstByte]) & 0xC0) == 0x80)
+				--firstByte;
+			result.resize(firstByte);
+		}
+		return result + "...";
+	};
+
+	if (!entry.themeCached || entry.cachedDark != dark)
+	{
+		entry.titleCache.reset();
+		entry.detailCache.reset();
+		entry.footerCache.reset();
+		entry.cachedDark = dark;
+		entry.themeCached = true;
+	}
+
+	std::string title = task.title;
+	if (task.showProgressInTitle && task.current >= 0 && task.total > 0)
+		title = std::to_string(task.current) + "/" + std::to_string(task.total) + " " + title;
+
+	if (!entry.titleCache)
+		entry.titleCache.reset(font->buildTextCache(fitText(title), 0.0f, 0.0f, textColor));
+	if (!entry.detailCache)
+		entry.detailCache.reset(font->buildTextCache(fitText(task.detail), 0.0f, 0.0f, textColor));
+	if (!entry.footerCache && !task.footer.empty())
+		entry.footerCache.reset(font->buildTextCache(fitText(task.footer), 0.0f, 0.0f, secondaryColor));
+
+	// Same translucent body and 2-pixel blue outline as GuiSkyscraperProgress.
+	Renderer::setMatrix(Transform4x4f::Identity());
+	Renderer::drawRect(x, y, width, height, panelColor, panelColor);
+	Renderer::drawRect(x, y, width, 2.0f, borderColor, borderColor);
+	Renderer::drawRect(x, y + height - 2.0f, width, 2.0f, borderColor, borderColor);
+	Renderer::drawRect(x, y, 2.0f, height, borderColor, borderColor);
+	Renderer::drawRect(x + width - 2.0f, y, 2.0f, height, borderColor, borderColor);
+
+	TextCache* lines[3] = {
+		entry.titleCache.get(), entry.detailCache.get(), entry.footerCache.get()
+	};
+	for (int i = 0; i < 3; ++i)
+	{
+		if (!lines[i])
+			continue;
+		Transform4x4f trans = Transform4x4f::Identity();
+		trans = trans.translate(Vector3f(x + padding, y + 6.0f + i * lineSpacing, 0.0f));
+		Renderer::setMatrix(trans);
+		font->renderTextCache(lines[i]);
+	}
+
+	// A glyph identifies the operation while it runs, then the outcome.
+	// Reuse the cached Font Awesome atlas; keep PNG fallback for other clients.
+	if (drawGlyph)
+	{
+		const char* stateGlyph = task.state == BackgroundTaskStatus::SUCCESS ? TaskGlyphs::DONE :
+			task.state == BackgroundTaskStatus::FAILED ? TaskGlyphs::ERROR :
+			task.state == BackgroundTaskStatus::CANCELLED ? TaskGlyphs::CANCEL : nullptr;
+		const std::string glyph = stateGlyph ? stateGlyph : task.iconGlyph;
+		const int glyphSize = std::max(12, static_cast<int>(iconSize * 0.86f));
+		const unsigned int glyphColor = dark ? 0xD3D6D9FF : 0x666666FF;
+		if (!entry.glyphCache || entry.cachedGlyph != glyph ||
+			entry.glyphFontSize != glyphSize || entry.glyphColor != glyphColor)
+		{
+			entry.glyphFont = Font::get(glyphSize, TaskGlyphs::FONT_PATH);
+			entry.glyphCache.reset(entry.glyphFont->buildTextCache(glyph, 0.0f, 0.0f, glyphColor));
+			entry.cachedGlyph = glyph;
+			entry.glyphFontSize = glyphSize;
+			entry.glyphColor = glyphColor;
+		}
+		if (entry.glyphCache)
+		{
+			const float glyphWidth = entry.glyphFont->sizeText(glyph).x();
+			const float glyphX = x + width - iconSize - 12.0f + (iconSize - glyphWidth) * 0.5f;
+			Transform4x4f iconTrans = Transform4x4f::Identity();
+			iconTrans = iconTrans.translate(Vector3f(glyphX, y + 10.0f, 0.0f));
+			Renderer::setMatrix(iconTrans);
+			entry.glyphFont->renderTextCache(entry.glyphCache.get());
+		}
+	}
+	else if (!task.iconPath.empty())
+	{
+		if (!mBackgroundTaskIcon)
+			mBackgroundTaskIcon.reset(new ImageComponent(this));
+		if (mBackgroundTaskIconPath != task.iconPath)
+		{
+			mBackgroundTaskIcon->setImage(task.iconPath);
+			mBackgroundTaskIconPath = task.iconPath;
+		}
+		if (mBackgroundTaskIconSize != iconSize)
+		{
+			mBackgroundTaskIcon->setResize(iconSize, iconSize);
+			mBackgroundTaskIconSize = iconSize;
+		}
+		mBackgroundTaskIcon->setPosition(x + width - iconSize - 12.0f, y + 10.0f);
+		mBackgroundTaskIcon->render(Transform4x4f::Identity());
+	}
+
+	const float barWidth = width - (padding * 2.0f);
+	const float barY = y + height - 9.0f;
+	Renderer::setMatrix(Transform4x4f::Identity());
+	Renderer::drawRect(x + padding, barY, barWidth, 3.0f, 0x77777766, 0x77777766);
+
+	if (task.current >= 0 && task.total > 0)
+	{
+		const float ratio = std::max(0.0f, std::min(1.0f,
+			(float)task.current / (float)task.total));
+		Renderer::drawRect(x + padding, barY, barWidth * ratio, 3.0f,
+			0x4A90E2FF, 0x4A90E2FF);
+	}
+	else if (task.state == BackgroundTaskStatus::RUNNING)
+	{
+		// An undetermined progress segment is activity, never a fake percentage.
+		const float segment = barWidth * 0.24f;
+		const float offset = (barWidth - segment) *
+			((float)mBackgroundTaskAnimMs / 1800.0f);
+		Renderer::drawRect(x + padding + offset, barY, segment, 3.0f,
+			0x4A90E2FF, 0x4A90E2FF);
+	}
+	else if (task.state == BackgroundTaskStatus::SUCCESS)
+	{
+		Renderer::drawRect(x + padding, barY, barWidth, 3.0f,
+			0x4A90E2FF, 0x4A90E2FF);
 	}
 }
 
