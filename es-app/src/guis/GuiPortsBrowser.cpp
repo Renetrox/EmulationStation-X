@@ -226,16 +226,24 @@ void GuiPortsBrowser::publishBackgroundStatus()
     task.detail = mJobTargetName;
     if (!mJobStageLabel.empty())
     {
-        task.footer = mJobStageLabel;
-        if (!mJobPortId.empty())
+        // Explicitly identify the scope: this bar represents the *current
+        // RetroPie-Setup stage*, not the complete port installation.
+        task.footer = trPorts("STAGE") + ": " + mJobStageLabel;
+        if (mJobStagePercent >= 0)
+        {
+            task.current = mJobStagePercent;
+            task.total = 100;
+            task.showProgressInTitle = false; // No misleading "60/100 ports".
+            task.footer += " · " + std::to_string(mJobStagePercent) + "%";
+        }
+        else if (!mJobPortId.empty())
             task.footer += " · " + ellipsizePorts(mJobPortId, 24);
     }
     else
         task.footer = trPorts("X-TRAS TASK CONTINUES IN BACKGROUND");
 
     task.iconGlyph = mJobGlyph.empty() ? TaskGlyphs::DOWNLOAD : mJobGlyph;
-    // The percentages in RetroPie-Setup logs describe individual stages,
-    // not end-to-end install progress. Use an indeterminate progress bar.
+    // Unknown stage progress remains the existing animated activity bar.
     mWindow->setBackgroundTask("xtras-browser", task);
 }
 
@@ -1013,6 +1021,7 @@ void GuiPortsBrowser::startJob(const std::string& busyMsg,
     mProgressPollMs = 0;
     mJobInitialLabel = busyMsg;
     mJobStageLabel.clear();
+    mJobStagePercent = -1;
     mJobPortId.clear();
     mJobLogStart = 0;
 
@@ -1129,6 +1138,7 @@ void GuiPortsBrowser::updateJobProgress()
 
     if (mJobStageLabel.empty())
     {
+        mJobStagePercent = -1;
         if (!mJobInitialLabel.empty())
             mBusy->setText(mJobInitialLabel);
         return;
@@ -1168,6 +1178,10 @@ void GuiPortsBrowser::updateJobProgress()
 
     if (percent >= 0)
         label += "  " + std::to_string(percent) + "%";
+
+    // With no current stage marker in the bounded log tail, the percentage
+    // could belong to a previous step. Never reuse it for the floating bar.
+    mJobStagePercent = (bestPos == std::string::npos) ? -1 : percent;
 
     mBusy->setText(label);
     if (mInBackground)
