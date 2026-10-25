@@ -46,6 +46,16 @@ class MediaPickerTTFTests(unittest.TestCase):
         self.assertIn('config->isMappedTo("x", input)', self.gui)
         self.assertIn('config->isMappedTo("y", input)', self.gui)
 
+    def test_callbacks_defer_list_mutation_until_after_input(self):
+        self.assertIn("mPendingDirectory = parent", self.gui)
+        self.assertIn("mPendingDirectory = folder", self.gui)
+        self.assertIn("mHasPendingChoice = true", self.gui)
+        self.assertIn("const bool handled = mList.input(config, input)", self.gui)
+        self.assertIn("choose(mPendingFile)", self.gui)
+        self.assertIn("navigate(directory)", self.gui)
+        self.assertIn("mHasPendingChoice = false", self.gui)
+        self.assertIn("mPendingDirectory", self.header)
+
     def test_locales_include_new_controls(self):
         for name in ("en", "es", "de", "fr", "it", "pt", "ru", "ja"):
             text = (ROOT / "lang" / (name + ".ini")).read_text()
