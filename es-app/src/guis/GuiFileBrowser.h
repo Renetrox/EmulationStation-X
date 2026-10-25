@@ -45,4 +45,11 @@ private:
     std::string mSelectedPath;
     std::function<void(const std::string&)> mSelected;
     bool mDarkMenu;
+
+    // Row callbacks execute inside ComponentList::input. Rebuilding the list
+    // or deleting the picker from that callback invalidates the active row.
+    // Apply requests only after ComponentList::input returns.
+    std::string mPendingDirectory;
+    std::string mPendingFile;
+    bool mHasPendingChoice = false;
 };
