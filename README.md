@@ -78,6 +78,21 @@ Further ARM64, failure-path and simultaneous-job checks remain useful.
 ## Example Theme Gallery
 <img width="1366" height="768" alt="Captura de pantalla_2026-01-09_19-20-24" src="https://github.com/user-attachments/assets/07912879-ca8d-4122-a640-d32cd15c6fd9" />
 
+## Native metadata media picker
+
+ES-X now includes a lightweight, controller-friendly **file browser for selecting game artwork and videos** directly from **Edit Metadata**. No external file manager is needed: the picker uses the existing ES-X interface and the **Font Awesome TTF icons already bundled with the frontend**. No additional PNG icon pack is required.
+
+Open a game's options, choose **Edit Metadata**, and select an image or video field (such as **Image**, **Thumbnail**, **Marquee**, **Box art**, **Screenshot**, **Wheel**, **Texture**, or **Video**) to browse folders and choose a local file. Image and video extensions are filtered automatically; extension matching is case-insensitive.
+
+- **A:** enter a folder or select a file.
+- **B:** close the picker without changing the field.
+- **Y:** go to the parent folder.
+- **X:** clear the selected media field.
+
+The browser starts from the current media folder when available, or the system's ROM directory. Selected media paths work with the live metadata view; ES-X writes portable relative paths into `gamelist.xml` where appropriate. **Save** your metadata changes to keep the selection.
+
+This is a focused **media selector**, not a general-purpose file manager: it does not rename, move, copy, or delete files.
+
 ## Multilingual scraper
 <img width="1366" height="768" alt="Captura de pantalla_2025-12-01_12-24-53" src="https://github.com/user-attachments/assets/83dedb20-1c32-432b-8495-24d2f6fca3a7" />
 
@@ -291,6 +306,7 @@ Beautiful themes should not require engine hacks.
 | Audio ducking | ✅ Stable |
 | Controller overlay | 🔄 Planned |
 | Network indicator |  ✅ Stable |
+| Native metadata media picker (Font Awesome TTF) | ✅ Available |
 | Native J2ME scraping | ✅ Available |
 | MIDlet manifest detection | ✅ Available |
 | Theme Browser | ✅ Stable |
