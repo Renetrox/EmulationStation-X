@@ -1,0 +1,31 @@
+name: Test ES-X TTF file picker
+
+on:
+  push:
+    branches:
+      - test/metadata-file-picker-ttf-20261025
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Static file picker regressions
+        run: python3 -m unittest discover -s tests -p test_media_picker_ttf.py -v
+      - name: Install ES-X desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git build-essential cmake pkg-config \
+            libsdl2-dev libsdl2-mixer-dev libfreeimage-dev \
+            libfreetype6-dev libcurl4-openssl-dev rapidjson-dev \
+            libasound2-dev libgl1-mesa-dev libvlc-dev \
+            libvlccore-dev vlc-bin libudev-dev
+      - name: Configure ES-X OpenGL frontend
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGL=ON -DGLES=OFF
+      - name: Build full frontend
+        run: cmake --build build --target emulationstation --parallel 2
