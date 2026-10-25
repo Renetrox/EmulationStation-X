@@ -138,7 +138,7 @@ void GuiFileBrowser::navigate(const std::string& directory)
     {
         const std::string parent = Utils::FileSystem::getParent(mCurrentDirectory);
         if (parent != mCurrentDirectory && !parent.empty())
-            addRow(PARENT_ICON, "..", [this, parent] { navigate(parent); });
+            addRow(PARENT_ICON, "..", [this, parent] { mPendingDirectory = parent; });
     }
 
     const auto entries = Utils::FileSystem::getDirContent(mCurrentDirectory);
@@ -166,14 +166,14 @@ void GuiFileBrowser::navigate(const std::string& directory)
     for (const auto& folder : folders)
     {
         addRow(FOLDER_ICON, Utils::FileSystem::getFileName(folder),
-               [this, folder] { navigate(folder); });
+               [this, folder] { mPendingDirectory = folder; });
     }
 
     const char* fileGlyph = mKind == MediaKind::VIDEO ? VIDEO_ICON : IMAGE_ICON;
     for (const auto& path : media)
     {
         addRow(fileGlyph, Utils::FileSystem::getFileName(path),
-               [this, path] { choose(path); }, path == mSelectedPath);
+               [this, path] { mPendingFile = path; mHasPendingChoice = true; }, path == mSelectedPath);
     }
 
     if (folders.empty() && media.empty())
@@ -211,7 +211,23 @@ bool GuiFileBrowser::input(InputConfig* config, Input input)
         return true;
     }
 
-    return mList.input(config, input);
+    const bool handled = mList.input(config, input);
+    // ComponentList owns the active row callback. Do not clear its rows or
+    // destroy this GUI until after that callback has returned.
+    if (mHasPendingChoice)
+    {
+        mHasPendingChoice = false;
+        choose(mPendingFile);
+        return true;
+    }
+    if (!mPendingDirectory.empty())
+    {
+        const std::string directory = mPendingDirectory;
+        mPendingDirectory.clear();
+        navigate(directory);
+        return true;
+    }
+    return handled;
 }
 
 void GuiFileBrowser::update(int deltaTime)
