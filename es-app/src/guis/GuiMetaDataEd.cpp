@@ -215,12 +215,13 @@ GuiMetaDataEd::GuiMetaDataEd(Window* window, MetaDataList* md, const std::vector
             const std::string title = tr(kind == GuiFileBrowser::MediaKind::VIDEO ?
                 "SELECT VIDEO" : "SELECT IMAGE");
 
-            auto updateVal = [ed, romRoot](const std::string& path)
+            auto updateVal = [ed](const std::string& path)
             {
-                // Within the ROM folder prefer portable ./media.png paths;
-                // external files retain their absolute path. RESET clears it.
-                ed->setValue(path.empty() ? "" :
-                    Utils::FileSystem::createRelativePath(path, romRoot, false, true));
+                // FileData expects an absolute path while ES-X is running.
+                // MetaDataList::appendToXML converts it to ./relative form when
+                // writing gamelist.xml. Saving a relative value directly into
+                // the live metadata makes images appear only after restart.
+                ed->setValue(path);
             };
 
             row.makeAcceptInputHandler([this, ed, romRoot, kind, updateVal, title]
