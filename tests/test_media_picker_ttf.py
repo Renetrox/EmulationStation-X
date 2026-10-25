@@ -41,7 +41,14 @@ class MediaPickerTTFTests(unittest.TestCase):
         self.assertIn("Utils::String::toLower(Utils::FileSystem::getExtension(path))", self.gui)
         for ext in (".png", ".jpeg", ".jpg", ".gif", ".svg", ".mp4", ".webm"):
             self.assertIn('"' + ext + '"', self.gui)
-        self.assertIn("createRelativePath(path, romRoot, false, true)", self.editor)
+        # The live metadata must use absolute media paths; XML serialization
+        # is responsible for portable paths on disk. Otherwise the image only
+        # refreshes after restarting ES-X and re-reading gamelist.xml.
+        self.assertIn("ed->setValue(path);", self.editor)
+        self.assertNotIn("ed->setValue(path.empty()", self.editor)
+        metadata = (ROOT / "es-app/src/MetaData.cpp").read_text()
+        self.assertIn("createRelativePath(value, relativeTo, true, true)", metadata)
+        self.assertIn("resolveRelativePath(value, relativeTo, true, true)", metadata)
         self.assertIn("mCurrentDirectory", self.header)
         self.assertIn('config->isMappedTo("x", input)', self.gui)
         self.assertIn('config->isMappedTo("y", input)', self.gui)
