@@ -595,12 +595,21 @@ void SystemView::populate()
 
 			if(!e.data.logo)
 			{
+				// Sin logo gráfico: mostrar el nombre sobre una tarjeta oscura
+				// legible tanto en temas claros como oscuros. Antes el texto
+				// predeterminado era negro y desaparecía con fondos oscuros.
+				// Si el tema define logoText, su color/fondo tienen prioridad.
 				TextComponent* text = new TextComponent(
 					mWindow,
 					(*it)->getName(),
 					Font::get(FONT_SIZE_LARGE),
-					0x000000FF,
+					0xF0F0F0FF,
 					ALIGN_CENTER);
+
+				const ThemeData::ThemeElement* logoTextElem =
+					theme->getElement("system", "logoText", "text");
+				if(!logoTextElem || !logoTextElem->has("color"))
+					text->setBackgroundColor(0x191919CC);
 
 				text->setSize(mCarousel.logoSize * mCarousel.logoScale);
 				text->applyTheme(
