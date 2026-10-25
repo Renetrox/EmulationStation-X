@@ -13,6 +13,7 @@
 #include "components/SwitchComponent.h"
 #include "components/TextComponent.h"
 
+#include "guis/GuiFileBrowser.h"
 #include "guis/GuiGameScraper.h"
 #include "guis/GuiMsgBox.h"
 #include "guis/GuiTextEditKeyboardPopup.h"
@@ -189,6 +190,56 @@ GuiMetaDataEd::GuiMetaDataEd(Window* window, MetaDataList* md, const std::vector
 			row.addElement(ed, false);
 			break;
 		}
+        case MD_PATH:
+        {
+            // Keep the standard metadata row; only its editor changes from a
+            // typed path to ES-X's lightweight TTF-only media browser.
+            ed = std::make_shared<TextComponent>(
+                window, "", Font::get(FONT_SIZE_SMALL, FONT_PATH_LIGHT),
+                getSecondaryTextColor(), ALIGN_RIGHT);
+            ed->setSize(0, lbl->getSize().y() * 0.71f);
+            row.addElement(ed, true);
+
+            auto spacer = std::make_shared<GuiComponent>(mWindow);
+            spacer->setSize(Renderer::getScreenWidth() * 0.005f, 0);
+            row.addElement(spacer, false);
+
+            auto bracket = std::make_shared<ImageComponent>(mWindow);
+            bracket->setImage(getArrowPath());
+            bracket->setResize(Vector2f(0, lbl->getFont()->getLetterHeight()));
+            row.addElement(bracket, false);
+
+            const std::string romRoot = scraperParams.system->getStartPath();
+            const auto kind = iter->key == "video" ?
+                GuiFileBrowser::MediaKind::VIDEO : GuiFileBrowser::MediaKind::IMAGE;
+            const std::string title = tr(kind == GuiFileBrowser::MediaKind::VIDEO ?
+                "SELECT VIDEO" : "SELECT IMAGE");
+
+            auto updateVal = [ed, romRoot](const std::string& path)
+            {
+                // Within the ROM folder prefer portable ./media.png paths;
+                // external files retain their absolute path. RESET clears it.
+                ed->setValue(path.empty() ? "" :
+                    Utils::FileSystem::createRelativePath(path, romRoot, false, true));
+            };
+
+            row.makeAcceptInputHandler([this, ed, romRoot, kind, updateVal, title]
+            {
+                std::string selectedFile = ed->getValue();
+                if (!selectedFile.empty())
+                    selectedFile = Utils::FileSystem::resolveRelativePath(
+                        selectedFile, romRoot, true, true);
+
+                std::string folder = selectedFile.empty() ? romRoot :
+                    Utils::FileSystem::getParent(selectedFile);
+                if (!Utils::FileSystem::isDirectory(folder))
+                    folder = romRoot;
+
+                mWindow->pushGui(new GuiFileBrowser(
+                    mWindow, folder, selectedFile, kind, updateVal, title));
+            });
+            break;
+        }
 		case MD_MULTILINE_STRING:
 		default:
 		{
