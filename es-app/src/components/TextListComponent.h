@@ -44,6 +44,41 @@ namespace TextListCarouselArt
 		return file->getCarouselImagePath(imageType);
 	}
 
+	// Opt-in: a wheel/marquee carousel wants text when the logo is missing,
+	// rather than silently substituting a screenshot or box art.
+	inline std::string getLogoFirstPath(FileData* file, const std::string& imageType)
+	{
+		if (!file)
+			return "";
+
+		if (imageType == "wheel")
+		{
+			const std::string wheel = file->getWheelPath();
+			if (!wheel.empty() && Utils::FileSystem::exists(wheel))
+				return wheel;
+
+			// Legacy collections frequently store their logo as marquee.
+			const std::string marquee = file->getMarqueePath();
+			return (!marquee.empty() && Utils::FileSystem::exists(marquee)) ?
+				marquee : "";
+		}
+
+		if (imageType == "marquee")
+		{
+			const std::string marquee = file->getMarqueePath();
+			return (!marquee.empty() && Utils::FileSystem::exists(marquee)) ?
+				marquee : "";
+		}
+
+		return file->getCarouselImagePath(imageType);
+	}
+
+	template <typename U>
+	inline std::string getLogoFirstPath(const U&, const std::string&)
+	{
+		return "";
+	}
+
 	template <typename U>
 	inline std::string getImagePath(const U&, const std::string&)
 	{
@@ -260,6 +295,8 @@ private:
 	unsigned int mCarouselItemColor;
 	unsigned int mCarouselSelectedItemColor;
 	bool mCarouselShowText;
+	bool mCarouselShowFallbackName;
+	unsigned int mCarouselFallbackNameColor;
 	int mCarouselTextMaxLines;
 
 	// ES-X: rueda opcional. Reutiliza el mismo modelo de SystemView:
@@ -360,6 +397,8 @@ TextListComponent<T>::TextListComponent(Window* window) :
 	mCarouselItemColor = 0x00000088;
 	mCarouselSelectedItemColor = 0x101020CC;
 	mCarouselShowText = true;
+	mCarouselShowFallbackName = false;
+	mCarouselFallbackNameColor = 0xFFFFFFFF;
 	mCarouselTextMaxLines = 2;
 	mCarouselItemRotation = 0.0f;
 	mCarouselItemRotationOrigin = Vector2f(0.5f, 0.5f);
@@ -823,13 +862,23 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 		if (mCarouselImage)
 		{
-			imagePath = TextListCarouselArt::getImagePath(entry.object, mCarouselImageType);
+			imagePath = mCarouselShowFallbackName ?
+				TextListCarouselArt::getLogoFirstPath(entry.object, mCarouselImageType) :
+				TextListCarouselArt::getImagePath(entry.object, mCarouselImageType);
+
+			// Some legacy gamelists reference media which no longer exists.
+			// Check this only for opt-in fallback to preserve existing behavior.
+			if (mCarouselShowFallbackName && !imagePath.empty() &&
+				!Utils::FileSystem::exists(imagePath))
+				imagePath.clear();
 
 			if (!imagePath.empty())
 			{
 				hasRealImage = true;
 			}
-			else if (!mCarouselFallbackImage.empty() &&
+			else if ((!mCarouselShowFallbackName ||
+				(mCarouselImageBorder.empty() && mCarouselImageBorderSelected.empty())) &&
+				!mCarouselFallbackImage.empty() &&
 				Utils::FileSystem::exists(mCarouselFallbackImage))
 			{
 				imagePath = mCarouselFallbackImage;
@@ -838,71 +887,9 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		}
 
 		const bool hasAnyCarouselImage = hasRealImage || hasFallbackImage;
+		const bool showFallbackName = mCarouselImage && mCarouselShowFallbackName && !hasRealImage;
 
-		if (mCarouselShowText && !hasAnyCarouselImage)
-		{
-			unsigned int textColor;
-			if (visuallyCentered && mSelectedColor)
-				textColor = mSelectedColor;
-			else
-				textColor = mColors[entry.data.colorId];
-
-			textColor = applyOpacity(textColor, opacity01);
-
-			std::string displayName = mUppercase ? Utils::String::toUpper(entry.name) : entry.name;
-
-			if (mShowRowNumbers)
-				displayName = std::to_string(realIndex + 1) + ". " + displayName;
-
-			const float maxTextWidth = itemWidth * 0.86f;
-			std::vector<std::string> lines = makeLines(displayName, maxTextWidth, mCarouselTextMaxLines);
-
-			const float lineGap = baseTextHeight * 0.15f;
-			const float totalTextHeight =
-				(lines.size() * baseTextHeight) +
-				(lines.size() > 1 ? ((lines.size() - 1) * lineGap) : 0.0f);
-
-			float y = -(totalTextHeight * 0.5f);
-
-			if (!verticalCarousel)
-			{
-				if (mCarouselLogoAlignment == CAROUSEL_ALIGN_TOP)
-					y = -(itemHeight * 0.5f) + (itemHeight * 0.08f);
-				else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_BOTTOM)
-					y = (itemHeight * 0.5f) - totalTextHeight - (itemHeight * 0.08f);
-			}
-
-			for (size_t line = 0; line < lines.size(); line++)
-			{
-				TextCache* cache = font->buildTextCache(lines[line], 0, 0, 0x000000FF);
-				cache->setColor(textColor);
-
-				float textX = -(cache->metrics.size.x() * 0.5f);
-
-				if (mCarouselLogoAlignment == CAROUSEL_ALIGN_LEFT || mAlignment == ALIGN_LEFT)
-					textX = -(itemWidth * 0.5f) + (itemWidth * 0.06f);
-				else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_RIGHT || mAlignment == ALIGN_RIGHT)
-					textX = (itemWidth * 0.5f) - cache->metrics.size.x() - (itemWidth * 0.06f);
-
-				Transform4x4f drawTrans = itemTrans;
-
-				drawTrans.translate(Vector3f(
-					drawX + (scaledW * 0.5f),
-					drawY + (scaledH * 0.5f),
-					0.0f));
-
-				drawTrans.scale(Vector3f(itemRenderScale, itemRenderScale, 1.0f));
-				drawTrans.translate(Vector3f(textX, y, 0.0f));
-
-				Renderer::setMatrix(drawTrans);
-				font->renderTextCache(cache);
-				delete cache;
-
-				y += baseTextHeight + lineGap;
-			}
-		}
-
-		if (mCarouselImage && hasAnyCarouselImage && !imagePath.empty())
+		if (mCarouselImage && (hasAnyCarouselImage || showFallbackName))
 		{
 			if (!entry.data.carouselImage)
 				entry.data.carouselImage = std::shared_ptr<ImageComponent>(new ImageComponent(this->mWindow, false, true));
@@ -984,7 +971,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			// una caja incorrecta. La rueda prioriza una transformación íntegra y
 			// conserva el recorte habitual cuando la rotación efectiva es cero.
 			const bool clipCoverImage =
-				!hasFallbackImage && mCarouselImageFit == "cover" &&
+				hasRealImage && !hasFallbackImage && mCarouselImageFit == "cover" &&
 				std::fabs(itemRotation) <= 0.001f;
 
 			if (clipCoverImage)
@@ -1042,7 +1029,8 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			if (border && mCarouselImageBorderZIndex < mCarouselImageZIndex)
 				renderBorder();
 
-			entry.data.carouselImage->render(imageTrans);
+			if (hasAnyCarouselImage && !imagePath.empty())
+				entry.data.carouselImage->render(imageTrans);
 
 			if (clipCoverImage)
 				Renderer::popClipRect();
@@ -1050,6 +1038,78 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			if (border && mCarouselImageBorderZIndex >= mCarouselImageZIndex)
 				renderBorder();
 		}
+		// A missing logo is a name overlay above the existing carousel border
+		// (logo_default.png in Riescade), just as SystemView's logo fallback.
+		if ((mCarouselShowText && !hasAnyCarouselImage) || showFallbackName)
+		{
+			unsigned int textColor;
+			if (showFallbackName)
+				textColor = mCarouselFallbackNameColor;
+			else if (visuallyCentered && mSelectedColor)
+				textColor = mSelectedColor;
+			else
+				textColor = mColors[entry.data.colorId];
+
+			textColor = applyOpacity(textColor, opacity01);
+
+			std::string displayName = mUppercase ? Utils::String::toUpper(entry.name) : entry.name;
+
+			if (mShowRowNumbers)
+				displayName = std::to_string(realIndex + 1) + ". " + displayName;
+
+			const float maxTextWidth = itemWidth * 0.86f;
+			std::vector<std::string> lines = makeLines(displayName, maxTextWidth, mCarouselTextMaxLines);
+
+			const float lineGap = baseTextHeight * 0.15f;
+			const float totalTextHeight =
+				(lines.size() * baseTextHeight) +
+				(lines.size() > 1 ? ((lines.size() - 1) * lineGap) : 0.0f);
+
+			float y = -(totalTextHeight * 0.5f);
+
+			if (!showFallbackName && !verticalCarousel)
+			{
+				if (mCarouselLogoAlignment == CAROUSEL_ALIGN_TOP)
+					y = -(itemHeight * 0.5f) + (itemHeight * 0.08f);
+				else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_BOTTOM)
+					y = (itemHeight * 0.5f) - totalTextHeight - (itemHeight * 0.08f);
+			}
+
+			for (size_t line = 0; line < lines.size(); line++)
+			{
+				TextCache* cache = font->buildTextCache(lines[line], 0, 0, 0x000000FF);
+				cache->setColor(textColor);
+
+				float textX = -(cache->metrics.size.x() * 0.5f);
+
+				// A missing logo is represented by a centered game title,
+				// regardless of the ordinary row-text alignment.
+				if (!showFallbackName &&
+					(mCarouselLogoAlignment == CAROUSEL_ALIGN_LEFT || mAlignment == ALIGN_LEFT))
+					textX = -(itemWidth * 0.5f) + (itemWidth * 0.06f);
+				else if (!showFallbackName &&
+					(mCarouselLogoAlignment == CAROUSEL_ALIGN_RIGHT || mAlignment == ALIGN_RIGHT))
+					textX = (itemWidth * 0.5f) - cache->metrics.size.x() - (itemWidth * 0.06f);
+
+				Transform4x4f drawTrans = itemTrans;
+
+				drawTrans.translate(Vector3f(
+					drawX + (scaledW * 0.5f),
+					drawY + (scaledH * 0.5f),
+					0.0f));
+
+				drawTrans.scale(Vector3f(itemRenderScale, itemRenderScale, 1.0f));
+				drawTrans.translate(Vector3f(textX, y, 0.0f));
+
+				Renderer::setMatrix(drawTrans);
+				font->renderTextCache(cache);
+				delete cache;
+
+				y += baseTextHeight + lineGap;
+			}
+		}
+
+
 	};
 
 	for (int virtualPos = start; virtualPos <= end; virtualPos++)
@@ -1825,6 +1885,14 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	mCarouselShowText = true;
 	if (elem->has("carouselShowText"))
 		mCarouselShowText = elem->get<bool>("carouselShowText");
+
+	// Explicit game-title fallback: independent from carouselShowText.
+	mCarouselShowFallbackName = false;
+	mCarouselFallbackNameColor = 0xFFFFFFFF;
+	if (elem->has("carouselShowFallbackName"))
+		mCarouselShowFallbackName = elem->get<bool>("carouselShowFallbackName");
+	if (elem->has("carouselFallbackNameColor"))
+		mCarouselFallbackNameColor = elem->get<unsigned int>("carouselFallbackNameColor");
 
 	mCarouselTextMaxLines = 2;
 	if (elem->has("carouselTextMaxLines"))
