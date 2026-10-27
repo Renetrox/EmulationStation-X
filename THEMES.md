@@ -355,30 +355,26 @@ The following parameters are supported by ES-X's `systemcarousel` and can be tun
 
 ---
 
-## Gamelist carousel: show game name if its logo is missing (experimental)
+## Gamelist carousel: missing image -> default plate + name (experimental)
 
-The system carousel already supports `showFallbackName` for missing **system**
-logos. The gamelist carousel can use the same **plate + name** design without
-changing the current carousel geometry.
+Works with **any** `carouselImageType` (`cover`, `wheel`, `marquee`,
+`screenshot`, `thumbnail`, `image`, `boxart`, `texture`, `fanart`).
+The name appears **only if the preferred image type has no valid media**.
+An explicit `auto` type keeps the existing fallback order and shows the name
+only when no fallback media exists at all. This is opt-in: older themes are
+not changed.
 
-For Riescade-like themes, the plate is **already defined** as a border image
-rendered behind the game logo using `carouselImageBorderZIndex=10`, with
-the logo itself at `carouselImageZIndex=20`:
+For a **cover** carousel such as GameFlix, use:
 
 ```xml
 <textlist name="gamelist">
   <orientation>horizontal</orientation>
   <carouselMode>true</carouselMode>
   <carouselImage>true</carouselImage>
-  <carouselImageType>wheel</carouselImageType>
+  <carouselImageType>cover</carouselImageType>
 
-  <!-- Existing background plate and layer order: keep these unchanged -->
-  <carouselImageBorder>./resources/_parts/logo_default.png</carouselImageBorder>
-  <carouselImageBorderFit>contain</carouselImageBorderFit>
-  <carouselImageBorderZIndex>10</carouselImageBorderZIndex>
-  <carouselImageZIndex>20</carouselImageZIndex>
-
-  <!-- New opt-in text over that plate only when the wheel logo is missing -->
+  <!-- Original default card art, shown only for games without covers -->
+  <carouselFallbackImage>./_inc/caratulas/default.png</carouselFallbackImage>
   <carouselShowText>false</carouselShowText>
   <carouselShowFallbackName>true</carouselShowFallbackName>
   <carouselFallbackNameColor>FFFFFFFF</carouselFallbackNameColor>
@@ -386,24 +382,32 @@ the logo itself at `carouselImageZIndex=20`:
 </textlist>
 ```
 
-When enabled:
+For a **wheel** carousel such as Riescade, keep the existing
+`carouselImageBorder` / `carouselImageBorderSelected` as the default logo
+plate and their existing `carouselImageBorderZIndex` /
+`carouselImageZIndex` order. Add only:
 
-- If a valid wheel (or legacy marquee) logo exists, draw it over the existing
-  plate as before; no extra game title is drawn.
-- If no valid logo exists, **keep the existing plate** and draw the game name
-  **on top**. Text respects the carousel's positions, scale and rotations.
-- Do not replace missing wheel/marquee logos with screenshots or covers.
-- If no border plate is defined, an optional `carouselFallbackImage` can
-  provide the background image; if neither is defined, the name still appears.
-- The existing `carouselShowText=false` and transparent standard list colors
-  do not suppress this opt-in fallback title.
-- Without `carouselShowFallbackName`, the legacy artwork selection and
-  fallback drawing behavior remain unchanged.
+```xml
+<carouselShowFallbackName>true</carouselShowFallbackName>
+<carouselFallbackNameColor>FFFFFFFF</carouselFallbackNameColor>
+```
 
-`carouselImageBorderZIndex` / `carouselImageZIndex` are **already-supported**
-ES-X settings. No new renderer or z-index property is needed. This applies to
-the **gamelist carousel**, not the standalone `md_marquee` image. Test on
-desktop and ARM before merging the experimental change.
+When active:
+- Available preferred images continue to display as normal.
+- Missing preferred images show the game title **on top** of the theme's
+  existing border plate or default art. No extra image is required.
+- For `wheel`, an existing `marquee` logo is also accepted; for `cover`,
+  an existing `boxart` is also accepted.
+- This does not replace a missing cover with a screenshot or a missing wheel
+  with a screenshot just to avoid showing its name.
+- Font color for the fallback name is independent of transparent normal
+  carousel list text colors.
+- With no enabled opt-in property, previous image fallbacks remain unchanged.
+- The `zIndex`, carousel geometry, selection effects and engine rendering
+  pipeline do not need new properties.
+
+This applies to `textlist` in a **gamelist carousel** and not to `md_marquee`.
+Test on desktop and ARM before merging this experimental option.
 ---
 
 ## Navigation Sounds
