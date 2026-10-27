@@ -355,6 +355,33 @@ The following parameters are supported by ES-X's `systemcarousel` and can be tun
 
 ---
 
+## Random game video in System View (experimental)
+
+ES-X can optionally preview **one random scraped game video** when a system is
+selected. The existing `mostPlayedVideo` behavior remains unchanged unless
+the theme explicitly opts in.
+
+```xml
+<view name="system">
+  <video name="randomGameVideo">
+    <pos>0.65 0.32</pos>
+    <maxSize>0.30 0.26</maxSize>
+    <delay>1</delay>
+    <zIndex>30</zIndex>
+  </video>
+</view>
+```
+
+- Uses each game's `<video>` entry from the gamelist; only existing files are considered.
+- Selects another clip when changing systems **or returning to System View**.
+- Caches valid paths by system and avoids repeating the previous clip if alternatives exist.
+- Uses the same single video player as `mostPlayedVideo`; no background decoding.
+- If both `randomGameVideo` and `mostPlayedVideo` are present, random mode takes priority; use only one in the theme.
+- With no videos in the system, the preview is hidden. No periodic auto-advance while remaining on one system.
+- The option is currently experimental; test on your actual OpenGL ES device before widespread theme use.
+
+---
+
 ## Navigation Sounds
 
 Themes can define navigation audio.
