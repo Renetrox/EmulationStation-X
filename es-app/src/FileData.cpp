@@ -523,6 +523,29 @@ const std::string FileData::getCarouselImagePath(const std::string& preferredTyp
 	return "";
 }
 
+// Opt-in name fallback: resolve the exact art category selected by the theme.
+// Do not silently substitute a screenshot for a missing logo, or a marquee
+// for a missing cover. Existing getCarouselImagePath() keeps its old behavior.
+const std::string FileData::getCarouselPreferredImagePath(const std::string& preferredType) const
+{
+	const std::string preferred = Utils::String::toLower(preferredType);
+	if (preferred.empty() || preferred == "auto")
+		return getCarouselImagePath(preferred);
+
+	if (preferred == "none")
+		return "";
+
+	// Treat wheel/marquee as equivalent logo media; likewise cover/boxart.
+	// getArtBySource() already handles these associated pairs.
+	if (preferred == "marquee")
+	{
+		const std::string marquee = getArtBySource("marquee");
+		return !marquee.empty() ? marquee : getArtBySource("wheel");
+	}
+
+	return getArtBySource(preferred);
+}
+
 const std::string FileData::getVideoFallbackPath() const
 {
 	return getArtPathForSlot(ArtSlot::VideoFallback);
