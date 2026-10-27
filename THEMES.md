@@ -358,8 +358,12 @@ The following parameters are supported by ES-X's `systemcarousel` and can be tun
 ## Gamelist carousel: show game name if its logo is missing (experimental)
 
 The system carousel already supports `showFallbackName` for missing **system**
-logos. This is a separate, opt-in feature for missing **game** logos in a
-`textlist` gamelist carousel (such as Riescade):
+logos. The gamelist carousel can use the same **plate + name** design without
+changing the current carousel geometry.
+
+For Riescade-like themes, the plate is **already defined** as a border image
+rendered behind the game logo using `carouselImageBorderZIndex=10`, with
+the logo itself at `carouselImageZIndex=20`:
 
 ```xml
 <textlist name="gamelist">
@@ -367,8 +371,14 @@ logos. This is a separate, opt-in feature for missing **game** logos in a
   <carouselMode>true</carouselMode>
   <carouselImage>true</carouselImage>
   <carouselImageType>wheel</carouselImageType>
-  <!-- Background plate shown if wheel/marquee is missing -->
-  <carouselFallbackImage>./resources/systemicons/p.png</carouselFallbackImage>
+
+  <!-- Existing background plate and layer order: keep these unchanged -->
+  <carouselImageBorder>./resources/_parts/logo_default.png</carouselImageBorder>
+  <carouselImageBorderFit>contain</carouselImageBorderFit>
+  <carouselImageBorderZIndex>10</carouselImageBorderZIndex>
+  <carouselImageZIndex>20</carouselImageZIndex>
+
+  <!-- New opt-in text over that plate only when the wheel logo is missing -->
   <carouselShowText>false</carouselShowText>
   <carouselShowFallbackName>true</carouselShowFallbackName>
   <carouselFallbackNameColor>FFFFFFFF</carouselFallbackNameColor>
@@ -376,26 +386,24 @@ logos. This is a separate, opt-in feature for missing **game** logos in a
 </textlist>
 ```
 
-With this option enabled:
+When enabled:
 
-- A game that has a valid wheel or marquee image continues to show that logo.
-- Otherwise ES-X draws the optional `carouselFallbackImage` **behind**
-  the game name, following the existing System View approach of showing a
-  default logo plate with its name overlaid. If no default image is configured,
-  the name still appears on its own.
-- The name is drawn **after** the image and border, centered and constrained
-  to the existing item width. Transparent normal text colors do not hide it.
-- For `carouselImageType=wheel` or `marquee`, screenshots/covers will **not**
-  replace a missing logo; instead the configured default plate is used.
-- The selected/unselected item sizes, spacing, cursor, rotation and animations
-  are unchanged. `carouselShowText=false` may remain in the theme.
-- Without `carouselShowFallbackName`, the previous artwork fallback and
-  `carouselShowText` behavior remain unchanged.
+- If a valid wheel (or legacy marquee) logo exists, draw it over the existing
+  plate as before; no extra game title is drawn.
+- If no valid logo exists, **keep the existing plate** and draw the game name
+  **on top**. Text respects the carousel's positions, scale and rotations.
+- Do not replace missing wheel/marquee logos with screenshots or covers.
+- If no border plate is defined, an optional `carouselFallbackImage` can
+  provide the background image; if neither is defined, the name still appears.
+- The existing `carouselShowText=false` and transparent standard list colors
+  do not suppress this opt-in fallback title.
+- Without `carouselShowFallbackName`, the legacy artwork selection and
+  fallback drawing behavior remain unchanged.
 
-This applies to the **gamelist carousel**, not the standalone `md_marquee`
-component in detailed/video views. The feature is experimental until tested on
-real themes and both PC and ARM hardware.
-
+`carouselImageBorderZIndex` / `carouselImageZIndex` are **already-supported**
+ES-X settings. No new renderer or z-index property is needed. This applies to
+the **gamelist carousel**, not the standalone `md_marquee` image. Test on
+desktop and ARM before merging the experimental change.
 ---
 
 ## Navigation Sounds
