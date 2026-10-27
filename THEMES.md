@@ -355,6 +355,45 @@ The following parameters are supported by ES-X's `systemcarousel` and can be tun
 
 ---
 
+## Gamelist carousel: show game name if its logo is missing (experimental)
+
+The system carousel already supports `showFallbackName` for missing **system**
+logos. This is a separate, opt-in feature for missing **game** logos in a
+`textlist` gamelist carousel (such as Riescade):
+
+```xml
+<textlist name="gamelist">
+  <orientation>horizontal</orientation>
+  <carouselMode>true</carouselMode>
+  <carouselImage>true</carouselImage>
+  <carouselImageType>wheel</carouselImageType>
+  <carouselShowText>false</carouselShowText>
+  <carouselShowFallbackName>true</carouselShowFallbackName>
+  <carouselFallbackNameColor>FFFFFFFF</carouselFallbackNameColor>
+  <carouselTextMaxLines>2</carouselTextMaxLines>
+</textlist>
+```
+
+With this option enabled:
+
+- A game that has a valid wheel or marquee image continues to show that logo.
+- Otherwise ES-X displays its game name **in the same carousel slot**, centered
+  and constrained to the existing item width. Transparent normal text colors
+  do not hide this fallback.
+- For `carouselImageType=wheel` or `marquee`, screenshots/covers will **not**
+  replace a missing logo. An explicit `carouselFallbackImage` is also skipped
+  when this option is enabled, because the name takes priority.
+- The selected/unselected item sizes, spacing, cursor, rotation and animations
+  are unchanged. `carouselShowText=false` may remain in the theme.
+- Without `carouselShowFallbackName`, the previous artwork fallback and
+  `carouselShowText` behavior remain unchanged.
+
+This applies to the **gamelist carousel**, not the standalone `md_marquee`
+component in detailed/video views. The feature is experimental until tested on
+real themes and both PC and ARM hardware.
+
+---
+
 ## Navigation Sounds
 
 Themes can define navigation audio.
