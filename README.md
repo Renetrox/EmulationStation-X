@@ -144,6 +144,8 @@ The gamelist can now be presented as a horizontal or vertical carousel using scr
 
 This makes it possible to create PS5-style horizontal game carousels, classic screenshot-based vertical layouts, and other console-inspired interfaces while still using the classic EmulationStation theme structure.
 
+**TEST — Rounded carousel artwork:** optional `carouselImageCornerRadius` (also `imageCornerRadius`) clips image corners without ornamental overlays, shaders or stencil buffers. `<carouselImageCornerRadius>0.010</carouselImageCornerRadius>` was visually confirmed on the PS5-style gamelist carousel on desktop (October 27, 2026). GL/GLES regressions, alternate media fits and Orange Pi validation remain pending. This feature is available for testing and may receive adjustments; existing themes remain unchanged unless they enable it. See [theme documentation](THEMES.md#rounded-carousel-images-experimental-gl-21-and-gles-10).
+
 <img width="1280" height="719" alt="photo_2026-05-08_20-49-32" src="https://github.com/user-attachments/assets/7f3e2664-f2e3-4bbc-b72f-802453a25e00" />
 <img width="1280" height="719" alt="photo_2026-05-08_20-49-48" src="https://github.com/user-attachments/assets/61321cb0-693c-4f7a-8ca5-def7a5ccebbe" />
 
