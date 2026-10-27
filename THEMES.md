@@ -319,7 +319,7 @@ Important properties:
 
 Depth and spacing can be fully adjusted without modifying engine code.
 
-### Optional curved system icons (experimental)
+### Optional curved system icons (TEST)
 
 To mimic the rounded card icons in ES-DE's PS5 menu, add this to
 `<view name="system">`. The setting applies to system images, not to text.
@@ -332,7 +332,7 @@ To mimic the rounded card icons in ES-DE's PS5 menu, add this to
 
 A radius of `0` (or an omitted tag) retains the original rectangular draw
 path. To use the same style for the gamelist's `<textlist>` carousel,
-see [Rounded carousel images](#rounded-carousel-images-experimental-gl-21-and-gles-10).
+see [Rounded carousel images](#rounded-carousel-images-test-gl-21-and-gles-10).
 
 ### Positioning and spacing a horizontal system carousel (XMB example)
 
@@ -563,7 +563,7 @@ axis-aligned `cover` clipping is disabled on rotated items so it cannot cut them
 | `carouselImage` | Enables artwork rendering inside carousel items. |
 | `carouselImageType` | Selects the artwork source. |
 | `carouselImageFit` | Artwork fitting mode: `contain`, `cover`, or `stretch`. |
-| `carouselImageCornerRadius` / `imageCornerRadius` | Experimental rounded image crop. Radius as a fraction of **screen width**, e.g. `0.010` = 1%. No shader/stencil; defaults to `0`. The explicit `carouselImageCornerRadius` takes precedence. |
+| `carouselImageCornerRadius` / `imageCornerRadius` | **TEST:** Rounded image crop. Radius as a fraction of **screen width**, e.g. `0.010` = 1%. No shader/stencil; defaults to `0`. The explicit `carouselImageCornerRadius` takes precedence. |
 | `carouselImagePadding` | Internal padding between artwork and tile bounds. |
 | `carouselImageZIndex` | Internal carousel-layer order for the artwork. Default: `10`. Higher values render later/above lower values. |
 | `carouselFallbackImage` | Fallback image used when the requested artwork is missing. |
@@ -594,7 +594,13 @@ none
 
 `none` disables carousel artwork.
 
-### Rounded carousel images (experimental; GL 2.1 and GLES 1.0)
+### Rounded carousel images (TEST; GL 2.1 and GLES 1.0)
+
+> **TEST (2026-10-27):** desktop visual test passed with PS5 gamelist artwork,
+> including the selected card and removal of decorative border PNGs. The code
+> has not yet been validated on the Orange Pi GLES renderer or across every
+> image fit/fallback case; further adjustments are expected.
+
 
 ES-DE's PS5 theme uses `<imageCornerRadius>0.010</imageCornerRadius>`
 for compact cards and `0.015` for larger ones. ES-X's classic
