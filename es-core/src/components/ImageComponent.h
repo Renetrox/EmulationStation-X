@@ -84,6 +84,10 @@ void resetFrameAnimation();
 	void setFlipX(bool flip); // Mirror on the X axis.
 	void setFlipY(bool flip); // Mirror on the Y axis.
 
+	// Opt-in rounded image clipping, in screen pixels.
+	// Uses textured rounded geometry (no stencil buffer or shaders).
+	void setCornerRadius(float radiusPixels);
+
 	// Flag indicating if rotation should be based on target size vs. actual size.
 	void setRotateByTargetSize(bool rotate);
 
@@ -124,6 +128,9 @@ private:
 	MaxSizeInfo getCurrentMaxSizeInfo(MaxSizeInfo requested = MaxSizeInfo()) const;
 
 	Renderer::Vertex mVertices[4];
+	float mCornerRadius;
+	// Scratch buffer reused while rendering, allocated only for rounded images.
+	std::vector<Renderer::Vertex> mRoundedVertices;
 
 	void updateVertices();
 	void updateColors();
