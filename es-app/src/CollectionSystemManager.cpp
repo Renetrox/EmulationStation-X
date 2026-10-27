@@ -19,6 +19,29 @@
 #include <fstream>
 #include <cstring>
 
+// Collection translations may be complete sentences with placeholders, while
+// older catalogs still contain sentence fragments. Support both formats.
+namespace
+{
+void replaceCollectionToken(std::string& text, const std::string& token, const std::string& value)
+{
+	std::string::size_type pos = 0;
+	while ((pos = text.find(token, pos)) != std::string::npos)
+	{
+		text.replace(pos, token.size(), value);
+		pos += value.size();
+	}
+}
+
+std::string formatCollectionMessage(std::string text, const std::string& collection,
+	const std::string& game = "")
+{
+	replaceCollectionToken(text, "{collection}", collection);
+	replaceCollectionToken(text, "{game}", game);
+	return text;
+}
+}
+
 // Handling the getting, initialization, deinitialization, saving and deletion of
 // a CollectionSystemManager Instance
 CollectionSystemManager* CollectionSystemManager::sInstance = NULL;
@@ -470,7 +493,9 @@ void CollectionSystemManager::setEditMode(std::string collectionName, bool quiet
 		if (addRemove == "ADD_REMOVE_GAMES_Y")
 			addRemove = "Add/remove games with Y.";
 
-		std::string msg = editingBase + " '" + colUpper + "'. " + addRemove;
+		std::string msg = editingBase.find("{collection}") != std::string::npos
+			? formatCollectionMessage(editingBase, colUpper)
+			: editingBase + " '" + colUpper + "'. " + addRemove;
 
 		GuiInfoPopup* s = new GuiInfoPopup(mWindow, msg, 8000);
 		mWindow->setInfoPopup(s);
@@ -484,7 +509,9 @@ void CollectionSystemManager::exitEditMode(bool quiet)
 		if (finishedBase == "FINISHED_EDITING_COLLECTION")
 			finishedBase = "Finished editing the collection";
 
-		std::string msg = finishedBase + " '" + Utils::String::toUpper(mEditingCollection) + "'.";
+		std::string msg = finishedBase.find("{collection}") != std::string::npos
+			? formatCollectionMessage(finishedBase, Utils::String::toUpper(mEditingCollection))
+			: finishedBase + " '" + Utils::String::toUpper(mEditingCollection) + "'.";
 		GuiInfoPopup* s = new GuiInfoPopup(mWindow, msg, 4000);
 		mWindow->setInfoPopup(s);
 	}
@@ -609,7 +636,10 @@ bool CollectionSystemManager::toggleGameInCollection(FileData* file)
 
 			s = new GuiInfoPopup(
 				mWindow,
-				addedBase + " '" + Utils::String::removeParenthesis(name) + "' " + toWord + " '" + sysNameUpper + "'",
+				(addedBase.find("{game}") != std::string::npos &&
+				 addedBase.find("{collection}") != std::string::npos)
+					? formatCollectionMessage(addedBase, sysNameUpper, Utils::String::removeParenthesis(name))
+					: addedBase + " '" + Utils::String::removeParenthesis(name) + "' " + toWord + " '" + sysNameUpper + "'",
 				4000
 			);
 		}
@@ -625,7 +655,10 @@ bool CollectionSystemManager::toggleGameInCollection(FileData* file)
 
 			s = new GuiInfoPopup(
 				mWindow,
-				removedBase + " '" + Utils::String::removeParenthesis(name) + "' " + fromWord + " '" + sysNameUpper + "'",
+				(removedBase.find("{game}") != std::string::npos &&
+				 removedBase.find("{collection}") != std::string::npos)
+					? formatCollectionMessage(removedBase, sysNameUpper, Utils::String::removeParenthesis(name))
+					: removedBase + " '" + Utils::String::removeParenthesis(name) + "' " + fromWord + " '" + sysNameUpper + "'",
 				4000
 			);
 		}
@@ -1385,7 +1418,9 @@ bool CollectionSystemManager::needDoublePress(int presscount) {
 		if (base == "PRESS_AGAIN_TO_REMOVE")
 			base = "Press again to remove from";
 
-		std::string msg = base + " '" + Utils::String::toUpper(mEditingCollection) + "'";
+		std::string msg = base.find("{collection}") != std::string::npos
+			? formatCollectionMessage(base, Utils::String::toUpper(mEditingCollection))
+			: base + " '" + Utils::String::toUpper(mEditingCollection) + "'";
 
 		GuiInfoPopup* toast = new GuiInfoPopup(mWindow, msg,
 			DOUBLE_PRESS_DETECTION_DURATION, 100, 200);
