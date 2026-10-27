@@ -351,6 +351,8 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "colorEnd", COLOR },
 	{ "gradientType", STRING },
 	{ "showFallbackName", BOOLEAN },
+	{ "imageCornerRadius", FLOAT },          // ES-DE-compatible system carousel
+	{ "carouselImageCornerRadius", FLOAT },  // explicit ES-X alias
 	{ "logoScale", FLOAT },
 	{ "logoRotation", FLOAT },
 	{ "logoRotationOrigin", NORMALIZED_PAIR },
