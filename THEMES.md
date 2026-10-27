@@ -319,6 +319,21 @@ Important properties:
 
 Depth and spacing can be fully adjusted without modifying engine code.
 
+### Optional curved system icons (experimental)
+
+To mimic the rounded card icons in ES-DE's PS5 menu, add this to
+`<view name="system">`. The setting applies to system images, not to text.
+
+```xml
+<carousel name="systemcarousel">
+  <imageCornerRadius>0.010</imageCornerRadius>
+</carousel>
+```
+
+A radius of `0` (or an omitted tag) retains the original rectangular draw
+path. To use the same style for the gamelist's `<textlist>` carousel,
+see [Rounded carousel images](#rounded-carousel-images-experimental-gl-21-and-gles-10).
+
 ### Positioning and spacing a horizontal system carousel (XMB example)
 
 The following parameters are supported by ES-X's `systemcarousel` and can be tuned in the theme XML without changing `SystemView.cpp`:
@@ -596,6 +611,9 @@ for compact cards and `0.015` for larger ones. ES-X's classic
 </textlist>
 ```
 
+- The **System View** image carousel accepts the same
+  `imageCornerRadius` or `carouselImageCornerRadius` option inside
+  `<carousel name="systemcarousel">`. Text-only carousel entries are unchanged.
 - The artwork and its optional fallback are clipped to rounded corners
   **using texture-mapped geometry**, not a decorative overlay PNG.
 - Radius is normalized to screen width, then limited to half the smaller
