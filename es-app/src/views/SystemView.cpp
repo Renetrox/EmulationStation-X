@@ -168,6 +168,7 @@ std::string systemCategory(SystemData* system, const std::shared_ptr<ThemeData>&
             case PlatformIds::ATARI_ST: case PlatformIds::ATARI_XE:
             case PlatformIds::BBC_MICRO: case PlatformIds::COMMODORE_64:
             case PlatformIds::J2ME: case PlatformIds::MAC_OS: case PlatformIds::MSX:
+            case PlatformIds::PICO_8: case PlatformIds::TIC_80:
             case PlatformIds::PC: case PlatformIds::SAM_COUPE:
             case PlatformIds::SHARP_X1: case PlatformIds::SHARP_X6800:
             case PlatformIds::THOMSON_MOTO: case PlatformIds::NEC_PC_8801:
@@ -660,11 +661,13 @@ void SystemView::populate()
 			const std::string category = systemCategory(*it, theme);
 			for (const auto& extra : ThemeData::makeExtrasWithMetadata(theme, "system", mWindow))
 			{
-				const auto* elem = theme->getElement("system", extra.name, "text");
-				if (elem && elem->has("activeFor") && !category.empty() &&
-				    hardwareKey(elem->get<std::string>("activeFor")) == category)
+				// Extras include images. Requesting a "text" element for an
+				// image logs a spurious type-mismatch warning on every reload.
+				if (TextComponent* tab = dynamic_cast<TextComponent*>(extra.component))
 				{
-					if (TextComponent* tab = dynamic_cast<TextComponent*>(extra.component))
+					const auto* elem = theme->getElement("system", extra.name, "text");
+					if (elem && elem->has("activeFor") && !category.empty() &&
+					    hardwareKey(elem->get<std::string>("activeFor")) == category)
 					{
 						if (elem->has("activeColor"))
 							tab->setColor(elem->get<unsigned int>("activeColor"));
