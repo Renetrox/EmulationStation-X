@@ -44,37 +44,15 @@ namespace TextListCarouselArt
 		return file->getCarouselImagePath(imageType);
 	}
 
-	// Opt-in: a wheel/marquee carousel wants text when the logo is missing,
-	// rather than silently substituting a screenshot or box art.
-	inline std::string getLogoFirstPath(FileData* file, const std::string& imageType)
+	// Opt-in: use only the theme's preferred artwork category, regardless
+	// of whether it is cover, wheel, marquee, image, screenshot or thumbnail.
+	inline std::string getPreferredPath(FileData* file, const std::string& imageType)
 	{
-		if (!file)
-			return "";
-
-		if (imageType == "wheel")
-		{
-			const std::string wheel = file->getWheelPath();
-			if (!wheel.empty() && Utils::FileSystem::exists(wheel))
-				return wheel;
-
-			// Legacy collections frequently store their logo as marquee.
-			const std::string marquee = file->getMarqueePath();
-			return (!marquee.empty() && Utils::FileSystem::exists(marquee)) ?
-				marquee : "";
-		}
-
-		if (imageType == "marquee")
-		{
-			const std::string marquee = file->getMarqueePath();
-			return (!marquee.empty() && Utils::FileSystem::exists(marquee)) ?
-				marquee : "";
-		}
-
-		return file->getCarouselImagePath(imageType);
+		return file ? file->getCarouselPreferredImagePath(imageType) : "";
 	}
 
 	template <typename U>
-	inline std::string getLogoFirstPath(const U&, const std::string&)
+	inline std::string getPreferredPath(const U&, const std::string&)
 	{
 		return "";
 	}
@@ -863,7 +841,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		if (mCarouselImage)
 		{
 			imagePath = mCarouselShowFallbackName ?
-				TextListCarouselArt::getLogoFirstPath(entry.object, mCarouselImageType) :
+				TextListCarouselArt::getPreferredPath(entry.object, mCarouselImageType) :
 				TextListCarouselArt::getImagePath(entry.object, mCarouselImageType);
 
 			// Some legacy gamelists reference media which no longer exists.
@@ -1038,7 +1016,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			if (border && mCarouselImageBorderZIndex >= mCarouselImageZIndex)
 				renderBorder();
 		}
-		// A missing logo is a name overlay above the existing carousel border
+		// Missing preferred artwork is a name overlay above the existing carousel border
 		// (logo_default.png in Riescade), just as SystemView's logo fallback.
 		if ((mCarouselShowText && !hasAnyCarouselImage) || showFallbackName)
 		{
