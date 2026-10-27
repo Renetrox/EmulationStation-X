@@ -71,6 +71,9 @@ public:
 	// Con parámetro permite que el tema use <carouselImageType>.
 	virtual const std::string getCarouselImagePath() const;
 	virtual const std::string getCarouselImagePath(const std::string& preferredType) const;
+	// Preferred media first, without substituting a different type when missing.
+	// Used only by opt-in carouselFallbackName; legacy art fallback is unchanged.
+	virtual const std::string getCarouselPreferredImagePath(const std::string& preferredType) const;
 
 	virtual const std::string getVideoFallbackPath() const;
 	virtual const std::string getBackgroundPath() const;
