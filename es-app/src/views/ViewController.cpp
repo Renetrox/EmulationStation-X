@@ -87,6 +87,9 @@ void ViewController::ReloadAndGoToStart()
 	mWindow->renderLoadingScreen(es_translate("Loading..."));
 	ViewController::get()->reloadAll();
 	ViewController::get()->goToStart();
+	// Match the startup path: release the force-loaded theme splash and
+	// allow the next runtime loading operation to use the current theme.
+	mWindow->closeLoadingScreen();
 }
 
 int ViewController::getSystemId(SystemData* system)
