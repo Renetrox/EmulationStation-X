@@ -198,6 +198,8 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "carouselImageBoxSize", NORMALIZED_PAIR },
 	
 	{ "carouselShowText", BOOLEAN },
+	{ "carouselShowFallbackName", BOOLEAN },
+	{ "carouselFallbackNameColor", COLOR },
 
 	// ES-X: tamaño/alineación estilo systemcarousel
 	{ "logoSize", NORMALIZED_PAIR },
