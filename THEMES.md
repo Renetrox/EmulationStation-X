@@ -319,6 +319,40 @@ Important properties:
 
 Depth and spacing can be fully adjusted without modifying engine code.
 
+### Positioning and spacing a horizontal system carousel (XMB example)
+
+The following parameters are supported by ES-X's `systemcarousel` and can be tuned in the theme XML without changing `SystemView.cpp`:
+
+```xml
+<carousel name="systemcarousel">
+  <type>horizontal</type>
+  <origin>0 0</origin>
+  <pos>0 0.126</pos>
+  <size>1 0.231</size>
+  <logoOffsetX>-0.275</logoOffsetX>
+  <logoSpacingX>0.15</logoSpacingX>
+  <logoSize>0.108 0.193</logoSize>
+  <logoScale>1.20</logoScale>
+  <maxLogoCount>11</maxLogoCount>
+  <logoAlignment>center</logoAlignment>
+  <minLogoOpacity>0.90</minLogoOpacity>
+  <scaledLogoSpacing>0.65</scaledLogoSpacing>
+  <color>00000000</color>
+  <zIndex>80</zIndex>
+</carousel>
+```
+
+- `pos` and `origin` position the *carousel container*; `size` also defines its clipping rectangle and affects automatic spacing.
+- `logoOffsetX` shifts the entire row of logos, including the selected item; it does **not** move the selected item independently.
+- `logoSpacingX` sets the horizontal distance between successive logo positions (normalized to screen width), overriding automatic spacing.
+- `maxLogoCount` limits how many logos are rendered around the current selection. It does not automatically fill empty screen space.
+- `scaledLogoSpacing` adjusts the gap adjacent to the scaled/selected logo; it does not redistribute the full row.
+- `selectedLogoOffsetX` changes only the selected logo's horizontal position; `logoPos` / `carouselLogoPos` define an explicit local anchor.
+
+**Practical tip:** to extend the XMB row without moving its chosen anchor, keep `logoOffsetX` and change `logoSpacingX`/`maxLogoCount` first. If the selected logo is off-center, the row remains symmetrically enumerated and some items may be clipped. The sample values reproduce the October 2026 XMB layout tuning; verify the final appearance at your target resolution.
+
+
+
 ---
 
 ## Navigation Sounds
