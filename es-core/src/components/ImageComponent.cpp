@@ -36,6 +36,7 @@ ImageComponent::ImageComponent(Window* window, bool forceLoad, bool dynamic) :
 	mColorShift(0xFFFFFFFF),
 	mColorShiftEnd(0xFFFFFFFF),
 	mColorGradientHorizontal(true),
+	mCornerRadius(0.0f),
 	mFadeOpacity(0),
 	mFading(false),
 	mForceLoad(forceLoad),
@@ -398,6 +399,12 @@ void ImageComponent::setFlipY(bool flip)
 	updateVertices();
 }
 
+void ImageComponent::setCornerRadius(float radiusPixels)
+{
+	// Only opt-in images leave the legacy four-vertex rendering path.
+	mCornerRadius = Math::max(0.0f, radiusPixels);
+}
+
 void ImageComponent::setColorShift(unsigned int color)
 {
 	mColorShift = color;
@@ -685,7 +692,90 @@ void ImageComponent::render(const Transform4x4f& parentTrans)
 			fadeIn(textureLoaded);
 
 			if (textureLoaded)
-				Renderer::drawTriangleStrips(&mVertices[0], 4);
+			{
+				// Fixed-function GL 2.1 / GLES 1.0 compatible rounded texture.
+				// Build a degenerate triangle strip which behaves like a
+				// triangle fan: the same original texture is sampled without
+				// creating a second texture, shader or stencil buffer.
+				// mVertices already contain the centered crop for "cover" fit.
+				const float left = mVertices[0].pos.x();
+				const float top = mVertices[0].pos.y();
+				const float right = mVertices[3].pos.x();
+				const float bottom = mVertices[3].pos.y();
+				const float width = right - left;
+				const float height = bottom - top;
+				const float radius = Math::min(
+					mCornerRadius, Math::min(width, height) * 0.5f);
+
+				if (radius >= 0.5f && width > 1.0f && height > 1.0f)
+				{
+					// Keep existing color gradients, scrolling opacity, texture
+					// flips and UV crop. Each vertex gets the bilinear attributes
+					// it would have received inside the original textured quad.
+					auto sample = [&](float x, float y) -> Renderer::Vertex
+					{
+						const float tx = Math::clamp(0.0f, (x - left) / width, 1.0f);
+						const float ty = Math::clamp(0.0f, (y - top) / height, 1.0f);
+						const float wTL = (1.0f - tx) * (1.0f - ty);
+						const float wTR = tx * (1.0f - ty);
+						const float wBL = (1.0f - tx) * ty;
+						const float wBR = tx * ty;
+						const Vector2f uv =
+							mVertices[0].tex * wTL + mVertices[2].tex * wTR +
+							mVertices[1].tex * wBL + mVertices[3].tex * wBR;
+						unsigned int color = 0;
+						for (int shift = 0; shift < 32; shift += 8)
+						{
+							const float c =
+								float((mVertices[0].col >> shift) & 255) * wTL +
+								float((mVertices[2].col >> shift) & 255) * wTR +
+								float((mVertices[1].col >> shift) & 255) * wBL +
+								float((mVertices[3].col >> shift) & 255) * wBR;
+							color |= static_cast<unsigned int>(c + 0.5f) << shift;
+						}
+						return Renderer::Vertex(Vector2f(x, y), uv, color);
+					};
+
+					const float pi = 3.14159265358979323846f;
+					const float cornersX[4] = {
+						left + radius, right - radius, right - radius, left + radius };
+					const float cornersY[4] = {
+						top + radius, top + radius, bottom - radius, bottom - radius };
+					const float startAngles[4] = {
+						pi, 1.5f * pi, 0.0f, 0.5f * pi };
+					const Renderer::Vertex center = sample(
+						(left + right) * 0.5f, (top + bottom) * 0.5f);
+					Renderer::Vertex firstRim;
+					mRoundedVertices.clear();
+					mRoundedVertices.reserve(80);
+					const int segments = 8;
+					for (int corner = 0; corner < 4; ++corner)
+					{
+						for (int i = 0; i <= segments; ++i)
+						{
+							const float angle =
+								startAngles[corner] +
+								(pi * 0.5f) * (float(i) / float(segments));
+							Renderer::Vertex rim = sample(
+								cornersX[corner] + radius * std::cos(angle),
+								cornersY[corner] + radius * std::sin(angle));
+							if (corner == 0 && i == 0)
+								firstRim = rim;
+							mRoundedVertices.push_back(center);
+							mRoundedVertices.push_back(rim);
+						}
+					}
+					mRoundedVertices.push_back(center);
+					mRoundedVertices.push_back(firstRim);
+					Renderer::drawTriangleStrips(
+						mRoundedVertices.data(),
+						static_cast<unsigned int>(mRoundedVertices.size()));
+				}
+				else
+				{
+					Renderer::drawTriangleStrips(&mVertices[0], 4);
+				}
+			}
 		}
 		else
 		{
@@ -756,6 +846,12 @@ void ImageComponent::applyTheme(
 
 	if (!elem)
 		return;
+
+	// ES-DE-compatible normalized screen width: e.g. 0.010 = 1% width.
+	// Absent tag resets the component to unrounded legacy rendering.
+	setCornerRadius(elem->has("cornerRadius") ?
+		elem->get<float>("cornerRadius") * float(Renderer::getScreenWidth()) :
+		0.0f);
 
 	// ES-DE style: optional short fade-in when game media changes.
 	mScrollFadeIn =
