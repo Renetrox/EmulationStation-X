@@ -876,7 +876,9 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			{
 				hasRealImage = true;
 			}
-			else if (!mCarouselFallbackImage.empty() &&
+			else if ((!mCarouselShowFallbackName ||
+				(mCarouselImageBorder.empty() && mCarouselImageBorderSelected.empty())) &&
+				!mCarouselFallbackImage.empty() &&
 				Utils::FileSystem::exists(mCarouselFallbackImage))
 			{
 				imagePath = mCarouselFallbackImage;
@@ -887,7 +889,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		const bool hasAnyCarouselImage = hasRealImage || hasFallbackImage;
 		const bool showFallbackName = mCarouselImage && mCarouselShowFallbackName && !hasRealImage;
 
-		if (mCarouselImage && hasAnyCarouselImage && !imagePath.empty())
+		if (mCarouselImage && (hasAnyCarouselImage || showFallbackName))
 		{
 			if (!entry.data.carouselImage)
 				entry.data.carouselImage = std::shared_ptr<ImageComponent>(new ImageComponent(this->mWindow, false, true));
@@ -969,7 +971,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			// una caja incorrecta. La rueda prioriza una transformación íntegra y
 			// conserva el recorte habitual cuando la rotación efectiva es cero.
 			const bool clipCoverImage =
-				!hasFallbackImage && mCarouselImageFit == "cover" &&
+				hasRealImage && !hasFallbackImage && mCarouselImageFit == "cover" &&
 				std::fabs(itemRotation) <= 0.001f;
 
 			if (clipCoverImage)
@@ -1027,7 +1029,8 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			if (border && mCarouselImageBorderZIndex < mCarouselImageZIndex)
 				renderBorder();
 
-			entry.data.carouselImage->render(imageTrans);
+			if (hasAnyCarouselImage && !imagePath.empty())
+				entry.data.carouselImage->render(imageTrans);
 
 			if (clipCoverImage)
 				Renderer::popClipRect();
@@ -1035,8 +1038,8 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			if (border && mCarouselImageBorderZIndex >= mCarouselImageZIndex)
 				renderBorder();
 		}
-		// A missing logo is a name overlay above the default image, just as
-		// SystemView overlays the system name on its default logo plate.
+		// A missing logo is a name overlay above the existing carousel border
+		// (logo_default.png in Riescade), just as SystemView's logo fallback.
 		if ((mCarouselShowText && !hasAnyCarouselImage) || showFallbackName)
 		{
 			unsigned int textColor;
