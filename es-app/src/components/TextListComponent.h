@@ -272,6 +272,8 @@ private:
 	bool mCarouselImage;
 	std::string mCarouselImageType;
 	std::string mCarouselImageFit;
+	// Per-item rounded artwork, stored in screen pixels (0 = legacy quad).
+	float mCarouselImageCornerRadius;
 	std::string mCarouselFallbackImage;
 	Vector2f mCarouselImagePadding;
 	float mCarouselImageZIndex;
@@ -367,6 +369,7 @@ TextListComponent<T>::TextListComponent(Window* window) :
 	mCarouselImage = false;
 	mCarouselImageType = "auto";
 	mCarouselImageFit = "contain";
+	mCarouselImageCornerRadius = 0.0f;
 	mCarouselFallbackImage = "";
 	mCarouselImagePadding = Vector2f(0.04f, 0.04f);
 	mCarouselImageZIndex = 10.0f;
@@ -969,6 +972,9 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				entry.data.carouselImage->setMaxSize(visualImageW, visualImageH);
 			}
 
+			// The UV crop supplied by setMinSize("cover") is rounded in
+			// ImageComponent itself, including rotated cards.
+			entry.data.carouselImage->setCornerRadius(mCarouselImageCornerRadius);
 			entry.data.carouselImage->setOrigin(imageOriginX, imageOriginY);
 			entry.data.carouselImage->setPosition(imagePosX, imagePosY, 0.0f);
 			entry.data.carouselImage->setOpacity((unsigned char)(opacity01 * 255.0f));
@@ -984,6 +990,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			// una caja incorrecta. La rueda prioriza una transformación íntegra y
 			// conserva el recorte habitual cuando la rotación efectiva es cero.
 			const bool clipCoverImage =
+				mCarouselImageCornerRadius <= 0.0f &&
 				!hasFallbackImage && mCarouselImageFit == "cover" &&
 				std::fabs(itemRotation) <= 0.001f;
 
@@ -1556,6 +1563,7 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	mCarouselImage = mCarouselMode;
 	mCarouselImageType = "auto";
 	mCarouselImageFit = "contain";
+	mCarouselImageCornerRadius = 0.0f;
 	mCarouselFallbackImage = "";
 	mCarouselImagePadding = Vector2f(0.04f, 0.04f);
 
@@ -1599,6 +1607,18 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 		LOG(LogWarning) << "Unknown carouselImageFit \"" << mCarouselImageFit << "\"! Using contain.";
 		mCarouselImageFit = "contain";
 	}
+
+// ES-DE's imageCornerRadius semantics: fraction of screen width.
+	// Prefer the explicit ES-X property if both are present.
+	mCarouselImageCornerRadius = 0.0f;
+	if (elem->has("carouselImageCornerRadius"))
+		mCarouselImageCornerRadius =
+			Math::max(0.0f, elem->get<float>("carouselImageCornerRadius")) *
+			float(Renderer::getScreenWidth());
+	else if (elem->has("imageCornerRadius"))
+		mCarouselImageCornerRadius =
+			Math::max(0.0f, elem->get<float>("imageCornerRadius")) *
+			float(Renderer::getScreenWidth());
 
 	if (elem->has("carouselFallbackImage"))
 		mCarouselFallbackImage = elem->get<std::string>("carouselFallbackImage");

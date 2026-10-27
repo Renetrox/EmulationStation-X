@@ -41,6 +41,7 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "rotationOrigin", NORMALIZED_PAIR },
 		{ "path", PATH },
 		{ "gameOverlayMatch", BOOLEAN },
+		{ "cornerRadius", FLOAT }, // rounded ImageComponent, ES-DE units
 		{ "default", PATH },
 		{ "tile", BOOLEAN },
 		{ "color", COLOR },
@@ -182,6 +183,8 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "carouselImage", BOOLEAN },
 	{ "carouselImageType", STRING },
 	{ "carouselImageFit", STRING },
+	{ "carouselImageCornerRadius", FLOAT }, // explicit ES-X tag, 0 = legacy
+	{ "imageCornerRadius", FLOAT },         // ES-DE-compatible carousel alias
 	{ "carouselImagePadding", NORMALIZED_PAIR },
 	{ "carouselImageZIndex", FLOAT },
 	
@@ -348,6 +351,8 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "colorEnd", COLOR },
 	{ "gradientType", STRING },
 	{ "showFallbackName", BOOLEAN },
+	{ "imageCornerRadius", FLOAT },          // ES-DE-compatible system carousel
+	{ "carouselImageCornerRadius", FLOAT },  // explicit ES-X alias
 	{ "logoScale", FLOAT },
 	{ "logoRotation", FLOAT },
 	{ "logoRotationOrigin", NORMALIZED_PAIR },

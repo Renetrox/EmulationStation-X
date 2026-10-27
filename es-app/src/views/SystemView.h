@@ -54,6 +54,8 @@ struct SystemViewCarousel
 	Vector2f size;
 	Vector2f origin;
 	float logoScale;
+	// ES-DE-style opt-in system carousel corner radius in screen pixels.
+	float imageCornerRadius;
 	float logoRotation;
 	Vector2f logoRotationOrigin;
 	Alignment logoAlignment;

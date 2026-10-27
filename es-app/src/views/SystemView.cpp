@@ -2016,6 +2016,11 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 		if(!comp)
 			return;
 
+		// One cached image per system: no new texture or render pass.
+		// Text-only fallback components are intentionally untouched.
+		if (ImageComponent* image = dynamic_cast<ImageComponent*>(comp.get()))
+			image->setCornerRadius(mCarousel.imageCornerRadius);
+
 		if(mCarousel.type == VERTICAL_WHEEL || mCarousel.type == HORIZONTAL_WHEEL)
 		{
 			comp->setRotationDegrees(mCarousel.logoRotation * distance);
@@ -2228,6 +2233,7 @@ void SystemView::getDefaultElements(void)
 	mCarousel.colorEnd      = 0xFFFFFFD8;
 	mCarousel.colorGradientHorizontal = true;
 	mCarousel.logoScale     = 1.2f;
+	mCarousel.imageCornerRadius = 0.0f;
 	mCarousel.logoRotation  = 7.5f;
 	mCarousel.logoRotationOrigin.x() = -5.0f;
 	mCarousel.logoRotationOrigin.y() = 0.5f;
@@ -2473,6 +2479,15 @@ void SystemView::getCarouselFromTheme(const ThemeData::ThemeElement* elem)
 
 	if(elem->has("logoScale"))
 		mCarousel.logoScale = elem->get<float>("logoScale");
+
+	if (elem->has("imageCornerRadius") || elem->has("carouselImageCornerRadius"))
+	{
+		const float fraction = elem->has("carouselImageCornerRadius") ?
+			elem->get<float>("carouselImageCornerRadius") :
+			elem->get<float>("imageCornerRadius");
+		mCarousel.imageCornerRadius = Math::max(0.0f, fraction) *
+			float(Renderer::getScreenWidth());
+	}
 
 	if(elem->has("logoSize"))
 		mCarousel.logoSize = elem->get<Vector2f>("logoSize") * mSize;
