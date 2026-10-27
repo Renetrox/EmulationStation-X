@@ -367,6 +367,8 @@ logos. This is a separate, opt-in feature for missing **game** logos in a
   <carouselMode>true</carouselMode>
   <carouselImage>true</carouselImage>
   <carouselImageType>wheel</carouselImageType>
+  <!-- Background plate shown if wheel/marquee is missing -->
+  <carouselFallbackImage>./resources/systemicons/p.png</carouselFallbackImage>
   <carouselShowText>false</carouselShowText>
   <carouselShowFallbackName>true</carouselShowFallbackName>
   <carouselFallbackNameColor>FFFFFFFF</carouselFallbackNameColor>
@@ -377,12 +379,14 @@ logos. This is a separate, opt-in feature for missing **game** logos in a
 With this option enabled:
 
 - A game that has a valid wheel or marquee image continues to show that logo.
-- Otherwise ES-X displays its game name **in the same carousel slot**, centered
-  and constrained to the existing item width. Transparent normal text colors
-  do not hide this fallback.
+- Otherwise ES-X draws the optional `carouselFallbackImage` **behind**
+  the game name, following the existing System View approach of showing a
+  default logo plate with its name overlaid. If no default image is configured,
+  the name still appears on its own.
+- The name is drawn **after** the image and border, centered and constrained
+  to the existing item width. Transparent normal text colors do not hide it.
 - For `carouselImageType=wheel` or `marquee`, screenshots/covers will **not**
-  replace a missing logo. An explicit `carouselFallbackImage` is also skipped
-  when this option is enabled, because the name takes priority.
+  replace a missing logo; instead the configured default plate is used.
 - The selected/unselected item sizes, spacing, cursor, rotation and animations
   are unchanged. `carouselShowText=false` may remain in the theme.
 - Without `carouselShowFallbackName`, the previous artwork fallback and
