@@ -53,12 +53,22 @@ namespace TextListCarouselArt
 
 		if (imageType == "wheel")
 		{
-			std::string path = file->getWheelPath();
-			return path.empty() ? file->getMarqueePath() : path;
+			const std::string wheel = file->getWheelPath();
+			if (!wheel.empty() && Utils::FileSystem::exists(wheel))
+				return wheel;
+
+			// Legacy collections frequently store their logo as marquee.
+			const std::string marquee = file->getMarqueePath();
+			return (!marquee.empty() && Utils::FileSystem::exists(marquee)) ?
+				marquee : "";
 		}
 
 		if (imageType == "marquee")
-			return file->getMarqueePath();
+		{
+			const std::string marquee = file->getMarqueePath();
+			return (!marquee.empty() && Utils::FileSystem::exists(marquee)) ?
+				marquee : "";
+		}
 
 		return file->getCarouselImagePath(imageType);
 	}
