@@ -421,9 +421,13 @@ void SystemView::refreshMostPlayedVideo()
 	if (!theme)
 		return;
 
-	// No es extra="true": es un único reproductor compartido por SystemView.
+	// Un único reproductor compartido: sin extras adicionales ni dos
+	// videos simultáneos. El modo aleatorio es completamente opcional.
+	const bool randomVideo =
+		theme->getElement("system", "randomGameVideo", "video") != nullptr;
+	const char* elementName = randomVideo ? "randomGameVideo" : "mostPlayedVideo";
 	const ThemeData::ThemeElement* elem =
-		theme->getElement("system", "mostPlayedVideo", "video");
+		theme->getElement("system", elementName, "video");
 
 	if (!elem)
 		return;
@@ -432,12 +436,13 @@ void SystemView::refreshMostPlayedVideo()
 	mMostPlayedVideo->applyTheme(
 		theme,
 		"system",
-		"mostPlayedVideo",
+		elementName,
 		POSITION | SIZE | DELAY | Z_INDEX | ROTATION | VISIBLE);
 
 	const bool themeVisible = mMostPlayedVideo->isVisible();
-	const std::string imagePath = system->getMostPlayedImage();
-	const std::string videoPath = system->getMostPlayedVideo();
+	const std::string imagePath = randomVideo ? "" : system->getMostPlayedImage();
+	const std::string videoPath = randomVideo ?
+		system->getRandomVideo() : system->getMostPlayedVideo();
 
 	mMostPlayedVideo->setImage(imagePath);
 	const bool hasVideo = mMostPlayedVideo->setVideo(videoPath);
@@ -1185,7 +1190,7 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 	// Al cambiar sistema, volver el foco al carrusel y refrescar visibilidad del botón
 	setInfoFocus(false);
 
-	// Cambiar la imagen/video al juego más jugado del nuevo sistema.
+	// Actualizar la vista previa del sistema (más jugado o vídeo aleatorio).
 	refreshMostPlayedVideo();
 
 	// ES-X: al cambiar de sistema, reiniciar únicamente los fondos vivos
