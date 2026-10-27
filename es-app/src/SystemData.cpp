@@ -580,6 +580,8 @@ SystemData* SystemData::getRandomSystem()
 void SystemData::setShuffledCacheDirty()
 {
 	mGamesShuffled.clear();
+	mRandomVideoPaths.clear();
+	mRandomVideoCacheValid = false;
 }
 
 FileData* SystemData::getRandomGame()
@@ -783,6 +785,70 @@ std::string SystemData::getMostPlayedImage() const
 	return "";
 }
 
+// Opt-in system preview: cache paths from gamelist metadata once per system.
+// Reuse the ordinary video player; no extra decoders or background playback.
+std::string SystemData::getRandomVideo()
+{
+	if (!mRandomVideoCacheValid)
+	{
+		mRandomVideoPaths.clear();
+		mRandomVideoCacheValid = true;
+
+		if (mRootFolder)
+		{
+			const auto games = mRootFolder->getFilesRecursive(GAME, true);
+			for (FileData* game : games)
+			{
+				if (!game)
+					continue;
+
+				const std::string raw = expandHomeTilde(game->getVideoPath());
+				if (raw.empty())
+					continue;
+
+				std::string path;
+				if (raw[0] == '/' && fileExistsAny(raw))
+					path = Utils::FileSystem::getGenericPath(raw);
+				else
+				{
+					// Collections may contain games from several original systems.
+					const SystemData* owner = game->getSystem();
+					const std::string startPath = owner ? owner->getStartPath() : getStartPath();
+					std::string candidate = Utils::FileSystem::resolveRelativePath(raw, startPath, false, true);
+					candidate = Utils::FileSystem::getGenericPath(candidate);
+					if (fileExistsAny(candidate))
+						path = candidate;
+					else
+					{
+						const std::string base = Utils::FileSystem::getParent(
+							owner ? owner->getGamelistPath(false) : getGamelistPath(false));
+						candidate = Utils::FileSystem::resolveRelativePath(raw, base, false, true);
+						candidate = Utils::FileSystem::getGenericPath(candidate);
+						if (fileExistsAny(candidate))
+							path = candidate;
+					}
+				}
+
+				if (!path.empty() &&
+				    std::find(mRandomVideoPaths.begin(), mRandomVideoPaths.end(), path) == mRandomVideoPaths.end())
+					mRandomVideoPaths.push_back(path);
+			}
+		}
+	}
+
+	if (mRandomVideoPaths.empty())
+		return "";
+
+	std::uniform_int_distribution<std::size_t> choose(0, mRandomVideoPaths.size() - 1);
+	std::size_t index = choose(sURNG);
+	// Prevent an immediate repeat when multiple clips exist.
+	if (mRandomVideoPaths.size() > 1 && mRandomVideoPaths[index] == mLastRandomVideo)
+		index = (index + 1) % mRandomVideoPaths.size();
+
+	mLastRandomVideo = mRandomVideoPaths[index];
+	return mLastRandomVideo;
+}
+
 std::string SystemData::getMostPlayedVideo() const
 {
 	FileData* best = getMostPlayedGame();
@@ -869,6 +935,9 @@ void SystemData::writeMetaData() {
 }
 
 void SystemData::onMetaDataSavePoint() {
+	// New scraper/media metadata must become visible to random system previews.
+	mRandomVideoPaths.clear();
+	mRandomVideoCacheValid = false;
 	if(Settings::getInstance()->getString("SaveGamelistsMode") != "always")
 		return;
 

@@ -68,6 +68,8 @@ public:
 	// Media del mismo juego más jugado.
 	std::string  getMostPlayedImage() const;
 	std::string  getMostPlayedVideo() const;
+	// Optional system-view preview, using only games with a valid video.
+	std::string  getRandomVideo();
 
 	static void deleteSystems();
 	static bool loadConfig(Window* window);
@@ -126,6 +128,11 @@ private:
 
 	FileData* mRootFolder;
 	std::vector<FileData*> mGamesShuffled;
+
+	// Lazy video cache, independent from the game shuffle queue.
+	std::vector<std::string> mRandomVideoPaths;
+	std::string mLastRandomVideo;
+	bool mRandomVideoCacheValid = false;
 };
 
 #endif // ES_APP_SYSTEM_DATA_H
