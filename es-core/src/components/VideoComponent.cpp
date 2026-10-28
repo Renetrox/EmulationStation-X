@@ -64,7 +64,8 @@ VideoComponent::VideoComponent(Window* window) :
 	mDisable(false),
 	mScreensaverMode(false),
 	mTargetIsMax(false),
-	mTargetSize(0, 0)
+	mTargetSize(0, 0),
+	mVideoCornerRadius(0.0f)
 {
 	// Setup the default configuration
 	mConfig.showSnapshotDelay 		= false;
@@ -202,9 +203,24 @@ void VideoComponent::applyTheme(const std::shared_ptr<ThemeData>& theme, const s
 
 	GuiComponent::applyTheme(theme, view, element, (properties ^ SIZE) | ((properties & (SIZE | POSITION)) ? ORIGIN : 0));
 
+	// VIDEO CORNER RADIUS (TEST): an absent tag resets the legacy rectangular
+	// rendering path when this shared player changes systems or themes.
+	mVideoCornerRadius = 0.0f;
+	mStaticImage.setCornerRadius(0.0f);
+
 	const ThemeData::ThemeElement* elem = theme->getElement(view, element, "video");
 	if(!elem)
 		return;
+
+	// As with imageCornerRadius in ES-X, radii use a fraction of screen
+	// width. A snapshot can have a different radius than the active video.
+	const float screenWidth = static_cast<float>(Renderer::getScreenWidth());
+	if (elem->has("videoCornerRadius"))
+		mVideoCornerRadius = Math::max(0.0f,
+			elem->get<float>("videoCornerRadius")) * screenWidth;
+	if (elem->has("imageCornerRadius"))
+		mStaticImage.setCornerRadius(Math::max(0.0f,
+			elem->get<float>("imageCornerRadius")) * screenWidth);
 
 	Vector2f scale = getParent() ? getParent()->getSize() : Vector2f((float)Renderer::getScreenWidth(), (float)Renderer::getScreenHeight());
 
