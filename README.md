@@ -136,6 +136,15 @@ real-world J2ME collections.
 ![photo_2026-04-04_09-59-24](https://github.com/user-attachments/assets/44ad1a7b-16ac-482f-afdc-014bb9e81dde)
 
 
+## TEST — Rounded video previews
+
+Video elements can opt into `videoCornerRadius` for VLC frames and
+`imageCornerRadius` for the snapshot/fallback displayed before or after
+playback. Both default to zero, preserving classic rectangular playback.
+The geometry is reused between frames with no extra decoding or video texture.
+**Experimental and not yet build- or device-tested.** See
+[theme documentation](THEMES.md#rounded-video-previews-test).
+
 ## Example Gamelist Carousel
 
 ES-X adds carousel support directly to `TextListComponent`, allowing themes to build modern game list layouts without creating a separate view.
