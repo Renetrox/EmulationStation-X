@@ -597,9 +597,10 @@ none
 ### Rounded carousel images (TEST; GL 2.1 and GLES 1.0)
 
 > **TEST (2026-10-27):** desktop visual test passed with PS5 gamelist artwork,
-> including the selected card and removal of decorative border PNGs. The code
-> has not yet been validated on the Orange Pi GLES renderer or across every
-> image fit/fallback case; further adjustments are expected.
+> including the selected card and removal of decorative border PNGs. The
+> author also confirmed it worked perfectly on the Orange Pi 4A. The exact
+> GL/GLES backend used there was not identified; alternate image fits and
+> fallback media still need broader validation.
 
 
 ES-DE's PS5 theme uses `<imageCornerRadius>0.010</imageCornerRadius>`
@@ -629,9 +630,10 @@ for compact cards and `0.015` for larger ones. ES-X's classic
   stretched image. PNG frames and borders remain separate and unchanged.
 - Applies to images displayed by the game carousel, not to video playback.
   Standalone theme images can also opt in with `<cornerRadius>0.010</cornerRadius>`.
-- Fixed-function OpenGL 2.1 and OpenGL ES 1.0 are both supported in theory,
-  but test on the desktop and Orange Pi before merging. Edges are polygonal
-  and may show light aliasing at small resolutions.
+- Uses fixed-function triangle-strip rendering intended for OpenGL 2.1
+  and OpenGL ES 1.0. Desktop and Orange Pi 4A visual tests passed, but the
+  precise active backend and wider GLES compatibility remain to be checked.
+  Edges are polygonal and may show light aliasing at small resolutions.
 
 ### Example: framed fanart carousel
 
