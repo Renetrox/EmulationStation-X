@@ -100,6 +100,8 @@ protected:
 	unsigned						mVideoWidth;
 	unsigned						mVideoHeight;
 	Vector2f						mTargetSize;
+	// TEST: normalized-to-screen-radius converted to pixels by applyTheme().
+	float                       mVideoCornerRadius;
 	std::shared_ptr<TextureResource> mTexture;
 	float							mFadeIn;
 	std::string						mStaticImagePath;

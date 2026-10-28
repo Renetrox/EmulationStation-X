@@ -312,7 +312,10 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "showSnapshotNoVideo", BOOLEAN },
 		{ "showSnapshotDelay", BOOLEAN },
 		{ "iterationCount", FLOAT },
-		{ "onIterationsDone", STRING } } },
+		{ "onIterationsDone", STRING },
+		{ "videoCornerRadius", FLOAT }, // TEST: rounded VLC video frames
+		{ "imageCornerRadius", FLOAT }  // TEST: rounded snapshot and fallback
+	} },
 
 { "carousel", {
 	{ "type", STRING },

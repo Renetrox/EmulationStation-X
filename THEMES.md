@@ -397,6 +397,49 @@ the theme explicitly opts in.
 
 ---
 
+## Rounded video previews (TEST)
+
+Video elements support optional curved corners without GPU stencil masks,
+shader changes or VLC decode changes. Both properties are fractions of the
+**screen width**, matching the rounded image feature in ES-X.
+
+```xml
+<view name="video">
+  <video name="md_video">
+    <origin>0.5 0.5</origin>
+    <pos>0.83 0.55</pos>
+    <maxSize>0.20 0.30</maxSize>
+    <videoCornerRadius>0.010</videoCornerRadius>
+    <imageCornerRadius>0.010</imageCornerRadius>
+    <showSnapshotDelay>true</showSnapshotDelay>
+    <showSnapshotNoVideo>true</showSnapshotNoVideo>
+    <iterationCount>1</iterationCount>
+    <onIterationsDone>image</onIterationsDone>
+  </video>
+</view>
+```
+
+- `videoCornerRadius`: clips the moving frames from VLC to the rounded
+  geometry. The same uploaded frame texture is used, with fixed-function GL
+  triangle strips and geometry cached per video size and radius.
+- `imageCornerRadius`: clips the static snapshot shown during delay, on
+  missing video, or after `onIterationsDone=image`. This is separate from
+  the moving frame setting.
+- Both are independently optional and default to `0`, leaving all existing
+  rectangular video rendering unchanged.
+- Also applies to `mostPlayedVideo` and `randomGameVideo` inside the
+  `system` view, because they share `VideoVlcComponent`.
+- The rounded frame geometry is drawn only when needed. Its dimensions
+  follow the final displayed video size (`size` / `maxSize`).
+- **TEST (2026-10-28):** XMB `md_video` visual test was reported successful by
+  the author. Verify all four corners, the image snapshot after playback, and
+  the `randomGameVideo`/`mostPlayedVideo` cases separately. The Orange Pi 4A
+  **video** render path and performance are still unverified. This test feature
+  is available in `main` by explicit maintainer request; the existing rounded
+  **image** support is separately confirmed on desktop and Orange Pi.
+
+---
+
 ## Navigation Sounds
 
 Themes can define navigation audio.

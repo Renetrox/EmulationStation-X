@@ -19,6 +19,7 @@ typedef SSIZE_T ssize_t;
 
 #include <vlc/vlc.h>
 #include <SDL_mutex.h>
+#include <cmath>
 
 libvlc_instance_t* VideoVlcComponent::mVLC = NULL;
 
@@ -46,7 +47,9 @@ static void display(void* /*data*/, void* /*id*/) {
 VideoVlcComponent::VideoVlcComponent(Window* window, std::string subtitles) :
 	VideoComponent(window),
 	mMedia(nullptr),
-	mMediaPlayer(nullptr)
+	mMediaPlayer(nullptr),
+	mRoundedVideoSize(-1.0f, -1.0f),
+	mRoundedVideoRadius(-1.0f)
 {
 	memset(&mContext, 0, sizeof(mContext));
 
@@ -145,6 +148,73 @@ void VideoVlcComponent::resize()
 	onSizeChanged();
 }
 
+// TEST: generate geometry using the same fixed-function triangular fan
+// approach as ImageComponent's rounded images. Coordinates and UVs are
+// derived from the *displayed* frame rectangle; no VLC callbacks, frame
+// conversion or texture allocation is changed.
+void VideoVlcComponent::updateRoundedVideoGeometry()
+{
+	if (mRoundedVideoSize == mSize && mRoundedVideoRadius == mVideoCornerRadius)
+		return;
+
+	mRoundedVideoSize = mSize;
+	mRoundedVideoRadius = mVideoCornerRadius;
+	mRoundedVideoVertices.clear();
+
+	// The normal VLC quad rounds its final screen-space coordinates.
+	const float width = Math::round(mSize.x());
+	const float height = Math::round(mSize.y());
+	if (width <= 1.0f || height <= 1.0f)
+		return;
+
+	const float radius = Math::min(
+		mVideoCornerRadius, Math::min(width, height) * 0.5f);
+	if (!(radius >= 0.5f))
+		return;
+
+	// Match the default VLC quad UV mapping exactly.
+	auto vertexAt = [width, height](float x, float y) -> Renderer::Vertex
+	{
+		return Renderer::Vertex(
+			Vector2f(x, y),
+			Vector2f(x / width, y / height),
+			0xFFFFFFFF);
+	};
+
+	const float pi = 3.14159265358979323846f;
+	const float cornersX[4] = {
+		radius, width - radius, width - radius, radius };
+	const float cornersY[4] = {
+		radius, radius, height - radius, height - radius };
+	const float startAngles[4] = {
+		pi, 1.5f * pi, 0.0f, 0.5f * pi };
+	const int segments = 8;
+	const Renderer::Vertex center = vertexAt(width * 0.5f, height * 0.5f);
+	Renderer::Vertex firstRim;
+	mRoundedVideoVertices.reserve(80);
+
+	// Draw using existing GL_TRIANGLE_STRIP interface on GL 2.1 and GLES.
+	// Alternating center/rim vertices produce triangles around the boundary.
+	for (int corner = 0; corner < 4; ++corner)
+	{
+		for (int i = 0; i <= segments; ++i)
+		{
+			const float angle = startAngles[corner] +
+				(pi * 0.5f) * (float(i) / float(segments));
+			const Renderer::Vertex rim = vertexAt(
+				cornersX[corner] + radius * std::cos(angle),
+				cornersY[corner] + radius * std::sin(angle));
+			if (corner == 0 && i == 0)
+				firstRim = rim;
+
+			mRoundedVideoVertices.push_back(center);
+			mRoundedVideoVertices.push_back(rim);
+		}
+	}
+	mRoundedVideoVertices.push_back(center);
+	mRoundedVideoVertices.push_back(firstRim);
+}
+
 void VideoVlcComponent::render(const Transform4x4f& parentTrans)
 {
 	if (!isVisible())
@@ -174,8 +244,29 @@ void VideoVlcComponent::render(const Transform4x4f& parentTrans)
 		mTexture->initFromPixels((unsigned char*)mContext.surface->pixels, mContext.surface->w, mContext.surface->h);
 		mTexture->bind();
 
-		// Render it
-		Renderer::drawTriangleStrips(&vertices[0], 4);
+		// TEST: preserve the exact four-vertex rendering when radius is absent.
+		// Geometry is built only on size/radius changes, not per VLC frame.
+		if (mVideoCornerRadius >= 0.5f)
+		{
+			updateRoundedVideoGeometry();
+			if (!mRoundedVideoVertices.empty())
+			{
+				// The geometry is cached; fade opacity still changes per frame.
+				for (auto& vertex : mRoundedVideoVertices)
+					vertex.col = color;
+				Renderer::drawTriangleStrips(
+					mRoundedVideoVertices.data(),
+					static_cast<unsigned int>(mRoundedVideoVertices.size()));
+			}
+			else
+			{
+				Renderer::drawTriangleStrips(&vertices[0], 4);
+			}
+		}
+		else
+		{
+			Renderer::drawTriangleStrips(&vertices[0], 4);
+		}
 	}
 	else
 	{
