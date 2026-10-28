@@ -3,6 +3,8 @@
 #define ES_CORE_COMPONENTS_VIDEO_VLC_COMPONENT_H
 
 #include "VideoComponent.h"
+#include "renderers/Renderer.h"
+#include <vector>
 
 struct SDL_mutex;
 struct SDL_Surface;
@@ -48,6 +50,8 @@ public:
 
 private:
 	void resize();
+	// Only rebuild rounded textured geometry when frame dimensions/radius change.
+	void updateRoundedVideoGeometry();
 	virtual void startVideo() override;
 	virtual void stopVideo() override;
 	virtual void handleLooping() override;
@@ -67,6 +71,11 @@ private:
 
 	VideoContext                    mContext;
 	std::shared_ptr<TextureResource> mTexture;
+
+	// TEST: reusable triangle strip for opt-in rounded frames. Zero new textures.
+	std::vector<Renderer::Vertex> mRoundedVideoVertices;
+	Vector2f mRoundedVideoSize;
+	float mRoundedVideoRadius;
 };
 
 #endif // ES_CORE_COMPONENTS_VIDEO_VLC_COMPONENT_H
