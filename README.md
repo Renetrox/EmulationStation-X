@@ -142,7 +142,7 @@ Video elements can opt into `videoCornerRadius` for VLC frames and
 `imageCornerRadius` for the snapshot/fallback displayed before or after
 playback. Both default to zero, preserving classic rectangular playback.
 The geometry is reused between frames with no extra decoding or video texture.
-**Experimental and not yet build- or device-tested.** See
+**TEST:** the author reported a successful visual result with the XMB `md_video` preview on 2026-10-28. This does not establish Orange Pi video performance or complete regression coverage; additional checks are pending. See
 [theme documentation](THEMES.md#rounded-video-previews-test).
 
 ## Example Gamelist Carousel
