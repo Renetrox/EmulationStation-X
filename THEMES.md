@@ -431,9 +431,12 @@ shader changes or VLC decode changes. Both properties are fractions of the
   `system` view, because they share `VideoVlcComponent`.
 - The rounded frame geometry is drawn only when needed. Its dimensions
   follow the final displayed video size (`size` / `maxSize`).
-- **TEST: not yet compiled or visually tested**. Desktop GL and Orange Pi 4A
-  validation are required before moving this feature to `main`. Existing
-  rounded **image** support is separate and already confirmed on both machines.
+- **TEST (2026-10-28):** XMB `md_video` visual test was reported successful by
+  the author. Verify all four corners, the image snapshot after playback, and
+  the `randomGameVideo`/`mostPlayedVideo` cases separately. The Orange Pi 4A
+  **video** render path and performance are still unverified. This test feature
+  is available in `main` by explicit maintainer request; the existing rounded
+  **image** support is separately confirmed on desktop and Orange Pi.
 
 ---
 
