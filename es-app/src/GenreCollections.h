@@ -16,26 +16,28 @@ struct Category
 {
     const char* name;        // Stable setting/collection ID.
     const char* label;       // Translatable display label.
-    const char* themeFolder; // Optional theme-specific art.
+    const char* themeFolder; // Batocera-compatible optional visual asset key.
     const char* aliases;     // Case/accent insensitive phrases, separated by '|'.
 };
 
 inline const std::vector<Category>& categories()
 {
+    // Keep genre-* stable for saved preferences; use legacy auto-* asset names
+    // where available so themes such as Pi-Station-X reuse their existing art.
     static const std::vector<Category> list = {
         { "genre-action",      "ACTION",       "auto-action",      "action|accion|acao|action adventure|run and gun" },
         { "genre-adventure",   "ADVENTURE",    "auto-adventure",   "adventure|aventura|aventure|abenteuer|action adventure|point and click|visual novel|interactive movie" },
         { "genre-platform",    "PLATFORM",     "auto-platform",    "platform|platformer|platform games|plataforma|plataformas|plateforme|jump and run|jump n run" },
         { "genre-puzzle",      "PUZZLE",       "auto-puzzle",      "puzzle|puzzle game|puzzle games|puzle|rompecabezas|quebracabeca|reflexion|logic|labyrinth" },
-        { "genre-racing",      "RACING",       "auto-racing",      "racing|race|race driving|race driving games|driving|carreras|conduccion|course|corrida" },
+        { "genre-racing",      "RACING",       "auto-racedriving",      "racing|race|race driving|race driving games|driving|carreras|conduccion|course|corrida" },
         { "genre-sports",      "SPORTS",       "auto-sports",      "sports|sport|deportes|deporte|esportes|sports with animals" },
-        { "genre-rpg",         "RPG",          "auto-rpg",         "rpg|jrpg|role playing|role playing game|role playing games|roleplaying|juegos de rol|jeu de role|jeux de role" },
+        { "genre-rpg",         "RPG",          "auto-roleplayings",         "rpg|jrpg|role playing|role playing game|role playing games|roleplaying|juegos de rol|jeu de role|jeux de role" },
         { "genre-shooter",     "SHOOTER",      "auto-shooter",     "shooter|shooters|shoot em up|shoot em up games|shmup|fps|first person shooter|third person shooter|disparos|tiros|run and gun" },
-        { "genre-fighting",    "FIGHTING",     "auto-fighting",    "fighting|fight|fighter|lucha|combat|beat em up|beat them up|beat em all" },
+        { "genre-fighting",    "FIGHTING",     "auto-fight",    "fighting|fight|fighter|lucha|combat|beat em up|beat them up|beat em all" },
         { "genre-strategy",    "STRATEGY",     "auto-strategy",    "strategy|estrategia|strategie|rts|real time strategy|turn based strategy" },
         { "genre-simulation",  "SIMULATION",   "auto-simulation",  "simulation|simulacion|simulator|simulador" },
         { "genre-horror",      "HORROR",       "auto-horror",      "horror|survival horror|terror|survie horreur" },
-        { "genre-music",       "MUSIC",        "auto-music",       "music|musica|dance|baile|music and dance|musique" },
+        { "genre-music",       "MUSIC",        "auto-musicanddance",       "music|musica|dance|baile|music and dance|musique" },
         { "genre-educational", "EDUCATIONAL",  "auto-educational", "educational|education|educacion|educacional|educativo|quiz|trivia" },
         { "genre-pinball",     "PINBALL",      "auto-pinball",     "pinball|flipper" }
     };
