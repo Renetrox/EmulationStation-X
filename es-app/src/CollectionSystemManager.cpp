@@ -365,10 +365,15 @@ void CollectionSystemManager::deleteCollectionFiles(FileData* file)
 // returns whether the current theme is compatible with Automatic or Custom Collections
 bool CollectionSystemManager::isThemeGenericCollectionCompatible(bool genericCustomCollections)
 {
-	std::vector<std::string> cfgSys = getCollectionThemeFolders(genericCustomCollections);
-	for (auto sysIt = cfgSys.cbegin(); sysIt != cfgSys.cend(); sysIt++)
+	// Optional genre-specific folders must never make a previously compatible
+	// legacy theme appear incompatible. Themes without auto-puzzle, etc. use
+	// the existing generic theme fallback instead.
+	for (const auto& pair : mCollectionSystemDeclsIndex)
 	{
-		if (!themeFolderExists(*sysIt))
+		const CollectionSystemDecl& decl = pair.second;
+		if (decl.isCustom != genericCustomCollections || decl.type == AUTO_GENRE)
+			continue;
+		if (!themeFolderExists(decl.themeFolder))
 			return false;
 	}
 	return true;
