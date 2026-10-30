@@ -14,11 +14,35 @@ on:
 
 jobs:
   genre-classifier:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Compile and run standalone genre classification checks
         run: |
           g++ -std=c++11 -Wall -Wextra -Werror -pedantic \
             tests/test_genre_collections.cpp -o /tmp/esx-genre-test
           /tmp/esx-genre-test
+
+  frontend-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install ES-X build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git build-essential cmake pkg-config \
+            libsdl2-dev libsdl2-mixer-dev libfreeimage-dev \
+            libfreetype6-dev libcurl4-openssl-dev rapidjson-dev \
+            libasound2-dev libgl1-mesa-dev libvlc-dev \
+            libvlccore-dev vlc-bin libudev-dev
+      - name: Configure ES-X
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGL=ON -DGLES=OFF
+      - name: Build full frontend
+        run: cmake --build build --target emulationstation --parallel 2
