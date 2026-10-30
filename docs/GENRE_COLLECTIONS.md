@@ -45,6 +45,28 @@ One game may belong to more than one collection.
   not duplicated or rewritten by the classification itself.
 - All existing custom collections and random collections remain unchanged.
 
+### Pi-Station-X generic cover fallback
+
+Pi-Station-X's `theme.xml` references
+`./_inc/caratulas/${system.theme}.png` as its normal `logo`.
+For any category without a dedicated image (e.g. `auto-horror`), add a
+`<default>./_inc/caratulas/default.png</default>` **inside that same
+`<image name="logo">`**. This invokes the existing `ImageComponent` fallback;
+a separate full-screen `<image extra="true">` does not act as a carousel logo.
+
+In the active `<carousel name="systemcarousel">` (usually `Swatch.xml` for
+the default Pi-Station-X layout), add
+`<showFallbackName>true</showFallbackName>`. Configure optional
+`<text name="logoText">` within the system view (for example, normalized
+`<pos>0.5 0.5</pos>`, `<size>0.9 0.32</size>`, `<color>FFFFFFFF</color>`).
+Only the generic fallback receives that text; existing genre-specific PNG covers
+remain unchanged. ES-X now uses the genre collection's localized `fullName`
+instead of exposing raw `genre-*` internal IDs for both image+caption and
+plain text-only fallbacks.
+
+This also works for other themes opting into the same existing logo-fallback
+interface, with no changes to collection creation or metadata matching.
+
 ## Testing
 
 Run a standalone classifier regression test:
