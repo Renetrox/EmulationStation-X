@@ -22,12 +22,14 @@ private:
 	void initializeMenu();
 	void applySettings();
 	void addSystemsToMenu();
+	std::string selectedAutoCollections() const;
 	void addEntry(const char* name, unsigned int color, bool add_arrow, const std::function<void()>& func);
 	void updateSettings(std::string newAutoSettings, std::string newCustomSettings);
 	void createCollection(std::string inName);
 	void exitEditMode();
 	void openRandomCollectionSettings();
 	std::shared_ptr< OptionListComponent<std::string> > autoOptionList;
+	std::shared_ptr< OptionListComponent<std::string> > genreOptionList;
 	std::shared_ptr< OptionListComponent<std::string> > customOptionList;
 	std::shared_ptr< OptionListComponent<std::string> > defaultScreenSaverCollection;
 	std::shared_ptr<SwitchComponent> sortAllSystemsSwitch;
