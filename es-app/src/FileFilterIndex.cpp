@@ -1,5 +1,6 @@
 #include "FileFilterIndex.h"
 #include "GenreCollections.h"
+#include <algorithm>
 
 #include "utils/StringUtil.h"
 #include "views/UIModeController.h"
