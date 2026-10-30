@@ -86,7 +86,7 @@ void GuiGamelistFilter::addFiltersToMenu()
 		for (auto keyIt : *allKeys)
 		{
 			optionList->add(
-				keyIt.first,
+				type == GENRE_FILTER ? es_translate(keyIt.first.c_str()) : keyIt.first,
 				keyIt.first,
 				mFilterIndex->isKeyBeingFilteredBy(keyIt.first, type));
 		}
