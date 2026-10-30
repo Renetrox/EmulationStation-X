@@ -1,0 +1,24 @@
+name: Genre auto-collections (Issue 19)
+on:
+  push:
+    branches:
+      - 'feature/genre-auto-collections-*'
+  pull_request:
+    paths:
+      - 'es-app/src/GenreCollections.h'
+      - 'es-app/src/CollectionSystemManager.*'
+      - 'es-app/src/guis/GuiCollectionSystemsOptions.*'
+      - 'tests/test_genre_collections.cpp'
+      - '.github/workflows/test-genre-collections.yml'
+  workflow_dispatch:
+
+jobs:
+  genre-classifier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and run standalone genre classification checks
+        run: |
+          g++ -std=c++11 -Wall -Wextra -Werror -pedantic \
+            tests/test_genre_collections.cpp -o /tmp/esx-genre-test
+          /tmp/esx-genre-test
