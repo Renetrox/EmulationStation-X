@@ -33,6 +33,24 @@ int main()
     assert(matches("Action / Beat'em Up", "genre-fighting"));
     assert(matches("Shoot'em Up", "genre-shooter"));
 
+    // Saved genre-* collection IDs never change with the theme artwork name.
+    // Pi-Station-X and other Batocera-derived themes already carry these files.
+    auto themeFolderFor = [](const std::string& id) -> std::string {
+        for (const auto& cat : GenreCollections::categories())
+            if (id == cat.name)
+                return cat.themeFolder;
+        return "";
+    };
+    assert(GenreCollections::categories().size() == 15);
+    assert(themeFolderFor("genre-racing") == "auto-racedriving");
+    assert(themeFolderFor("genre-rpg") == "auto-roleplayings");
+    assert(themeFolderFor("genre-fighting") == "auto-fight");
+    assert(themeFolderFor("genre-music") == "auto-musicanddance");
+    assert(themeFolderFor("genre-action") == "auto-action");
+    assert(themeFolderFor("genre-platform") == "auto-platform");
+    assert(themeFolderFor("genre-horror") == "auto-horror");
+    assert(themeFolderFor("genre-unknown").empty());
+
     // Do not rely on simple substrings: avoid spurious classification.
     assert(!matches("Interaction", "genre-action"));
     assert(!matches("Airport", "genre-rpg"));
