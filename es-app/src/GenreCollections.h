@@ -29,7 +29,7 @@ inline const std::vector<Category>& categories()
         { "genre-puzzle",      "PUZZLE",       "auto-puzzle",      "puzzle|puzzle game|puzzle games|puzle|rompecabezas|quebracabeca|reflexion|logic|labyrinth" },
         { "genre-racing",      "RACING",       "auto-racing",      "racing|race|race driving|race driving games|driving|carreras|conduccion|course|corrida" },
         { "genre-sports",      "SPORTS",       "auto-sports",      "sports|sport|deportes|deporte|esportes|sports with animals" },
-        { "genre-rpg",         "RPG",          "auto-rpg",         "rpg|jrpg|role playing|role playing game|role playing games|roleplaying|juegos de rol|jeu de role" },
+        { "genre-rpg",         "RPG",          "auto-rpg",         "rpg|jrpg|role playing|role playing game|role playing games|roleplaying|juegos de rol|jeu de role|jeux de role" },
         { "genre-shooter",     "SHOOTER",      "auto-shooter",     "shooter|shooters|shoot em up|shoot em up games|shmup|fps|first person shooter|third person shooter|disparos|tiros|run and gun" },
         { "genre-fighting",    "FIGHTING",     "auto-fighting",    "fighting|fight|fighter|lucha|combat|beat em up|beat them up|beat em all" },
         { "genre-strategy",    "STRATEGY",     "auto-strategy",    "strategy|estrategia|strategie|rts|real time strategy|turn based strategy" },
