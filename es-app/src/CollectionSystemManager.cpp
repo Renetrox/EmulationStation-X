@@ -1,4 +1,5 @@
 #include "CollectionSystemManager.h"
+#include "GenreCollections.h"
 
 #include "components/TextListComponent.h"
 #include "guis/GuiInfoPopup.h"
@@ -40,6 +41,14 @@ CollectionSystemManager::CollectionSystemManager(Window* window) : mWindow(windo
 	for (std::vector<CollectionSystemDecl>::const_iterator it = tempSystemDecl.cbegin(); it != tempSystemDecl.cend(); ++it)
 	{
 		mCollectionSystemDeclsIndex[(*it).name] = (*it);
+	}
+
+	// Genre collections are opt-in and remain virtual (no ROM copies).
+	for (const auto& genre : GenreCollections::categories())
+	{
+		CollectionSystemDecl decl = { AUTO_GENRE, genre.name, genre.label,
+			"name, ascending", genre.themeFolder, false };
+		mCollectionSystemDeclsIndex[decl.name] = decl;
 	}
 
 	// creating standard environment data
@@ -211,6 +220,9 @@ void CollectionSystemManager::updateSystemsList()
 		SystemData::sSystemVector.push_back(mCustomCollectionsBundle);
 	}
 
+	// Populate all enabled genres in a single traversal of the games.
+	populateGenreCollections();
+
 	// add auto enabled ones except random
 	addEnabledCollectionsToDisplayedSystems(&mAutoCollectionSystemsData, false);
 	// finally, add random
@@ -268,7 +280,9 @@ void CollectionSystemManager::updateCollectionSystem(FileData* file, CollectionS
 			fileIndex->removeFromIndex(collectionEntry);
 			collectionEntry->refreshMetadata();
 			// found and we are removing
-			if (name == "favorites" && file->metadata.get("favorite") == "false") {
+			if ((name == "favorites" && file->metadata.get("favorite") == "false") ||
+				(sysData.decl.type == AUTO_GENRE &&
+				 !GenreCollections::matches(file->metadata.get("genre"), name))) {
 				// need to check if still marked as favorite, if not remove
 				ViewController::get()->getGameListView(curSys).get()->remove(collectionEntry, false, true);
 			}
@@ -283,7 +297,9 @@ void CollectionSystemManager::updateCollectionSystem(FileData* file, CollectionS
 		{
 			// we didn't find it here - we need to check if we should add it
 			if (name == "recent" && file->metadata.get("playcount") > "0" && includeFileInAutoCollections(file) ||
-				name == "favorites" && file->metadata.get("favorite") == "true") {
+				name == "favorites" && file->metadata.get("favorite") == "true" ||
+				(sysData.decl.type == AUTO_GENRE && includeFileInAutoCollections(file) &&
+				 GenreCollections::matches(file->metadata.get("genre"), name))) {
 				CollectionFileData* newGame = new CollectionFileData(file, curSys);
 				rootFolder->addChild(newGame);
 				fileIndex->addToIndex(newGame);
@@ -720,6 +736,56 @@ void CollectionSystemManager::initAutoCollectionSystems()
 	}
 }
 
+// Fill all newly enabled genre collections together, classifying each game once.
+// Disabled collections are not populated, so large ROM libraries remain cheap.
+void CollectionSystemManager::populateGenreCollections()
+{
+	std::vector<CollectionSystemData*> pending;
+	std::map<std::string, CollectionSystemData*> targetByName;
+	for (auto& pair : mAutoCollectionSystemsData)
+	{
+		CollectionSystemData& data = pair.second;
+		if (data.decl.type != AUTO_GENRE || !data.isEnabled || data.isPopulated)
+			continue;
+		pending.push_back(&data);
+		targetByName[data.decl.name] = &data;
+	}
+
+	if (pending.empty())
+		return;
+
+	for (auto sourceSystem : SystemData::sSystemVector)
+	{
+		if (!sourceSystem->isGameSystem() || sourceSystem->isCollection())
+			continue;
+
+		for (auto game : sourceSystem->getRootFolder()->getFilesRecursive(GAME))
+		{
+			if (!includeFileInAutoCollections(game))
+				continue;
+
+			for (const auto& genreName : GenreCollections::classify(game->metadata.get("genre")))
+			{
+				auto it = targetByName.find(genreName);
+				if (it == targetByName.end())
+					continue;
+
+				SystemData* collection = it->second->system;
+				CollectionFileData* entry = new CollectionFileData(game, collection);
+				collection->getRootFolder()->addChild(entry);
+				collection->getIndex()->addToIndex(entry);
+			}
+		}
+	}
+
+	for (auto collection : pending)
+	{
+		collection->system->getRootFolder()->sort(getSortTypeFromString(collection->decl.defaultSort));
+		collection->isPopulated = true;
+		collection->system->loadTheme();
+	}
+}
+
 // this may come in handy if at any point in time in the future we want to
 // automatically generate metadata for a folder
 void CollectionSystemManager::updateCollectionFolderMetadata(SystemData* sys)
@@ -1033,6 +1099,9 @@ void CollectionSystemManager::populateAutoCollection(CollectionSystemData* sysDa
 						break;
 					case AUTO_ALL_GAMES:
 						break;
+					case AUTO_GENRE:
+						include = include && GenreCollections::matches((*gameIt)->metadata.get("genre"), sysDecl.name);
+						break;
 					default:
 						// No-op to prevent compiler warnings
 						// Getting here means that the file is not part of a pre-defined collection.
@@ -1171,6 +1240,11 @@ void CollectionSystemManager::addEnabledCollectionsToDisplayedSystems(std::map<s
 					else
 						populateAutoCollection(&(it->second));
 				}
+
+				// Do not display empty genre categories in the system carousel.
+				if (it->second.decl.type == AUTO_GENRE &&
+					it->second.system->getRootFolder()->getChildrenByFilename().empty())
+					continue;
 
 				// check if it has its own view
 				if (!it->second.decl.isCustom || themeFolderExists(it->first) || !Settings::getInstance()->getBool("UseCustomCollectionsSystem"))
