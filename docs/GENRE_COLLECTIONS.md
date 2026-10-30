@@ -21,8 +21,19 @@ One game may belong to more than one collection.
 ## Compatibility and configuration
 
 - Automatic collection IDs use the `genre-` prefix, e.g. `genre-puzzle`.
-- Optional theme art folders use `auto-` names, e.g. `auto-puzzle`.
-  Missing dedicated art falls back to the existing theme behavior.
+- Automatic collection IDs are independent of visual identifiers. Optional theme
+  art keys use Batocera-compatible `auto-` names wherever practical, such as
+  `auto-puzzle`. In particular, the stable settings IDs `genre-racing`,
+  `genre-rpg`, `genre-fighting`, and `genre-music` load artwork through
+  `auto-racedriving`, `auto-roleplayings`, `auto-fight`, and
+  `auto-musicanddance`, respectively. Existing enabled selections do not change.
+- Pi-Station-X already ships matching PNG covers and JPG backgrounds, both
+  referenced by `${system.theme}`; no image rename or theme XML edit is needed.
+- Themes without matching artwork retain their existing fallback. ES-X already
+  supports a generic logo plus caption when a theme provides a `logo`
+  `<default>` and enables `<showFallbackName>true</showFallbackName>` in its
+  system carousel. This change does not add assets or require every theme to
+  configure that optional fallback.
 - Selected IDs are stored with existing automatic collections in
   `CollectionSystemsAuto` (no new settings format).
 - Genres without metadata remain outside genre collections.
