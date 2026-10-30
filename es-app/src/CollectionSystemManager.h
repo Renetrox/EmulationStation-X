@@ -27,6 +27,7 @@ enum CollectionSystemType
 	AUTO_LAST_PLAYED,
 	AUTO_FAVORITES,
 	AUTO_RANDOM,
+	AUTO_GENRE,
 	CUSTOM_COLLECTION
 };
 
@@ -127,6 +128,7 @@ private:
 	void initCustomCollectionSystems();
 	SystemData* createNewCollectionEntry(std::string name, CollectionSystemDecl sysDecl, const CollectionFlags flags);
 	void populateAutoCollection(CollectionSystemData* sysData);
+	void populateGenreCollections();
 	void populateCustomCollection(CollectionSystemData* sysData);
 	void addRandomGames(SystemData* newSys, SystemData* sourceSystem, FileData* rootFolder, FileFilterIndex* index,
 		std::map<std::string, std::map<std::string, int>> mapsForRandomColl, int defaultValue);
