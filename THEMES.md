@@ -620,7 +620,7 @@ axis-aligned `cover` clipping is disabled on rotated items so it cannot cut them
 | `carouselImageBorderFit` | Border/card PNG fitting mode: `stretch` (legacy default) or `contain` (preserves aspect ratio). |
 | `carouselImageBorderZIndex` | Internal carousel-layer order for the border/overlay. Default: `20`. Set it below `carouselImageZIndex` to place the PNG behind the artwork. |
 
-### Game names over fallback images (experimental)
+### Game names over fallback images
 
 The system carousel's `showFallbackName` applies to systems, not to games.
 For a **gamelist** with `<carouselMode>true</carouselMode>`, use:
@@ -645,8 +645,11 @@ For a **gamelist** with `<carouselMode>true</carouselMode>`, use:
   is preserved. `carouselShowFallbackName` alone does not force text-only
   games to appear.
 - Default is `false`: existing themes and game lists behave unchanged.
-  This feature is opt-in and currently under visual testing, particularly
-  with PS3/XMB-style vertical game carousels.
+  This opt-in property is available in ES-X `main` since PR #67. It was
+  visually validated in Pi-Station-X's **PS4 Carousel Gamelist** with missing
+  artwork and existing artwork; other layouts (notably PS3/XMB) have not been
+  visually validated with this option. Pi-Station-X activates it **only** in
+  `layout/ps4-carrousel gamelist/Swatch.xml`.
 
 Supported `carouselImageType` values:
 
