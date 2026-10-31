@@ -260,6 +260,8 @@ private:
 	unsigned int mCarouselItemColor;
 	unsigned int mCarouselSelectedItemColor;
 	bool mCarouselShowText;
+	// Draw game names over the generic fallback artwork, never real artwork.
+	bool mCarouselShowFallbackName;
 	int mCarouselTextMaxLines;
 
 	// ES-X: rueda opcional. Reutiliza el mismo modelo de SystemView:
@@ -362,6 +364,7 @@ TextListComponent<T>::TextListComponent(Window* window) :
 	mCarouselItemColor = 0x00000088;
 	mCarouselSelectedItemColor = 0x101020CC;
 	mCarouselShowText = true;
+	mCarouselShowFallbackName = false;
 	mCarouselTextMaxLines = 2;
 	mCarouselItemRotation = 0.0f;
 	mCarouselItemRotationOrigin = Vector2f(0.5f, 0.5f);
@@ -842,10 +845,13 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 		const bool hasAnyCarouselImage = hasRealImage || hasFallbackImage;
 
-		if (mCarouselShowText && !hasAnyCarouselImage)
+		float fallbackLabelWidth = itemWidth * 0.86f;
+		auto renderEntryLabel = [&](bool overFallbackImage)
 		{
 			unsigned int textColor;
-			if (visuallyCentered && mSelectedColor)
+			if (overFallbackImage)
+				textColor = 0xFFFFFFFF;
+			else if (visuallyCentered && mSelectedColor)
 				textColor = mSelectedColor;
 			else
 				textColor = mColors[entry.data.colorId];
@@ -857,7 +863,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			if (mShowRowNumbers)
 				displayName = std::to_string(realIndex + 1) + ". " + displayName;
 
-			const float maxTextWidth = itemWidth * 0.86f;
+			const float maxTextWidth = overFallbackImage ? fallbackLabelWidth : itemWidth * 0.86f;
 			std::vector<std::string> lines = makeLines(displayName, maxTextWidth, mCarouselTextMaxLines);
 
 			const float lineGap = baseTextHeight * 0.15f;
@@ -867,7 +873,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 			float y = -(totalTextHeight * 0.5f);
 
-			if (!verticalCarousel)
+			if (!overFallbackImage && !verticalCarousel)
 			{
 				if (mCarouselLogoAlignment == CAROUSEL_ALIGN_TOP)
 					y = -(itemHeight * 0.5f) + (itemHeight * 0.08f);
@@ -882,9 +888,9 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 				float textX = -(cache->metrics.size.x() * 0.5f);
 
-				if (mCarouselLogoAlignment == CAROUSEL_ALIGN_LEFT || mAlignment == ALIGN_LEFT)
+				if (!overFallbackImage && (mCarouselLogoAlignment == CAROUSEL_ALIGN_LEFT || mAlignment == ALIGN_LEFT))
 					textX = -(itemWidth * 0.5f) + (itemWidth * 0.06f);
-				else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_RIGHT || mAlignment == ALIGN_RIGHT)
+				else if (!overFallbackImage && (mCarouselLogoAlignment == CAROUSEL_ALIGN_RIGHT || mAlignment == ALIGN_RIGHT))
 					textX = (itemWidth * 0.5f) - cache->metrics.size.x() - (itemWidth * 0.06f);
 
 				Transform4x4f drawTrans = itemTrans;
@@ -903,8 +909,11 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 				y += baseTextHeight + lineGap;
 			}
-		}
+		};
 
+		// Preserve text-only rendering when neither game art nor fallback exists.
+		if (mCarouselShowText && !hasAnyCarouselImage)
+			renderEntryLabel(false);
 		if (mCarouselImage && hasAnyCarouselImage && !imagePath.empty())
 		{
 			if (!entry.data.carouselImage)
@@ -958,6 +967,8 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			{
 				const float fallbackSide = Math::min(visualImageW, visualImageH);
 				entry.data.carouselImage->setResize(fallbackSide, fallbackSide);
+				// Limit the text width to the artwork, accounting for the item transform.
+				fallbackLabelWidth = Math::max(1.0f, (fallbackSide * 0.80f) / itemRenderScale);
 			}
 			else if (mCarouselImageFit == "cover")
 			{
@@ -1057,6 +1068,10 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			if (border && mCarouselImageBorderZIndex >= mCarouselImageZIndex)
 				renderBorder();
 		}
+
+		// Keep the text above the generic PNG and its border, never real art.
+		if (mCarouselShowFallbackName && hasFallbackImage)
+			renderEntryLabel(true);
 	};
 
 	for (int virtualPos = start; virtualPos <= end; virtualPos++)
@@ -1845,6 +1860,11 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	mCarouselShowText = true;
 	if (elem->has("carouselShowText"))
 		mCarouselShowText = elem->get<bool>("carouselShowText");
+
+	// Opt-in, independent from carouselShowText: only label generic PNGs.
+	mCarouselShowFallbackName = false;
+	if (elem->has("carouselShowFallbackName"))
+		mCarouselShowFallbackName = elem->get<bool>("carouselShowFallbackName");
 
 	mCarouselTextMaxLines = 2;
 	if (elem->has("carouselTextMaxLines"))
