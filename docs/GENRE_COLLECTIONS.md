@@ -1,4 +1,4 @@
-# Automatic genre collections (experimental, Issue #19)
+# Automatic genre collections (ES-X main; Issue #19)
 
 This implementation is native to ES-X and preserves RetroPie's existing gamelists,
 ROM directories, custom collections and existing per-system filters.
@@ -27,8 +27,11 @@ One game may belong to more than one collection.
   `genre-rpg`, `genre-fighting`, and `genre-music` load artwork through
   `auto-racedriving`, `auto-roleplayings`, `auto-fight`, and
   `auto-musicanddance`, respectively. Existing enabled selections do not change.
-- Pi-Station-X already ships matching PNG covers and JPG backgrounds, both
-  referenced by `${system.theme}`; no image rename or theme XML edit is needed.
+- Pi-Station-X already ships PNG covers and JPG backgrounds for many supported
+  genre IDs, referenced by `${system.theme}`. Some new genres have no dedicated
+  cover, so the theme uses a generic logo plus the localized collection name.
+  The compatibility fixes for missing per-system metadata XML files and the
+  generic logo are included in Pi-Station-X `main` (PRs #4 and #5).
 - Themes without matching artwork retain their existing fallback. ES-X already
   supports a generic logo plus caption when a theme provides a `logo`
   `<default>` and enables `<showFallbackName>true</showFallbackName>` in its
@@ -66,9 +69,17 @@ its variable and view passes. Mark only the optional second line in the theme's
 Existing collection and console metadata still loads when present, while an
 unknown system now keeps the default metadata and all graphics. Missing
 **required** includes remain errors; do not change the default file to optional.
-This requires an updated ES-X binary **and** the one-line theme modification.
+This is available in ES-X `main` (PR #66) and the corresponding Pi-Station-X
+layout templates already contain the change (PRs #4 and #5). For other themes,
+mark the system-specific include as optional only when appropriate.
 A valid `<default>` in the system `logo` and `showFallbackName` remain the
 separate mechanism for a genuinely missing carousel cover image.
+
+ES-X also exposes `${systemMetaLine}` for a clean combination of the available
+hardware type, release year and manufacturer. Missing fields are omitted rather
+than leaving literal placeholders or dangling separators. In Pi-Station-X a
+new genre collection normally shows only **Colección**; traditional consoles
+retain their actual year and manufacturer.
 
 ### Pi-Station-X generic cover fallback
 
@@ -91,6 +102,13 @@ plain text-only fallbacks.
 
 This also works for other themes opting into the same existing logo-fallback
 interface, with no changes to collection creation or metadata matching.
+
+**Do not confuse system and game fallbacks:** `<showFallbackName>` belongs to
+`systemcarousel`. To label games over a generic `carouselFallbackImage` in a
+`textlist` gamelist, the separate `carouselShowFallbackName` option is now in
+ES-X `main` (PR #67). Pi-Station-X enables that game-level option only in its
+**PS4 Carousel Gamelist** layout (PR #7). Other layouts retain their usual
+behavior. See [THEMES.md](../THEMES.md#game-names-over-fallback-images) for XML.
 
 ## Testing
 
