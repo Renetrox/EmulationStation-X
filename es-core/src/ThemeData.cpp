@@ -862,6 +862,24 @@ void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const st
 	// 5) includes (variables/language)
 	parseIncludesVariables(root);
 
+	// ES-X: formatted metadata line for themes with optional per-system
+	// includes. Compute after defaults and translations have been loaded.
+	// Missing fields must not create dangling separators or placeholders.
+	std::string systemMetaLine;
+	for (const char* key : {"systemHardwareType", "systemReleaseYear", "systemManufacturer"})
+	{
+		auto field = mVariables.find(key);
+		if (field == mVariables.end())
+			continue;
+		const std::string value = Utils::String::trim(field->second);
+		if (value.empty() || value.find("${") != std::string::npos)
+			continue;
+		if (!systemMetaLine.empty())
+			systemMetaLine += " • ";
+		systemMetaLine += value;
+	}
+	mVariables["systemMetaLine"] = systemMetaLine;
+
 	// 6) includes (views/features) + root views/features
 	parseIncludesViewsAndFeatures(root);
 	parseViews(root);
