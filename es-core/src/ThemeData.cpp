@@ -723,7 +723,14 @@ void ThemeData::parseIncludesVariables(const pugi::xml_node& root)
 		std::string path = Utils::FileSystem::resolveRelativePath(relPath, mPaths.back(), true, false);
 
 		if (!ResourceManager::getInstance()->fileExists(path))
+		{
+			// Some themes keep optional per-system metadata files. An
+			// unrecognized collection must not discard the whole theme.
+			// Strict include behavior is unchanged unless explicitly opted in.
+			if (node.attribute("optional").as_bool(false))
+				continue;
 			throw error << "Included file \"" << relPath << "\" not found! (resolved to \"" << path << "\")";
+		}
 
 		error << "    from included file \"" << relPath << "\":\n    ";
 
@@ -761,7 +768,14 @@ void ThemeData::parseIncludesViewsAndFeatures(const pugi::xml_node& root)
 		std::string path = Utils::FileSystem::resolveRelativePath(relPath, mPaths.back(), true, false);
 
 		if (!ResourceManager::getInstance()->fileExists(path))
+		{
+			// Some themes keep optional per-system metadata files. An
+			// unrecognized collection must not discard the whole theme.
+			// Strict include behavior is unchanged unless explicitly opted in.
+			if (node.attribute("optional").as_bool(false))
+				continue;
 			throw error << "Included file \"" << relPath << "\" not found! (resolved to \"" << path << "\")";
+		}
 
 		error << "    from included file \"" << relPath << "\":\n    ";
 
