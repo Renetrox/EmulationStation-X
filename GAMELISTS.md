@@ -1,6 +1,13 @@
 Gamelists
 =========
 
+For ES-X automatic genre collections and per-console genre filters, see
+[Genre Collections](docs/GENRE_COLLECTIONS.md). For theme XML that displays
+missing game artwork using a generic image with the game name, see
+[Game names over fallback images](THEMES.md#game-names-over-fallback-images).
+These are presentation and filtering features; they do not change the
+`gamelist.xml` format.
+
 The gamelist.xml file for a system defines metadata for a system's games, such as a name, image (like a screenshot or box art), description, release date, and rating.
 
 ES will check three places for a gamelist.xml in the following order, using the first one it finds:
