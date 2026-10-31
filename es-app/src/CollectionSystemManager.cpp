@@ -1033,8 +1033,11 @@ void CollectionSystemManager::populateRandomCollectionFromCollections(std::map<s
 	for (auto& c : mAutoCollectionSystemsData)
 	{
 		CollectionSystemData csd = c.second;
-		// we can't add games from the random collection to the random collection
-		if (csd.decl.type != AUTO_RANDOM)
+		// The Random Game settings only expose legacy automatic collection
+		// sources. Genre collections are independently opt-in; scanning all 15
+		// here (including disabled genres) would needlessly duplicate game
+		// references and slow down Random collection initialization.
+		if (csd.decl.type != AUTO_RANDOM && csd.decl.type != AUTO_GENRE)
 		{
 			// collections might not be populated
 			if (!csd.isPopulated)
