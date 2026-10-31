@@ -201,6 +201,8 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "carouselImageBoxSize", NORMALIZED_PAIR },
 	
 	{ "carouselShowText", BOOLEAN },
+	// Optional game-title overlay over the generic PNG when game art is absent.
+	{ "carouselShowFallbackName", BOOLEAN },
 
 	// ES-X: tamaño/alineación estilo systemcarousel
 	{ "logoSize", NORMALIZED_PAIR },
