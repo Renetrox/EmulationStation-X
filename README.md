@@ -145,6 +145,26 @@ The geometry is reused between frames with no extra decoding or video texture.
 **TEST:** the author reported a successful visual result with the XMB `md_video` preview on 2026-10-28. This does not establish Orange Pi video performance or complete regression coverage; additional checks are pending. See
 [theme documentation](THEMES.md#rounded-video-previews-test).
 
+## Automatic genre collections and theme fallbacks
+
+ES-X can group games from existing `<genre>` metadata into optional
+**automatic genre collections** spanning multiple consoles. The original
+per-system **Options → Filter Gamelist → Genre** remains available. These
+features do not move ROMs or rewrite the games' metadata.
+
+- [Genre Collections — setup, IDs and compatibility](docs/GENRE_COLLECTIONS.md)
+- [Theme XML — system and gamelist fallback names](THEMES.md#game-names-over-fallback-images)
+
+The theme engine supports optional system metadata includes
+(`<include optional="true">...`), and `${systemMetaLine}` displays only
+available metadata fields. System carousels can show a missing system logo's
+name with `showFallbackName`; game-list carousels can independently use
+`carouselShowFallbackName` to label a generic image **only when game art is
+missing**. Both fallback-name features require theme opt-in. The gamelist
+property is present in `main` since PR #67 and was visually checked with
+Pi-Station-X's PS4 Carousel Gamelist; other Pi-Station-X layouts do not turn
+it on.
+
 ## Example Gamelist Carousel
 
 ES-X adds carousel support directly to `TextListComponent`, allowing themes to build modern game list layouts without creating a separate view.
