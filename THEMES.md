@@ -594,7 +594,7 @@ axis-aligned `cover` clipping is disabled on rotated items so it cannot cut them
 | `minLogoOpacity` | Minimum opacity for non-selected items. |
 | `carouselItemColor` | Background color for normal carousel tiles. |
 | `carouselSelectedItemColor` | Background color for the selected tile. |
-| `carouselShowText` | Shows or hides game names inside carousel items. |
+| `carouselShowText` | Shows game names only for items with neither real art nor a fallback. |
 | `carouselTextMaxLines` | Maximum title lines; supported range is 1–3. |
 | `carouselItemRotation` | Rotation in degrees per item of distance from the selected item; `0` disables the wheel transformation. |
 | `carouselItemRotationOrigin` | Normalized rotation origin; values outside `0–1` place the wheel pivot outside the tile. |
@@ -610,6 +610,7 @@ axis-aligned `cover` clipping is disabled on rotated items so it cannot cut them
 | `carouselImagePadding` | Internal padding between artwork and tile bounds. |
 | `carouselImageZIndex` | Internal carousel-layer order for the artwork. Default: `10`. Higher values render later/above lower values. |
 | `carouselFallbackImage` | Fallback image used when the requested artwork is missing. |
+| `carouselShowFallbackName` | **TEST / opt-in:** overlays the game name on `carouselFallbackImage` only when the game artwork is missing; independent of `carouselShowText` and disabled by default. Real artwork is never labeled. |
 | `carouselImageLockSize` | Enables use of a fixed artwork box when `carouselImageBoxSize` is defined. |
 | `carouselImageBoxSize` | Optional fixed artwork box relative to the carousel area. |
 | `carouselImageBorder` | PNG overlay/frame used for normal carousel items. |
@@ -618,6 +619,34 @@ axis-aligned `cover` clipping is disabled on rotated items so it cannot cut them
 | `carouselImageBorderColor` | Tint/color shift applied to the border image. |
 | `carouselImageBorderFit` | Border/card PNG fitting mode: `stretch` (legacy default) or `contain` (preserves aspect ratio). |
 | `carouselImageBorderZIndex` | Internal carousel-layer order for the border/overlay. Default: `20`. Set it below `carouselImageZIndex` to place the PNG behind the artwork. |
+
+### Game names over fallback images (experimental)
+
+The system carousel's `showFallbackName` applies to systems, not to games.
+For a **gamelist** with `<carouselMode>true</carouselMode>`, use:
+
+```xml
+<textlist name="gamelist">
+  <carouselMode>true</carouselMode>
+  <carouselImage>true</carouselImage>
+  <carouselImageType>texture</carouselImageType>
+  <carouselFallbackImage>./_inc/physical-media/_default.png</carouselFallbackImage>
+  <carouselShowText>false</carouselShowText>
+  <carouselShowFallbackName>true</carouselShowFallbackName>
+  <carouselTextMaxLines>2</carouselTextMaxLines>
+</textlist>
+```
+
+- When a game has its own artwork, only that image is rendered.
+- When a game has no artwork and the generic PNG exists, the PNG appears
+  **with the game's title centered over it** in white, following the item's
+  scale, rotation, opacity, and the existing `carouselTextMaxLines` limit.
+- If neither image nor PNG exists, the existing `carouselShowText` behavior
+  is preserved. `carouselShowFallbackName` alone does not force text-only
+  games to appear.
+- Default is `false`: existing themes and game lists behave unchanged.
+  This feature is opt-in and currently under visual testing, particularly
+  with PS3/XMB-style vertical game carousels.
 
 Supported `carouselImageType` values:
 
