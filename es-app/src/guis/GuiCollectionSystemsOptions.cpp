@@ -13,6 +13,7 @@
 #include "utils/StringUtil.h"
 #include "views/ViewController.h"
 #include "CollectionSystemManager.h"
+#include "GenreCollections.h"
 #include "Window.h"
 #include "Settings.h"
 #include "renderers/Renderer.h"
@@ -235,7 +236,7 @@ void GuiCollectionSystemsOptions::createCollection(std::string inName)
 	}
 
 	customOptionList->add(name, name, true);
-	std::string outAuto = Utils::String::vectorToDelimitedString(autoOptionList->getSelectedObjects(), ",");
+	std::string outAuto = selectedAutoCollections();
 	std::string outCustom = Utils::String::vectorToDelimitedString(customOptionList->getSelectedObjects(), ",");
 	updateSettings(outAuto, outCustom);
 	ViewController::get()->goToSystemView(newSys);
@@ -261,6 +262,14 @@ GuiCollectionSystemsOptions::~GuiCollectionSystemsOptions()
 {
 }
 
+std::string GuiCollectionSystemsOptions::selectedAutoCollections() const
+{
+	std::vector<std::string> names = autoOptionList->getSelectedObjects();
+	const auto genres = genreOptionList->getSelectedObjects();
+	names.insert(names.end(), genres.begin(), genres.end());
+	return Utils::String::vectorToDelimitedString(names, ",");
+}
+
 void GuiCollectionSystemsOptions::addSystemsToMenu()
 {
 	std::map<std::string, CollectionSystemData> autoSystems =
@@ -272,9 +281,23 @@ void GuiCollectionSystemsOptions::addSystemsToMenu()
 			_("SELECT COLLECTIONS"),
 			true);
 
+	genreOptionList = std::make_shared<OptionListComponent<std::string>>(
+		mWindow, _("SELECT COLLECTIONS"), true);
+
+	// Standard auto collections and genre collections share the saved setting.
+	// Keep two short selectors instead of one very long menu.
 	// añadir sistemas automáticos (ALL GAMES, FAVORITES, RANDOM, LAST PLAYED) con traducción .ini
 	for (auto it = autoSystems.cbegin(); it != autoSystems.cend(); ++it)
 	{
+		if (it->second.decl.type == AUTO_GENRE)
+		{
+			const std::string label = it->second.decl.longName;
+			const std::string localized = LocaleES::get(label);
+			genreOptionList->add(localized == label ? label : localized,
+				it->second.decl.name, it->second.isEnabled);
+			continue;
+		}
+
 		// longName viene como "ALL GAMES", "FAVORITES", etc.
 		std::string label = it->second.decl.longName;
 
@@ -291,6 +314,7 @@ void GuiCollectionSystemsOptions::addSystemsToMenu()
 			it->second.isEnabled);
 	}
 	mMenu.addWithLabel(_("AUTOMATIC GAME COLLECTIONS"), autoOptionList);
+	mMenu.addWithLabel(_("GENRE COLLECTIONS"), genreOptionList);
 
 	std::map<std::string, CollectionSystemData> customSystems =
 		CollectionSystemManager::get()->getCustomCollectionSystems();
@@ -314,7 +338,7 @@ void GuiCollectionSystemsOptions::addSystemsToMenu()
 
 void GuiCollectionSystemsOptions::applySettings()
 {
-	std::string outAuto = Utils::String::vectorToDelimitedString(autoOptionList->getSelectedObjects(), ",");
+	std::string outAuto = selectedAutoCollections();
 	std::string prevAuto = Settings::getInstance()->getString("CollectionSystemsAuto");
 	std::string outCustom = Utils::String::vectorToDelimitedString(customOptionList->getSelectedObjects(), ",");
 	std::string prevCustom = Settings::getInstance()->getString("CollectionSystemsCustom");

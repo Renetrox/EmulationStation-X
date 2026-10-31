@@ -1,4 +1,6 @@
 #include "FileFilterIndex.h"
+#include "GenreCollections.h"
+#include <algorithm>
 
 #include "utils/StringUtil.h"
 #include "views/UIModeController.h"
@@ -336,6 +338,21 @@ bool FileFilterIndex::showFile(FileData* game)
 					keepGoing = isKeyBeingFilteredBy(secKey, filterData.type);
 				}
 			}
+			// The raw genre may be a combined/subgenre value, e.g. "Action / Puzzle".
+			// Allow selecting canonical genres from the same per-system filter UI.
+			if (!keepGoing && filterData.type == GENRE_FILTER)
+			{
+				const auto genres = GenreCollections::classify(game->metadata.get("genre"));
+				for (const auto& category : GenreCollections::categories())
+				{
+					if (std::find(genres.begin(), genres.end(), category.name) != genres.end() &&
+						isKeyBeingFilteredBy(category.label, GENRE_FILTER))
+					{
+						keepGoing = true;
+						break;
+					}
+				}
+			}
 			// if still nothing, then it's not a match
 			if (!keepGoing)
 				return false;
@@ -386,10 +403,20 @@ void FileFilterIndex::manageGenreEntryInIndex(FileData* game, bool remove)
 
 	manageIndexEntry(&genreIndexAllKeys, key, remove);
 
+	const std::string originalKey = key;
 	key = getIndexableKey(game, GENRE_FILTER, true);
-	if (!includeUnknown && key == UNKNOWN_LABEL)
-	{
+	if (key != UNKNOWN_LABEL && key != originalKey)
 		manageIndexEntry(&genreIndexAllKeys, key, remove);
+
+	// Add canonical categories alongside the original metadata label. This
+	// keeps stock gamelist values available and supports localized subgenres.
+	const auto selectedGenres = GenreCollections::classify(game->metadata.get("genre"));
+	for (const auto& category : GenreCollections::categories())
+	{
+		if (std::find(selectedGenres.begin(), selectedGenres.end(), category.name) == selectedGenres.end())
+			continue;
+		if (originalKey != category.label && key != category.label)
+			manageIndexEntry(&genreIndexAllKeys, category.label, remove);
 	}
 }
 

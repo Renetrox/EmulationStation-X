@@ -561,6 +561,12 @@ void SystemView::populate()
 			e.data.hasDescription = false;
 			e.data.descriptionText.clear();
 
+			// Prefer the translated collection title in the existing logo
+			// fallback. The stable genre-* IDs are settings keys, not UI text.
+			const std::string fallbackName =
+				(*it)->isCollection() && (*it)->getName().compare(0, 6, "genre-") == 0
+				? (*it)->getFullName() : (*it)->getName();
+
 			// make logo
 			const ThemeData::ThemeElement* logoElem = theme->getElement("system", "logo", "image");
 			if(logoElem)
@@ -587,7 +593,7 @@ void SystemView::populate()
 
 					ImageComponent* logo = labelMissingLogo ?
 						static_cast<ImageComponent*>(new SystemFallbackLogo(
-							mWindow, theme, (*it)->getName())) :
+							mWindow, theme, fallbackName)) :
 						static_cast<ImageComponent*>(new ImageComponent(mWindow, false, false));
 
 					// Preserve the same image loading and dimensions as ES-X main.
@@ -602,7 +608,7 @@ void SystemView::populate()
 			{
 				TextComponent* text = new TextComponent(
 					mWindow,
-					(*it)->getName(),
+					fallbackName,
 					Font::get(FONT_SIZE_LARGE),
 					0x000000FF,
 					ALIGN_CENTER);
