@@ -45,6 +45,31 @@ One game may belong to more than one collection.
   not duplicated or rewritten by the classification itself.
 - All existing custom collections and random collections remain unchanged.
 
+### Optional per-system metadata includes (Pi-Station-X)
+
+Some Batocera-derived themes, including Pi-Station-X, use both a common
+`_default.xml` and a system-specific metadata include. Most original console
+and legacy automatic-collection metadata files exist, but freshly introduced
+`auto-action`, `auto-horror`, etc. metadata XML files do not. Historically ES-X
+throws on **every** missing `<include>`, aborting that system's entire theme
+load; this produces unstyled, oversized `genre-*` text instead of any logos.
+
+The theme parser now supports explicit `optional="true"` on an include in **both**
+its variable and view passes. Mark only the optional second line in the theme's
+`Swatch.xml`:
+
+```xml
+<include>./_inc/metadata-global/_default.xml</include>
+<include optional="true">./_inc/metadata-global/${system.theme}.xml</include>
+```
+
+Existing collection and console metadata still loads when present, while an
+unknown system now keeps the default metadata and all graphics. Missing
+**required** includes remain errors; do not change the default file to optional.
+This requires an updated ES-X binary **and** the one-line theme modification.
+A valid `<default>` in the system `logo` and `showFallbackName` remain the
+separate mechanism for a genuinely missing carousel cover image.
+
 ### Pi-Station-X generic cover fallback
 
 Pi-Station-X's `theme.xml` references
