@@ -3,6 +3,8 @@
 #include "DateTimeComponent.h"
 #include "resources/Font.h"
 #include "utils/StringUtil.h"
+#include "../LocaleESHook.h"
+#include <cstdio>
 
 DateTimeEditComponent::DateTimeEditComponent(Window* window, DisplayMode dispMode) : GuiComponent(window),
 	mEditing(false), mEditIndex(0), mDisplayMode(dispMode), mRelativeUpdateAccumulator(0),
@@ -215,14 +217,17 @@ std::string DateTimeEditComponent::getDisplayString(DisplayMode mode) const
 
 			char buf[64];
 
-			if(dur.getDays() > 0)
-				sprintf(buf, "%d day%s ago", dur.getDays(), (dur.getDays() > 1) ? "s" : "");
-			else if(dur.getHours() > 0)
-				sprintf(buf, "%d hour%s ago", dur.getHours(), (dur.getHours() > 1) ? "s" : "");
-			else if(dur.getMinutes() > 0)
-				sprintf(buf, "%d minute%s ago", dur.getMinutes(), (dur.getMinutes() > 1) ? "s" : "");
+			const char* key = "SECS_AGO";
+			int amount = dur.getSeconds();
+			if(dur.getDays() > 0) { key = "DAYS_AGO"; amount = dur.getDays(); }
+			else if(dur.getHours() > 0) { key = "HOURS_AGO"; amount = dur.getHours(); }
+			else if(dur.getMinutes() > 0) { key = "MINS_AGO"; amount = dur.getMinutes(); }
+
+			const std::string translated = es_translate(key);
+			if (translated.find("%d") != std::string::npos)
+				snprintf(buf, sizeof(buf), translated.c_str(), amount);
 			else
-				sprintf(buf, "%d second%s ago", dur.getSeconds(), (dur.getSeconds() > 1) ? "s" : "");
+				snprintf(buf, sizeof(buf), "%d %s", amount, translated.c_str());
 
 			return std::string(buf);
 		}
