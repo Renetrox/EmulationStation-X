@@ -1005,3 +1005,85 @@ system keeps all labels in their inactive style. No runtime polling.
 
 **TEST:** visual placement, edge-case platform classifications and build
 behavior are pending evaluation on PC / Orange Pi 4A.
+
+
+---
+
+## Native splash reuse: Pi-Station-X and PS5
+
+ES-X can load a standalone `splash.xml` from the **root of the active theme**.
+Pi-Station-X has been visually tested with a simplified PlayStation-style startup
+screen; the theme author also reports reusing that splash in PS5 because both
+themes share the same base. PS5's separate artwork and layout have not been
+independently validated here.
+
+The splash is a normal `ThemeData` view, not a Batocera-specific parser.
+It supports a background, live loading label, progress bar, and ordinary
+`image`/`text` elements with `extra="true"` and `zIndex`.
+
+### Assets and configuration
+
+Place `splash.xml` in each theme root and keep asset paths relative to that
+theme. The tested Pi-Station-X layout uses:
+
+| Resource | Purpose |
+| --- | --- |
+| `./_inc/images/main1.png` | Background |
+| `./_inc/images/frame-splash.png` | Original profile frame |
+| `${AVATAR_PATH}` | Selected avatar from `theme.ini` |
+| `${USER_NAME}` | Display name from `theme.ini` |
+| `${welcome}` | Localized single-word greeting |
+
+The profile image, frame and display name are optional theme extras. Themes
+without these assets should omit the corresponding XML elements, not reference
+missing files. Keep `splash.xml` separate for Pi-Station-X and PS5, so
+their visuals can evolve independently.
+
+For language-aware greetings, define `welcome` under `<variables>` as a
+default and override it with `<language name="es">`, `<language name="gn">`,
+etc. The active ES-X UI language is read by `ThemeData` when loading the
+splash; the live loading status is a separate engine-provided label.
+
+Example:
+
+```xml
+<variables><welcome>Welcome</welcome></variables>
+<language name="es">
+  <variables><welcome>Bienvenido</welcome></variables>
+</language>
+<language name="gn">
+  <variables><welcome>Tereguahẽ porãite</welcome></variables>
+</language>
+<view name="splash">
+  <splash name="splash"><backgroundColor>030303</backgroundColor></splash>
+  <image name="background">
+    <path>./_inc/images/main1.png</path>
+    <size>1 1</size>
+  </image>
+  <text name="welcome_message" extra="true">
+    <text>${welcome}</text>
+    <pos>0.12 0.13</pos><size>0.76 0.07</size>
+    <alignment>center</alignment>
+  </text>
+  <image name="user_avatar" extra="true">
+    <path>${AVATAR_PATH}</path>
+    <pos>0.5 0.43</pos><maxSize>0.14 0.14</maxSize>
+    <zIndex>115</zIndex>
+  </image>
+  <image name="avatar_frame" extra="true">
+    <path>./_inc/images/frame-splash.png</path>
+    <pos>0.5 0.42</pos><maxSize>0.19 0.19</maxSize>
+    <zIndex>110</zIndex>
+  </image>
+</view>
+```
+
+The complete working Pi-Station-X setup also uses the native
+`progressbar`, `progressbar:active` and `label` elements, plus optional
+name and shadow extras. Preserve their relative `zIndex` settings: in the
+user-tested layout the avatar (`115`) appears in front of the frame (`110`).
+
+This is theme-level reuse: **no engine change is necessary** when both themes
+resolve their assets and `theme.ini` variables correctly. A missing
+`splash.xml` falls back to ES-X's classic splash. See
+[`docs/STATIC_SPLASH.md`](docs/STATIC_SPLASH.md) for parser details and tests.
