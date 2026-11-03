@@ -1,6 +1,7 @@
 #include "BusyComponent.h"
 
 #include "LocaleES.h"
+#include "Settings.h"
 
 #include "components/AnimatedImageComponent.h"
 #include "components/ImageComponent.h"
@@ -24,6 +25,10 @@ BusyComponent::BusyComponent(Window* window)
 	, mBackground(window, ":/frame.png")
 	, mGrid(window, Vector2i(5, 3))
 {
+	// Match MenuComponent's existing MenuDark setting.
+	const bool darkMenu = Settings::getInstance()->getBool("MenuDark");
+	mBackground.setImagePath(darkMenu ? ":/frame_dark.png" : ":/frame.png");
+
 	mAnimation = std::make_shared<AnimatedImageComponent>(mWindow);
 	mAnimation->load(&BUSY_ANIMATION_DEF);
 
@@ -31,7 +36,7 @@ BusyComponent::BusyComponent(Window* window)
 		mWindow,
 		LocaleES::get("WORKING"),
 		Font::get(FONT_SIZE_MEDIUM),
-		0x777777FF
+		darkMenu ? 0xFFFFFFFF : 0x777777FF
 	);
 
 	// col 1 = animation, col 2 = spacer, col 3 = text
