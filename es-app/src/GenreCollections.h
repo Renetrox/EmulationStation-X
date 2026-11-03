@@ -35,7 +35,7 @@ inline const std::vector<Category>& categories()
         { "genre-shooter",     "SHOOTER",      "auto-shooter",     "shooter|shooters|shoot em up|shoot em up games|shmup|fps|first person shooter|third person shooter|disparos|tiros|run and gun" },
         { "genre-fighting",    "FIGHTING",     "auto-fight",    "fighting|fight|fighter|lucha|combat|beat em up|beat them up|beat em all" },
         { "genre-strategy",    "STRATEGY",     "auto-strategy",    "strategy|estrategia|strategie|rts|real time strategy|turn based strategy" },
-        { "genre-simulation",  "SIMULATION",   "auto-simulation",  "simulation|simulacion|simulator|simulador" },
+        { "genre-simulation",  "SIMULATION",   "auto-simulation",  "simulation|simulacion|simulacao|simulator|simulador" },
         { "genre-horror",      "HORROR",       "auto-horror",      "horror|survival horror|terror|survie horreur" },
         { "genre-music",       "MUSIC",        "auto-musicanddance",       "music|musica|dance|baile|music and dance|musique" },
         { "genre-educational", "EDUCATIONAL",  "auto-educational", "educational|education|educacion|educacional|educativo|quiz|trivia" },
@@ -55,10 +55,10 @@ inline std::string normalize(const std::string& value)
         if (c == 0xC3 && i + 1 < value.size())
         {
             const unsigned char n = static_cast<unsigned char>(value[++i]);
-            if (n == 0x81 || n == 0x80 || n == 0x82 || n == 0x84 || n == 0xA1 || n == 0xA0 || n == 0xA2 || n == 0xA4) ch = 'a';
+            if (n == 0x81 || n == 0x80 || n == 0x82 || n == 0x84 || n == 0xA1 || n == 0xA0 || n == 0xA2 || n == 0xA4 || n == 0xA3 || n == 0x83) ch = 'a';
             else if (n == 0x89 || n == 0x88 || n == 0x8A || n == 0x8B || n == 0xA9 || n == 0xA8 || n == 0xAA || n == 0xAB) ch = 'e';
             else if (n == 0x8D || n == 0x8C || n == 0x8E || n == 0x8F || n == 0xAD || n == 0xAC || n == 0xAE || n == 0xAF) ch = 'i';
-            else if (n == 0x93 || n == 0x92 || n == 0x94 || n == 0x96 || n == 0xB3 || n == 0xB2 || n == 0xB4 || n == 0xB6) ch = 'o';
+            else if (n == 0x93 || n == 0x92 || n == 0x94 || n == 0x96 || n == 0xB3 || n == 0xB2 || n == 0xB4 || n == 0xB6 || n == 0xB5 || n == 0x95) ch = 'o';
             else if (n == 0x9A || n == 0x99 || n == 0x9B || n == 0x9C || n == 0xBA || n == 0xB9 || n == 0xBB || n == 0xBC) ch = 'u';
             else if (n == 0x91 || n == 0xB1) ch = 'n';
             else if (n == 0x87 || n == 0xA7) ch = 'c';
