@@ -84,6 +84,7 @@ private:
 
 	// Command helpers
 	int  runCmd(const std::string& cmd);
+	int  runGitCloneWithProgress(const std::string& repo, const std::string& stage);
 	bool hasCommand(const std::string& cmd) const;
 
 	// New: capture output
@@ -152,6 +153,9 @@ private:
 	std::mutex  mJobMutex;
 	std::atomic<bool> mJobRunning;
 	std::atomic<bool> mJobDone;
+	// Git's receiving-objects percentage, not an overall install percentage.
+	std::atomic<int> mJobProgress{-1};
+	int mShownJobProgress = -2; // UI-thread only
 	bool mJobOk;
 	bool mJobRefreshCatalogAfter;
 	std::string mJobDoneMsg;

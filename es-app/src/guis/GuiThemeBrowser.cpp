@@ -228,8 +228,8 @@ void GuiThemeBrowser::publishBackgroundStatus()
 	task.detail = mJobTargetTitle;
 	task.footer = trTheme("THEME TASK CONTINUES IN BACKGROUND");
 	task.iconGlyph = mJobGlyph.empty() ? TaskGlyphs::DOWNLOAD : mJobGlyph;
-	// git clone does not provide reliable progress through this job runner.
-	// Let Window animate its indeterminate bar instead of inventing a percent.
+	// The Git percentage describes only receiving objects, not the entire job.
+	// Keep the background task's overall progress indeterminate.
 	mWindow->setBackgroundTask("theme-browser", task);
 }
 
@@ -249,6 +249,59 @@ int GuiThemeBrowser::runCmd(const std::string& cmd)
 {
 	LOG(LogInfo) << "GuiThemeBrowser cmd: " << cmd;
 	return std::system(cmd.c_str());
+}
+
+// Git reports transfer progress on stderr (using CR-delimited updates).
+// Only the "Receiving objects" phase is displayed; never invent a global %.
+int GuiThemeBrowser::runGitCloneWithProgress(const std::string& repo, const std::string& stage)
+{
+	const std::string cmd = "LC_ALL=C git clone --progress --depth 1 " +
+		quote(repo) + " " + quote(stage) + " 2>&1";
+	LOG(LogInfo) << "GuiThemeBrowser clone: " << repo;
+
+	FILE* pipe = popen(cmd.c_str(), "r");
+	if (!pipe)
+		return -1;
+
+	auto parseProgress = [this](const std::string& line) {
+		const std::string phase = "Receiving objects:";
+		size_t pos = line.find(phase);
+		if (pos == std::string::npos)
+			return;
+
+		pos += phase.size();
+		while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t'))
+			++pos;
+
+		const char* begin = line.c_str() + pos;
+		char* end = nullptr;
+		const long percentage = std::strtol(begin, &end, 10);
+		if (end != begin && *end == '%' && percentage >= 0 && percentage <= 100)
+			mJobProgress.store(static_cast<int>(percentage), std::memory_order_relaxed);
+	};
+
+	std::string line;
+	int c;
+	while ((c = std::fgetc(pipe)) != EOF)
+	{
+		if (c == '\r' || c == '\n')
+		{
+			if (!line.empty())
+			{
+				parseProgress(line);
+				if (line.find("fatal:") != std::string::npos ||
+				    line.find("error:") != std::string::npos)
+					LOG(LogWarning) << "GuiThemeBrowser clone: " << line;
+				line.clear();
+			}
+		}
+		else if (line.size() < 1024)
+			line.push_back(static_cast<char>(c));
+	}
+	if (!line.empty())
+		parseProgress(line);
+
+	return pclose(pipe);
 }
 
 bool GuiThemeBrowser::hasCommand(const std::string& cmd) const
@@ -724,7 +777,7 @@ bool GuiThemeBrowser::downloadOrUpdateSilent(const ThemeEntry& e)
 	// Clone off to the side so a network failure cannot delete an
 	// already-installed theme. Only promote a fully cloned checkout.
 	runCmd("rm -rf " + quote(stage));
-	if (runCmd("git clone --depth 1 " + quote(e.repo) + " " + quote(stage)) != 0 ||
+	if (runGitCloneWithProgress(e.repo, stage) != 0 ||
 		!Utils::FileSystem::exists(stage))
 	{
 		runCmd("rm -rf " + quote(stage));
@@ -789,6 +842,10 @@ void GuiThemeBrowser::startJob(const std::string& busyMsg, std::function<bool()>
 	mJobOk = false;
 	mJobRefreshCatalogAfter = refreshCatalogAfter;
 	mJobBusyMsg = busyMsg;
+	mJobProgress.store(-1, std::memory_order_relaxed);
+	mShownJobProgress = -2;
+	if (mBusy)
+		mBusy->setText(LocaleES::get("WORKING"));
 
 	updateFooter();
 	updateHelpPrompts();
@@ -985,6 +1042,26 @@ void GuiThemeBrowser::update(int deltaTime)
 		return;
 	}
 	GuiComponent::update(deltaTime);
+
+	// Keep all widget updates on the UI thread; the clone worker only
+	// publishes an atomic percentage for the receiving-objects phase.
+	if (mBusy && mBusyVisible && mJobRunning)
+	{
+		const int percent = mJobProgress.load(std::memory_order_relaxed);
+		if (percent != mShownJobProgress)
+		{
+			mShownJobProgress = percent;
+			if (percent >= 0)
+			{
+				std::string label = mJobBusyMsg;
+				while (!label.empty() && label.back() == '.')
+					label.pop_back();
+				mBusy->setText(label + " " + std::to_string(percent) + "%");
+			}
+			else
+				mBusy->setText(LocaleES::get("WORKING"));
+		}
+	}
 
 	mFrame.update(deltaTime);
 	mList.update(deltaTime);
