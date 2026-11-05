@@ -80,7 +80,8 @@ namespace CompactBrowserStyle
         const std::string& title,
         const std::string& details,
         bool installed,
-        bool updateAvailable = false)
+        bool updateAvailable = false,
+        bool unavailable = false)
     {
         auto grid = std::make_shared<ComponentGrid>(window, Vector2i(2, 2));
         const float rowHeight = std::max(
@@ -91,14 +92,14 @@ namespace CompactBrowserStyle
         grid->setColWidthPerc(0, 0.085f, false);
         grid->setRowHeightPerc(0, 0.55f, false);
 
-        const char* glyph = updateAvailable ? TaskGlyphs::UPDATE :
+        const char* glyph = unavailable ? TaskGlyphs::ERROR : updateAvailable ? TaskGlyphs::UPDATE :
             (installed ? TaskGlyphs::DONE : TaskGlyphs::DOWNLOAD);
         auto status = std::make_shared<TextComponent>(
-            window, glyph, iconFont(), 0xD3D6D9FF, ALIGN_CENTER);
+            window, glyph, iconFont(), unavailable ? 0xF29A86FF : 0xD3D6D9FF, ALIGN_CENTER);
         status->setVerticalAlignment(ALIGN_CENTER);
 
         auto headline = std::make_shared<TextComponent>(
-            window, title, titleFont(), 0xEEEEEEFF, ALIGN_LEFT);
+            window, title, titleFont(), unavailable ? 0xF29A86FF : 0xEEEEEEFF, ALIGN_LEFT);
         headline->setVerticalAlignment(ALIGN_CENTER);
 
         auto metadata = std::make_shared<TextComponent>(

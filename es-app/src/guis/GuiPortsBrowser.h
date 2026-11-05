@@ -14,6 +14,7 @@
 #include <mutex>
 #include <functional>
 #include <memory>
+#include <utility>
 
 class BusyComponent;
 
@@ -39,6 +40,7 @@ private:
         std::string section;
         std::string flags;
         bool installed = false;
+        int available = -1; // -1 unknown, 0 unavailable, 1 available
 
         // X-TRAS: free games share the browser with RetroPie ports.
         bool isGame = false;
@@ -59,6 +61,8 @@ private:
 
     bool findRetroPieSetup();
     bool loadPorts();
+    void startCompatibilityCheck();
+    void finishCompatibilityCheck();
     bool readModuleMetadata(const std::string& path, PortEntry& entry) const;
     bool canUseSudo() const;
 
@@ -119,6 +123,11 @@ private:
 
     std::unique_ptr<BusyComponent> mBusy;
     bool mBusyVisible;
+
+    std::thread mCompatibilityThread;
+    std::atomic<bool> mCompatibilityDone{false};
+    std::atomic<bool> mCompatibilityCancel{false};
+    std::vector<std::pair<std::string, int>> mCompatibilityResults;
 
     std::thread mJobThread;
     std::mutex mJobMutex;

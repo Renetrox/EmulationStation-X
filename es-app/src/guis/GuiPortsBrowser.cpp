@@ -24,6 +24,10 @@
 #include <fcntl.h>
 #include <cstring>
 #include <chrono>
+#include <cstdio>
+#include <cerrno>
+#include <poll.h>
+#include <sys/wait.h>
 
 static inline std::string trPorts(const std::string& key)
 {
@@ -209,6 +213,9 @@ GuiPortsBrowser::GuiPortsBrowser(Window* window)
 
 GuiPortsBrowser::~GuiPortsBrowser()
 {
+    mCompatibilityCancel = true;
+    if (mCompatibilityThread.joinable())
+        mCompatibilityThread.join();
     if (mJobThread.joinable())
         mJobThread.join();
 }
@@ -391,6 +398,12 @@ std::string GuiPortsBrowser::sectionName(const std::string& section) const
 
 bool GuiPortsBrowser::loadPorts()
 {
+    mCompatibilityCancel = true;
+    if (mCompatibilityThread.joinable())
+        mCompatibilityThread.join();
+    mCompatibilityDone = false;
+    mCompatibilityCancel = false;
+    mCompatibilityResults.clear();
     mPorts.clear();
 
     if (!findRetroPieSetup())
@@ -425,13 +438,14 @@ bool GuiPortsBrowser::loadPorts()
         }
     }
 
-    // Si dos repositorios definen el mismo id, dejamos una sola entrada.
-    // La última definición encontrada reemplaza la anterior.
+    // Match RetroPie-Setup: built-in modules win, then sorted vendors/files.
+    std::sort(portDirs.begin() + 1, portDirs.end());
     for (const std::string& portDir : portDirs)
     {
         Utils::FileSystem::stringList files =
             Utils::FileSystem::getDirContent(portDir);
 
+        files.sort();
         for (const std::string& path : files)
         {
             if (!Utils::FileSystem::isRegularFile(path))
@@ -454,9 +468,7 @@ bool GuiPortsBrowser::loadPorts()
                     return p.id == entry.id;
                 });
 
-            if (existing != mPorts.end())
-                *existing = entry;
-            else
+            if (existing == mPorts.end())
                 mPorts.push_back(entry);
         }
     }
@@ -486,7 +498,122 @@ bool GuiPortsBrowser::loadPorts()
     else if (mLastSelectedIndex >= (int)mPorts.size())
         mLastSelectedIndex = (int)mPorts.size() - 1;
 
+    startCompatibilityCheck();
     return !mPorts.empty();
+}
+
+// Run only platform discovery and module registration, never setup_env (which
+// installs dependencies and imports keys). Reuse the installed rules, including
+// ordered flags and version comparisons. No sudo and no per-row subprocesses.
+void GuiPortsBrowser::startCompatibilityCheck()
+{
+    const std::string setupDir = mRetroPieSetupDir;
+    mCompatibilityThread = std::thread([this, setupDir]()
+    {
+        const std::string script = R"ESX(
+scriptdir=$1
+rootdir=/opt/retropie
+__user=$(id -un)
+__group=$(id -gn)
+home=$HOME
+configdir=$rootdir/configs
+source "$scriptdir/scriptmodules/system.sh" || exit 1
+source "$scriptdir/scriptmodules/helpers.sh" || exit 1
+source "$scriptdir/scriptmodules/inifuncs.sh" || exit 1
+source "$scriptdir/scriptmodules/packages.sh" || exit 1
+# OS discovery asks for lsb-release. A query must never install it.
+getDepends() { command -v lsb_release >/dev/null || exit 1; }
+# Legacy Pi discovery removes obsolete pkgconfig files; suppress that cleanup.
+rm() { return 0; }
+test_chroot >/dev/null 2>&1
+get_platform >/dev/null 2>&1
+get_os_version >/dev/null 2>&1
+conf_memory_vars
+conf_build_vars >/dev/null 2>&1
+rp_registerAllModules >/dev/null 2>&1
+for id in "${__mod_id[@]}"; do
+    [[ "${__mod_info[$id/type]}" == ports ]] || continue
+    printf 'ESX_PORT\t%s\t%s\n' "$id" "${__mod_info[$id/enabled]}"
+done
+printf 'ESX_DONE\n'
+)ESX";
+        const std::string cmd = "timeout --kill-after=1s 20s bash -c " +
+            quotePorts(script) + " esx " + quotePorts(setupDir) + " 2>/dev/null";
+        std::vector<std::pair<std::string, int>> results;
+        bool complete = false;
+        int output[2];
+        pid_t child = -1;
+        std::string data;
+        int status = -1;
+        if (::pipe(output) == 0)
+        {
+            child = ::fork();
+            if (child == 0)
+            {
+                ::setpgid(0, 0);
+                ::close(output[0]);
+                ::dup2(output[1], STDOUT_FILENO);
+                ::close(output[1]);
+                ::execl("/bin/sh", "sh", "-c", cmd.c_str(), (char*)nullptr);
+                _exit(127);
+            }
+            ::close(output[1]);
+            if (child > 0)
+            {
+                ::setpgid(child, child);
+                pollfd fd = {output[0], POLLIN, 0};
+                while (!mCompatibilityCancel)
+                {
+                    if (::poll(&fd, 1, 100) < 0) break;
+                    if (fd.revents & (POLLIN | POLLHUP))
+                    {
+                        char buffer[4096];
+                        const ssize_t count = ::read(output[0], buffer, sizeof(buffer));
+                        if (count <= 0) break;
+                        data.append(buffer, static_cast<size_t>(count));
+                        if (data.size() > 1024 * 1024) break;
+                    }
+                }
+                // Also reap the whole query group on close/refresh or malformed output.
+                if (mCompatibilityCancel || data.size() > 1024 * 1024)
+                    ::kill(-child, SIGKILL);
+                while (::waitpid(child, &status, 0) < 0 && errno == EINTR) {}
+            }
+            ::close(output[0]);
+        }
+        std::istringstream lines(data);
+        std::string line;
+        while (std::getline(lines, line))
+        {
+            const std::string value = trimPorts(line);
+            if (value == "ESX_DONE") complete = true;
+            if (value.compare(0, 9, "ESX_PORT\t") != 0) continue;
+            const size_t tab = value.find('\t', 9);
+            if (tab == std::string::npos) continue;
+            const std::string state = value.substr(tab + 1);
+            if (state == "0" || state == "1")
+                results.emplace_back(value.substr(9, tab - 9), state == "1" ? 1 : 0);
+        }
+        if (mCompatibilityCancel || status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
+            complete = false;
+        // Publish once; the main thread owns mPorts and every UI component.
+        if (complete) mCompatibilityResults = std::move(results);
+        mCompatibilityDone = true;
+    });
+}
+
+void GuiPortsBrowser::finishCompatibilityCheck()
+{
+    if (!mCompatibilityDone) return;
+    if (mCompatibilityThread.joinable()) mCompatibilityThread.join();
+    mCompatibilityDone = false;
+    for (auto& port : mPorts)
+    {
+        if (port.isGame) continue;
+        for (const auto& result : mCompatibilityResults)
+            if (port.id == result.first) { port.available = result.second; break; }
+    }
+    if (!mInBackground) rebuildList();
 }
 
 void GuiPortsBrowser::loadFreeGames()
@@ -807,9 +934,13 @@ void GuiPortsBrowser::rebuildList()
                 meta += std::string(u8"    \uf07b  ") + section;
         }
 
+        if (!port.isGame && port.available != 1)
+            meta += " · " + trPorts(port.available == 0 ?
+                "UNAVAILABLE FOR THIS SYSTEM" : "COMPATIBILITY UNVERIFIED");
+
         ComponentListRow row;
         auto item = CompactBrowserStyle::makeRow(
-            mWindow, title, meta, port.installed);
+            mWindow, title, meta, port.installed, false, port.available == 0);
         row.addElement(item, true);
 
         row.makeAcceptInputHandler([this, i]()
@@ -855,7 +986,8 @@ void GuiPortsBrowser::updateFooter()
     const PortEntry& port = mPorts[mLastSelectedIndex];
 
     std::string footer = "A ";
-    footer += port.installed ? trPorts("UPDATE") : trPorts("INSTALL");
+    footer += port.available == 0 ? trPorts("DETAILS") :
+        (port.installed ? trPorts("UPDATE") : trPorts("INSTALL"));
 
     if (port.installed)
         footer += "    X " + trPorts("REMOVE");
@@ -1353,6 +1485,15 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
             return true;
         }
 
+        if (current.available == 0)
+        {
+            mWindow->pushGui(new GuiMsgBox(mWindow,
+                trPorts("UNAVAILABLE FOR THIS SYSTEM") + "\n" + current.id +
+                "\n" + trPorts("PACKAGE FLAGS") + ": " + current.flags,
+                "OK", nullptr));
+            return true;
+        }
+
         if (!canUseSudo())
         {
             showPopup(
@@ -1448,6 +1589,7 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
 
 void GuiPortsBrowser::update(int deltaTime)
 {
+    finishCompatibilityCheck();
     if (!mInBackground)
         refreshLanguage();
 
@@ -1517,7 +1659,8 @@ std::vector<HelpPrompt> GuiPortsBrowser::getHelpPrompts()
         {
             const bool installed = mPorts[mLastSelectedIndex].installed;
             prompts.push_back(
-                HelpPrompt("a", installed ? trPorts("UPDATE") : trPorts("INSTALL")));
+                HelpPrompt("a", mPorts[mLastSelectedIndex].available == 0 ? trPorts("DETAILS") :
+                    (installed ? trPorts("UPDATE") : trPorts("INSTALL"))));
             if (installed)
                 prompts.push_back(HelpPrompt("x", trPorts("REMOVE")));
             prompts.push_back(HelpPrompt("y", trPorts("REFRESH")));
