@@ -85,12 +85,28 @@ public:
 		{
 			mImage.setPosition(0.0f, 0.0f);
 			mImage.setOrigin(0.0f, 0.0f);
-			mImage.setResize(width, height);
+			// Preserve the full image proportions: a partially filled bar should
+			// reveal the left fraction, not compress its artwork or end caps.
+			// Renderer clip rectangles are axis-aligned, so retain the old
+			// scaling behavior for explicitly rotated splash progress bars.
+			const bool clipImage = (getRotation() == 0.0f);
+			mImage.setResize(clipImage ? getSize().x() : width, height);
 			mImage.setColorShift(mColor);
 			mImage.setColorShiftEnd(mColorEnd);
 			mImage.setColorGradientHorizontal(mHorizontalGradient);
 			mImage.setOpacity(getOpacity());
+			if (clipImage)
+			{
+				const Vector3f topLeft = trans.translation();
+				const Vector3f bottomRight = trans * Vector3f(width, height, 0.0f);
+				Renderer::pushClipRect(
+					Vector2i((int)std::floor(topLeft.x()), (int)std::floor(topLeft.y())),
+					Vector2i((int)std::ceil(bottomRight.x() - topLeft.x()),
+					         (int)std::ceil(bottomRight.y() - topLeft.y())));
+			}
 			mImage.render(trans);
+			if (clipImage)
+				Renderer::popClipRect();
 			return;
 		}
 
