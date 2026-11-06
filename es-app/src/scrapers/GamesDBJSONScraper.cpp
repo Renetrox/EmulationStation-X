@@ -241,7 +241,9 @@ std::string getDeveloperString(const Value& v)
 	bool first = true;
 	for (int i = 0; i < (int)v.Size(); ++i)
 	{
-		auto mapIt = resources.gamesdb_new_developers_map.find(getIntOrThrow(v[i]));
+		if (!v[i].IsInt())
+			continue;
+		auto mapIt = resources.gamesdb_new_developers_map.find(v[i].GetInt());
 		if (mapIt == resources.gamesdb_new_developers_map.cend())
 		{
 			continue;
@@ -266,7 +268,9 @@ std::string getPublisherString(const Value& v)
 	bool first = true;
 	for (int i = 0; i < (int)v.Size(); ++i)
 	{
-		auto mapIt = resources.gamesdb_new_publishers_map.find(getIntOrThrow(v[i]));
+		if (!v[i].IsInt())
+			continue;
+		auto mapIt = resources.gamesdb_new_publishers_map.find(v[i].GetInt());
 		if (mapIt == resources.gamesdb_new_publishers_map.cend())
 		{
 			continue;
@@ -291,7 +295,9 @@ std::string getGenreString(const Value& v)
 	bool first = true;
 	for (int i = 0; i < (int)v.Size(); ++i)
 	{
-		auto mapIt = resources.gamesdb_new_genres_map.find(getIntOrThrow(v[i]));
+		if (!v[i].IsInt())
+			continue;
+		auto mapIt = resources.gamesdb_new_genres_map.find(v[i].GetInt());
 		if (mapIt == resources.gamesdb_new_genres_map.cend())
 		{
 			continue;
