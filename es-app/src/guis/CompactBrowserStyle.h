@@ -52,12 +52,17 @@ namespace CompactBrowserStyle
         bool installed,
         bool updateAvailable = false)
     {
-        auto grid = std::make_shared<ComponentGrid>(window, Vector2i(2, 1));
+        // Preserve the tall selection row, but constrain the headline cell
+        // to one font line so TextComponent ellipsizes instead of wrapping.
+        auto grid = std::make_shared<ComponentGrid>(window, Vector2i(2, 3));
         const float rowHeight = std::max(
             titleFont()->getLetterHeight() + 14.0f,
             Renderer::getScreenHeight() * 0.052f);
+        const float lineHeight = std::min(rowHeight, titleFont()->getHeight() * 0.98f);
 
         grid->setColWidthPerc(0, 0.085f, false);
+        // The other two rows automatically split the remaining vertical space.
+        grid->setRowHeightPerc(1, lineHeight / rowHeight, false);
 
         const char* glyph = updateAvailable ? TaskGlyphs::UPDATE :
             (installed ? TaskGlyphs::DONE : TaskGlyphs::DOWNLOAD);
@@ -69,8 +74,8 @@ namespace CompactBrowserStyle
             window, title, titleFont(), 0xEEEEEEFF, ALIGN_LEFT);
         headline->setVerticalAlignment(ALIGN_CENTER);
 
-        grid->setEntry(status, Vector2i(0, 0), false, true);
-        grid->setEntry(headline, Vector2i(1, 0), false, true);
+        grid->setEntry(status, Vector2i(0, 0), false, true, Vector2i(1, 3));
+        grid->setEntry(headline, Vector2i(1, 1), false, true);
         grid->setSize(Vector2f(0.0f, rowHeight));
         return grid;
     }
