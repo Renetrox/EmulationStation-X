@@ -11,6 +11,10 @@
 #include <fstream>
 #include <cstdio>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 const std::map<std::string, generate_scraper_requests_func> scraper_request_funcs {
 	{ "TheGamesDB", &thegamesdb_generate_json_scraper_requests },
 	{ "ScreenScraper", &screenscraper_generate_scraper_requests }
@@ -305,7 +309,15 @@ void ImageDownloadHandle::update()
 		return;
 	}
 
+#ifdef _WIN32
+	// Windows rename() does not replace an existing destination. MoveFileEx
+	// provides replacement semantics while leaving the old file intact if the
+	// operation fails.
+	if (!MoveFileExA(temporaryPath.c_str(), mSavePath.c_str(),
+		MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+#else
 	if (std::rename(temporaryPath.c_str(), mSavePath.c_str()) != 0)
+#endif
 	{
 		std::remove(temporaryPath.c_str());
 		setError("Failed to install downloaded media.");
