@@ -108,3 +108,34 @@ For an ES-X adaptation:
 
 The tested visual XML adaptation is independent from ES-X's C++ changes and
 does not require updating the code for old themes.
+
+
+## Localized logos and grid fallback label visibility
+
+The optional native system grid now checks for language-specific variants of the
+declared `<image name="logo">` path and its `<default>` path:
+
+1. Region-specific variant (e.g. `auto-favorites-es_PY.svg`).
+2. Base-language variant (e.g. `auto-favorites-es.svg`).
+3. Declared original logo (e.g. `auto-favorites.svg`).
+4. Declared fallback image (e.g. `auto-favorites.png`).
+
+SVG and PNG language variants are both supported. Only system Grid changes; the
+existing horizontal/vertical carousels retain their historical resolution rules.
+
+The fallback system name is drawn **only** if no logo image was found, **and**
+if the theme allows a text label. BatWiiCera explicitly disables tile labels:
+
+```xml
+<view name="system">
+    <text name="gridtile">
+        <visible>false</visible>
+    </text>
+</view>
+```
+
+This prevents a name being painted over a channel's artwork. Themes omitting
+that setting still receive readable name-only tiles when media is missing.
+
+Check language switching (`es`, `en`, `pt`, `gn_PY`), missing logos,
+genre collections and card selection on desktop and Orange Pi 4A before merging.
