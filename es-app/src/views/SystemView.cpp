@@ -543,6 +543,20 @@ void SystemView::populate()
 	getDescriptionExtras(this).bySystem.clear();
 	mEntries.clear();
 
+    // The old theme loader may apply different per-system layouts in turn.
+    // Skip legacy logo allocation only when EVERY visible system uses grid.
+    // Mixed theme collections must keep their legacy logos ready for fallback.
+    const bool allSystemThemesGrid = std::all_of(
+        SystemData::sSystemVector.cbegin(),
+        SystemData::sSystemVector.cend(),
+        [](SystemData* system)
+        {
+            if (!system->isVisible())
+                return true;
+            const auto& theme = system->getTheme();
+            return theme && theme->getElement("system", "imagegrid", "imagegrid");
+        });
+
 	for(auto it = SystemData::sSystemVector.cbegin(); it != SystemData::sSystemVector.cend(); it++)
 	{
 		const std::shared_ptr<ThemeData>& theme = (*it)->getTheme();
@@ -570,7 +584,7 @@ void SystemView::populate()
 
 			// The grid binds only visible tiles; avoid allocating unused legacy
 			// logo components for every installed system (important on SBCs).
-			if (mCarousel.displayMode != "grid")
+			if (mCarousel.displayMode != "grid" || !allSystemThemesGrid)
 			{
 			// make logo
 			const ThemeData::ThemeElement* logoElem = theme->getElement("system", "logo", "image");
