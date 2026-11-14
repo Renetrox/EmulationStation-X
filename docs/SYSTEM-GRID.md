@@ -81,3 +81,30 @@ The uploaded BatWiiCera source is v0.1.6; the original art and licensing must
 be kept (CC BY-NC-SA 4.0). The prototype does not implement Batocera `subset`
 menus, pointer overlays or online channels; these are theme portability limits,
 not prerequisites for native system Grid.
+
+
+## BatWiiCera multimedia views in ES-X
+
+BatWiiCera's Batocera layout originally placed `<video name="md_video">` in
+`<view name="detailed">`. ES-X's DetailedGameListView has no video component:
+the `md_video` element must instead be defined in a `<view name="video">`.
+
+For an ES-X adaptation:
+- Include `video` in the shared browsing/metadata views and copy the
+  `detailed` layout to `video`.
+- Add visible `<image name="md_image">` with image-space dimensions for
+  both `detailed` and `video` views. The original theme's shared
+  rules hid both `md_image` and `md_thumbnail`.
+- Place `md_video` only in the `video` view above the image,
+  and use a distinct `extra="true"` static image for missing media.
+- Do **not** put `no-preview.png` in the video's `<default>`
+  property; that property means a default *video*.
+- ES-X picks VideoGameListView automatically only if its system has an actual video
+  and a `video` theme view. Otherwise it may choose DetailedGameListView
+  or BasicGameListView depending on game metadata and settings.
+- Visible system labels below the clock are independent of the artwork inside
+  a system grid tile. With the current grid code, a label is overlaid on the tile
+  only if neither the system's logo nor its fallback image exists.
+
+The tested visual XML adaptation is independent from ES-X's C++ changes and
+does not require updating the code for old themes.
