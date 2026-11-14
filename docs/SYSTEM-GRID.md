@@ -1,6 +1,6 @@
-# ES-X: system grid (experimental)
+# ES-X: system grid (opt-in)
 
-Branch: `test/system-grid-view-20261114`
+Introduced by [PR #73](https://github.com/Renetrox/EmulationStation-X/pull/73) after desktop testing of BatWiiCera; only themes declaring a system `<imagegrid>` enable it.
 
 The system selector now supports an **opt-in grid** in addition to the existing horizontal/vertical carousels, wheel layouts and textlist. It does not change the gamelist grid.
 
@@ -47,18 +47,21 @@ The grid uses each system's existing `<image name="logo">` image and `default` f
 * A dedicated system tile adapter avoids coupling to `ImageGridComponent<FileData*>` and its `getType()` handling.
 * The theme parser already knows `imagegrid` and `gridtile`, so it needs no new XML property.
 
-## Test checklist (before merging)
+## Validation and remaining coverage
 
-- [ ] Compile ES-X on desktop and Orange Pi 4A.
-- [ ] Verify old horizontal and vertical themes behave exactly as in main.
-- [ ] Verify 4×3 and 3×3 system grids, including an incomplete final row.
-- [ ] Verify game launch, back, favorite/automatic collections, and random selection.
-- [ ] Verify logos (SVG/PNG), fallback and missing logo text.
-- [ ] Verify transition/background extras and video at system switching.
-- [ ] Observe VRAM use and scrolling behavior on the Orange Pi 4A.
-- [ ] Adapt BatWiiCera's layout/assets and check its CC BY-NC-SA 4.0 credits.
+On 2026-11-14 the maintainer compiled ES-X on a desktop system and interactively
+validated system grid navigation, localized system logos, fallback label visibility,
+BatWiiCera's media previews, `defaultSnapshot`, and help display.
+The original Wii-style gray tile relief was intentionally preserved.
 
-This branch has not been compiled or tested on an end-user device yet. Do not merge to main before validating the checklist.
+The following are **not yet verified** by those tests:
+- Compilation and performance on Orange Pi 4A (including 800×600).
+- Runtime display of the proposed 4:3 layout (3×3 system grid) on the target monitor.
+- Regression sweep of all horizontal/vertical themes and incomplete-last-row cases.
+- Resource use (VRAM) and extended stability on SBC hardware.
+
+The 16:9 and 4:3 BatWiiCera theme XML and its copyrighted assets are distributed
+separately from the ES-X engine PR. Keep the original theme license/credits.
 
 ## BatWiiCera adapter notes
 
@@ -92,11 +95,8 @@ the `md_video` element must instead be defined in a `<view name="video">`.
 For an ES-X adaptation:
 - Include `video` in the shared browsing/metadata views and copy the
   `detailed` layout to `video`.
-- Add visible `<image name="md_image">` with image-space dimensions for
-  both `detailed` and `video` views. The original theme's shared
-  rules hid both `md_image` and `md_thumbnail`.
-- Place `md_video` only in the `video` view above the image,
-  and use a distinct `extra="true"` static image for missing media.
+- Define `<image name="md_image">` for `detailed` with a conditional `<default>` image, and hide `md_image` in the `video` view to prevent overlap.
+- Place `md_video` only in the `video` view. Set `<defaultSnapshot>` to the fallback artwork and enable `<showSnapshotNoVideo>` and `<showSnapshotDelay>` rather than adding a permanent static `extra` image.
 - Do **not** put `no-preview.png` in the video's `<default>`
   property; that property means a default *video*.
 - ES-X picks VideoGameListView automatically only if its system has an actual video
@@ -137,8 +137,7 @@ if the theme allows a text label. BatWiiCera explicitly disables tile labels:
 This prevents a name being painted over a channel's artwork. Themes omitting
 that setting still receive readable name-only tiles when media is missing.
 
-Check language switching (`es`, `en`, `pt`, `gn_PY`), missing logos,
-genre collections and card selection on desktop and Orange Pi 4A before merging.
+Further validation recommended: language switching (`es`, `en`, `pt`, `gn_PY`), missing logos, genre collections and card selection on Orange Pi 4A.
 
 
 ## Conditional "No preview available" artwork
@@ -179,4 +178,4 @@ fallback when artwork is missing. The VideoGameListView hides `md_image`
 and uses one video component for both the thumbnail and the movie: snapshot
 during delay; movie during playback; thumbnail or `defaultSnapshot` only when
 there is no playable video. Existing themes without the new property retain
-their behavior. This code is experimental; validate on the target before merging.
+their behavior. Validate the theme asset paths and playback behavior on each target device.
