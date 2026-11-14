@@ -1827,7 +1827,7 @@ void SystemView::renderSystemGrid(const Transform4x4f& trans)
                 ResourceManager::getInstance()->fileExists(fallback);
             tile->setImage(hasLogo ? path : (hasFallback ? fallback : ""));
             label->setText(system->getFullName());
-            label->setVisible(!hasLogo);
+            label->setVisible(!hasLogo && !hasFallback);
             mSystemGridBoundIndices[slot] = idx;
         }
 
