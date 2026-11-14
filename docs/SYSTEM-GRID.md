@@ -139,3 +139,44 @@ that setting still receive readable name-only tiles when media is missing.
 
 Check language switching (`es`, `en`, `pt`, `gn_PY`), missing logos,
 genre collections and card selection on desktop and Orange Pi 4A before merging.
+
+
+## Conditional "No preview available" artwork
+
+For BatWiiCera, a static `<image name="preview-fallback" extra="true">`
+is incorrect: extras do not know if the selected game has video or art and
+therefore remain visible all the time. **Remove that extra image.**
+
+ES-X now supports an opt-in `<defaultSnapshot>` property for
+`<video>` elements, which supplies the default image to the
+video player's built-in snapshot component (not the `<default>` video path):
+
+```xml
+<view name="detailed, video">
+    <image name="md_image">
+        <pos>0.695 0.28</pos><origin>0.5 0.5</origin>
+        <maxSize>0.50 0.40</maxSize>
+        <default>./_inc/images/no-preview.png</default>
+        <zIndex>12</zIndex>
+    </image>
+</view>
+<view name="video">
+    <image name="md_image"><visible>false</visible></image>
+    <video name="md_video">
+        <pos>0.695 0.28</pos><origin>0.5 0.5</origin>
+        <maxSize>0.50 0.40</maxSize>
+        <delay>0.3</delay>
+        <defaultSnapshot>./_inc/images/no-preview.png</defaultSnapshot>
+        <showSnapshotNoVideo>true</showSnapshotNoVideo>
+        <showSnapshotDelay>true</showSnapshotDelay>
+        <zIndex>14</zIndex>
+    </video>
+</view>
+```
+
+The DetailedGameListView uses `md_image` and its `<default>`
+fallback when artwork is missing. The VideoGameListView hides `md_image`
+and uses one video component for both the thumbnail and the movie: snapshot
+during delay; movie during playback; thumbnail or `defaultSnapshot` only when
+there is no playable video. Existing themes without the new property retain
+their behavior. This code is experimental; validate on the target before merging.
