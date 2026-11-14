@@ -568,6 +568,10 @@ void SystemView::populate()
 				(*it)->isCollection() && (*it)->getName().compare(0, 6, "genre-") == 0
 				? (*it)->getFullName() : (*it)->getName();
 
+			// The grid binds only visible tiles; avoid allocating unused legacy
+			// logo components for every installed system (important on SBCs).
+			if (mCarousel.displayMode != "grid")
+			{
 			// make logo
 			const ThemeData::ThemeElement* logoElem = theme->getElement("system", "logo", "image");
 			if(logoElem)
@@ -661,6 +665,7 @@ void SystemView::populate()
 
 			Vector2f denormalized = mCarousel.logoSize * e.data.logo->getOrigin();
 			e.data.logo->setPosition(denormalized.x(), denormalized.y(), 0.0);
+			}
 
 			// delete any existing extras
 			for(auto extra : e.data.backgroundExtras)
@@ -1054,11 +1059,13 @@ bool SystemView::input(InputConfig* config, Input input)
             if (dx != 0 || dy != 0)
             {
                 if (mSystemGridHeldX != dx || mSystemGridHeldY != dy)
+                {
                     moveSystemGrid(dx, dy);
+                    mSystemGridRepeatElapsed = 0;
+                    mSystemGridFirstRepeat = true;
+                }
                 mSystemGridHeldX = dx;
                 mSystemGridHeldY = dy;
-                mSystemGridRepeatElapsed = 0;
-                mSystemGridFirstRepeat = true;
                 return true;
             }
         }
@@ -1155,8 +1162,18 @@ bool SystemView::input(InputConfig* config, Input input)
 	{
         if (mCarousel.displayMode == "grid")
         {
-            mSystemGridHeldX = mSystemGridHeldY = 0;
-            mSystemGridRepeatElapsed = 0;
+            // Only the released direction cancels repeating: a different
+            // button release must not interrupt a held D-pad direction.
+            const bool releasedHeldDirection =
+                (mSystemGridHeldX == -1 && config->isMappedLike("left", input)) ||
+                (mSystemGridHeldX ==  1 && config->isMappedLike("right", input)) ||
+                (mSystemGridHeldY == -1 && config->isMappedLike("up", input)) ||
+                (mSystemGridHeldY ==  1 && config->isMappedLike("down", input));
+            if (releasedHeldDirection)
+            {
+                mSystemGridHeldX = mSystemGridHeldY = 0;
+                mSystemGridRepeatElapsed = 0;
+            }
         }
 		else if(config->isMappedLike("left", input) ||
 		   config->isMappedLike("right", input) ||
