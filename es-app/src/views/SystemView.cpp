@@ -16,6 +16,7 @@
 #include "NavigationSounds.h"
 
 #include "components/ImageComponent.h"
+#include "components/GridTileComponent.h"
 #include "components/ScrollableContainer.h"
 #include "components/TextComponent.h"
 #ifdef _OMX_
@@ -801,12 +802,15 @@ void SystemView::populate()
 	mExtrasFadeOpacity = 0.0f;
 
 	setInfoFocus(false);
+	rebuildSystemGrid();
 	refreshMostPlayedVideo();
 }
 
 void SystemView::onShow()
 {
 	mShowing = true;
+	mSystemGridHeldX = mSystemGridHeldY = 0;
+	mSystemGridRepeatElapsed = 0;
 
 	// ES-X: al volver desde una gamelist o un juego, dejar la vista
 	// de sistemas en un estado completamente estable.
@@ -853,6 +857,7 @@ void SystemView::onShow()
 void SystemView::onHide()
 {
 	mShowing = false;
+	mSystemGridHeldX = mSystemGridHeldY = 0;
 
 	if (mMostPlayedVideo)
 	{
@@ -892,6 +897,37 @@ inline void playSystemScrollSound(SystemData* sys,
 
 	if (snd)
 		snd->play();
+}
+
+
+bool SystemView::moveSystemGrid(int dx, int dy)
+{
+    if (mEntries.empty() || (dx == 0 && dy == 0))
+        return false;
+
+    const int columns = std::max(1, mSystemGridColumns);
+    const int currentRow = mCursor / columns;
+    const int currentColumn = mCursor % columns;
+    const int targetColumn = currentColumn + dx;
+    const int targetRow = currentRow + dy;
+    if (targetColumn < 0 || targetColumn >= columns || targetRow < 0)
+        return false;
+
+    int next = targetRow * columns + targetColumn;
+    if (next >= size()) {
+        // In an incomplete final row, select the nearest existing column.
+        if (dy > 0 && targetRow * columns < size())
+            next = size() - 1;
+        else
+            return false;
+    }
+    if (next == mCursor)
+        return false;
+
+    mCursor = next;  // One cursor for the grid, extras, launch and collections.
+    onCursorChanged(CURSOR_STOPPED);
+    playSystemScrollSound(getSelected(), mScrollSnd);
+    return true;
 }
 
 // ─────────────────────────────────────────────
@@ -936,11 +972,12 @@ bool SystemView::input(InputConfig* config, Input input)
 			return true;
 		}
 
+		const bool gridMode = mCarousel.displayMode == "grid";
 		const bool carouselIsVertical = (mCarousel.type == VERTICAL || mCarousel.type == VERTICAL_WHEEL);
 
 		if (!mInfoFocus)
 		{
-			if (selectedHasInfo())
+			if (selectedHasInfo() && !gridMode)
 			{
 				if (!carouselIsVertical && config->isMappedLike("down", input))
 				{
@@ -1001,9 +1038,34 @@ bool SystemView::input(InputConfig* config, Input input)
 			return true;
 		}
 
+        if (gridMode)
+        {
+            if (selectedHasInfo() && config->isMappedTo("y", input))
+            {
+                mSystemGridHeldX = mSystemGridHeldY = 0;
+                setInfoFocus(true);
+                return true;
+            }
+            int dx = 0, dy = 0;
+            if (config->isMappedLike("left", input)) dx = -1;
+            else if (config->isMappedLike("right", input)) dx = 1;
+            else if (config->isMappedLike("up", input)) dy = -1;
+            else if (config->isMappedLike("down", input)) dy = 1;
+            if (dx != 0 || dy != 0)
+            {
+                if (mSystemGridHeldX != dx || mSystemGridHeldY != dy)
+                    moveSystemGrid(dx, dy);
+                mSystemGridHeldX = dx;
+                mSystemGridHeldY = dy;
+                mSystemGridRepeatElapsed = 0;
+                mSystemGridFirstRepeat = true;
+                return true;
+            }
+        }
+
 		bool moved = false;
 
-		switch(mCarousel.type)
+		if (!gridMode) switch(mCarousel.type)
 		{
 		case VERTICAL:
 		case VERTICAL_WHEEL:
@@ -1091,7 +1153,12 @@ bool SystemView::input(InputConfig* config, Input input)
 	}
 	else
 	{
-		if(config->isMappedLike("left", input) ||
+        if (mCarousel.displayMode == "grid")
+        {
+            mSystemGridHeldX = mSystemGridHeldY = 0;
+            mSystemGridRepeatElapsed = 0;
+        }
+		else if(config->isMappedLike("left", input) ||
 		   config->isMappedLike("right", input) ||
 		   config->isMappedLike("up", input) ||
 		   config->isMappedLike("down", input))
@@ -1116,6 +1183,24 @@ void SystemView::update(int deltaTime)
 {
 	listUpdate(deltaTime);
 	GuiComponent::update(deltaTime);
+
+    if (mShowing && mCarousel.displayMode == "grid")
+    {
+        for (auto& tile : mSystemGridTiles)
+            tile->update(deltaTime);
+
+        if (mSystemGridHeldX != 0 || mSystemGridHeldY != 0)
+        {
+            mSystemGridRepeatElapsed += deltaTime;
+            const int threshold = mSystemGridFirstRepeat ? 350 : 145;
+            if (mSystemGridRepeatElapsed >= threshold)
+            {
+                mSystemGridRepeatElapsed %= threshold;
+                mSystemGridFirstRepeat = false;
+                moveSystemGrid(mSystemGridHeldX, mSystemGridHeldY);
+            }
+        }
+    }
 
 	if (mMostPlayedVideo)
 		mMostPlayedVideo->update(deltaTime);
@@ -1187,6 +1272,14 @@ void SystemView::update(int deltaTime)
 
 void SystemView::onCursorChanged(const CursorState& /*state*/)
 {
+    if (mCarousel.displayMode == "grid" && !mEntries.empty())
+    {
+        const int row = mCursor / std::max(1, mSystemGridColumns);
+        if (row < mSystemGridFirstRow)
+            mSystemGridFirstRow = row;
+        else if (row >= mSystemGridFirstRow + mSystemGridRows)
+            mSystemGridFirstRow = row - mSystemGridRows + 1;
+    }
 	updateHelpPrompts();
 
 	// El nuevo sistema seleccionado comienza el pulso desde reposo.
@@ -1448,11 +1541,14 @@ std::vector<HelpPrompt> SystemView::getHelpPrompts()
 
 	std::vector<HelpPrompt> prompts;
 
+	const bool gridMode = (mCarousel.displayMode == "grid");
 	const bool carouselIsVertical = (mCarousel.type == VERTICAL || mCarousel.type == VERTICAL_WHEEL);
 
 	if (!mInfoFocus)
 	{
-		if (carouselIsVertical)
+		if (gridMode)
+			prompts.push_back(HelpPrompt("up/down/left/right", loc.translate("CHOOSE")));
+		else if (carouselIsVertical)
 			prompts.push_back(HelpPrompt("up/down", loc.translate("CHOOSE")));
 		else
 			prompts.push_back(HelpPrompt("left/right", loc.translate("CHOOSE")));
@@ -1462,7 +1558,9 @@ std::vector<HelpPrompt> SystemView::getHelpPrompts()
 
 		if (selectedHasInfo())
 		{
-			if (carouselIsVertical)
+			if (gridMode)
+				prompts.push_back(HelpPrompt("y", "INFO"));
+			else if (carouselIsVertical)
 				prompts.push_back(HelpPrompt("right", "INFO"));
 			else
 				prompts.push_back(HelpPrompt("down", "INFO"));
@@ -1520,6 +1618,12 @@ void SystemView::getViewElements(const std::shared_ptr<ThemeData>& theme)
 	if(carouselElem)
 		getCarouselFromTheme(carouselElem);
 
+    // A system imagegrid is opt-in. It takes precedence over the legacy
+    // carousel only for themes that declare it in their system view.
+    const ThemeData::ThemeElement* gridElem = theme->getElement("system", "imagegrid", "imagegrid");
+    if (gridElem)
+        readSystemGridTheme(gridElem);
+
 	const ThemeData::ThemeElement* sysInfoElem = theme->getElement("system", "systemInfo", "text");
 	if(sysInfoElem)
 		mSystemInfo.applyTheme(theme, "system", "systemInfo", ThemeFlags::ALL);
@@ -1543,6 +1647,187 @@ void SystemView::getViewElements(const std::shared_ptr<ThemeData>& theme)
 	mViewNeedsReload = false;
 }
 
+
+
+// System grid uses only the existing theme parser's <imagegrid> and <gridtile>.
+// It deliberately does not instantiate ImageGridComponent<SystemData*>:
+// that game's implementation calls FileData::getType() for fallback images.
+void SystemView::readSystemGridTheme(const ThemeData::ThemeElement* elem)
+{
+    if (!elem)
+        return;
+
+    const Vector2f screen((float)Renderer::getScreenWidth(),
+                          (float)Renderer::getScreenHeight());
+    mCarousel.displayMode = "grid";
+    mCarousel.color = mCarousel.colorEnd = 0xFFFFFF00;
+    mCarousel.origin = Vector2f::Zero();
+    mCarousel.pos = Vector2f(0.075f * screen.x(), 0.06f * screen.y());
+    mCarousel.size = Vector2f(0.85f * screen.x(), 0.635f * screen.y());
+
+    if (elem->has("pos"))
+        mCarousel.pos = elem->get<Vector2f>("pos") * screen;
+    if (elem->has("size"))
+        mCarousel.size = elem->get<Vector2f>("size") * screen;
+    if (elem->has("margin"))
+        mSystemGridMargin = elem->get<Vector2f>("margin") * screen;
+    if (elem->has("padding"))
+        mSystemGridPadding = elem->get<Vector4f>("padding") *
+            Vector4f(screen.x(), screen.y(), screen.x(), screen.y());
+    if (elem->has("autoLayout"))
+    {
+        const Vector2f grid = elem->get<Vector2f>("autoLayout");
+        mSystemGridColumns = std::max(1, std::min(8, (int)grid.x()));
+        mSystemGridRows = std::max(1, std::min(6, (int)grid.y()));
+    }
+    if (elem->has("autoLayoutSelectedZoom"))
+        mSystemGridSelectedZoom = std::max(1.0f, std::min(1.25f,
+            elem->get<float>("autoLayoutSelectedZoom")));
+    if (elem->has("zIndex"))
+        mCarousel.zIndex = elem->get<float>("zIndex");
+}
+
+void SystemView::rebuildSystemGrid()
+{
+    mSystemGridTiles.clear();
+    mSystemGridLabels.clear();
+    mSystemGridBoundIndices.clear();
+    mSystemGridHeldX = mSystemGridHeldY = 0;
+    mSystemGridRepeatElapsed = 0;
+    mSystemGridFirstRepeat = true;
+    mSystemGridFirstRow = 0;
+
+    if (mCarousel.displayMode != "grid" || mEntries.empty())
+        return;
+
+    const int cols = std::max(1, mSystemGridColumns);
+    const int rows = std::max(1, mSystemGridRows);
+    const float cellW = (mCarousel.size.x() - mSystemGridPadding.x() -
+        mSystemGridPadding.z() - (cols - 1) * mSystemGridMargin.x()) / cols;
+    const float cellH = (mCarousel.size.y() - mSystemGridPadding.y() -
+        mSystemGridPadding.w() - (rows - 1) * mSystemGridMargin.y()) / rows;
+    if (cellW <= 2.0f || cellH <= 2.0f)
+        return;
+
+    auto theme = mEntries.at(mCursor).object->getTheme();
+    const int visible = cols * rows;
+    mSystemGridTiles.reserve(visible);
+    mSystemGridLabels.reserve(visible);
+    mSystemGridBoundIndices.assign(visible, -1);
+
+    for (int i = 0; i < visible; ++i)
+    {
+        auto tile = std::make_shared<GridTileComponent>(mWindow);
+        tile->applyTheme(theme, "system", "gridtile", ThemeFlags::ALL);
+        tile->setOrigin(0.5f, 0.5f);
+        tile->forceSize(Vector2f(cellW, cellH), mSystemGridSelectedZoom);
+        tile->setSelected(false, false, nullptr, true);
+        mSystemGridTiles.push_back(tile);
+
+        auto label = std::make_shared<TextComponent>(
+            mWindow, "", Font::get(FONT_SIZE_SMALL), 0x333333FF, ALIGN_CENTER);
+        label->applyTheme(theme, "system", "logoText",
+            ThemeFlags::FONT_PATH | ThemeFlags::FONT_SIZE |
+            ThemeFlags::COLOR | ThemeFlags::FORCE_UPPERCASE);
+        label->setHorizontalAlignment(ALIGN_CENTER);
+        label->setVerticalAlignment(ALIGN_CENTER);
+        label->setOrigin(0.5f, 0.5f);
+        label->setSize(cellW * 0.82f, cellH * 0.55f);
+        mSystemGridLabels.push_back(label);
+    }
+
+    const int row = mCursor / cols;
+    mSystemGridFirstRow = std::max(0, row - rows + 1);
+}
+
+void SystemView::renderSystemGrid(const Transform4x4f& trans)
+{
+    if (mEntries.empty() || mSystemGridTiles.empty())
+        return;
+
+    const int cols = std::max(1, mSystemGridColumns);
+    const int rows = std::max(1, mSystemGridRows);
+    const float cellW = (mCarousel.size.x() - mSystemGridPadding.x() -
+        mSystemGridPadding.z() - (cols - 1) * mSystemGridMargin.x()) / cols;
+    const float cellH = (mCarousel.size.y() - mSystemGridPadding.y() -
+        mSystemGridPadding.w() - (rows - 1) * mSystemGridMargin.y()) / rows;
+    if (cellW <= 2.0f || cellH <= 2.0f)
+        return;
+
+    Transform4x4f gridTrans = trans;
+    gridTrans.translate(Vector3f(mCarousel.pos.x(), mCarousel.pos.y(), 0.0f));
+    Renderer::pushClipRect(
+        Vector2i((int)gridTrans.translation().x(), (int)gridTrans.translation().y()),
+        Vector2i((int)mCarousel.size.x(), (int)mCarousel.size.y()));
+
+    int selectedSlot = -1;
+    for (size_t slot = 0; slot < mSystemGridTiles.size(); ++slot)
+    {
+        const int localRow = (int)slot / cols;
+        const int localColumn = (int)slot % cols;
+        const int idx = (mSystemGridFirstRow + localRow) * cols + localColumn;
+        auto& tile = mSystemGridTiles[slot];
+        auto& label = mSystemGridLabels[slot];
+        if (idx >= size())
+        {
+            tile->setVisible(false);
+            label->setVisible(false);
+            mSystemGridBoundIndices[slot] = -1;
+            continue;
+        }
+
+        SystemData* system = mEntries.at(idx).object;
+        if (mSystemGridBoundIndices[slot] != idx)
+        {
+            const auto& theme = system->getTheme();
+            const auto* logo = theme->getElement("system", "logo", "image");
+            std::string path, fallback;
+            if (logo)
+            {
+                if (logo->has("path"))
+                    path = logo->get<std::string>("path");
+                if (logo->has("default"))
+                    fallback = logo->get<std::string>("default");
+            }
+
+            const bool hasLogo = !path.empty() &&
+                ResourceManager::getInstance()->fileExists(path);
+            const bool hasFallback = !fallback.empty() &&
+                ResourceManager::getInstance()->fileExists(fallback);
+            tile->setImage(hasLogo ? path : (hasFallback ? fallback : ""));
+            label->setText(system->getFullName());
+            label->setVisible(!hasLogo);
+            mSystemGridBoundIndices[slot] = idx;
+        }
+
+        const float x = mSystemGridPadding.x() + cellW * 0.5f +
+            localColumn * (cellW + mSystemGridMargin.x());
+        const float y = mSystemGridPadding.y() + cellH * 0.5f +
+            localRow * (cellH + mSystemGridMargin.y());
+        tile->setPosition(x, y);
+        label->setPosition(x, y);
+        tile->setVisible(true);
+        const bool selected = (idx == mCursor);
+        tile->setSelected(selected, true);
+        if (selected)
+            selectedSlot = (int)slot;
+        else
+        {
+            tile->render(gridTrans);
+            if (label->isVisible())
+                label->render(gridTrans);
+        }
+    }
+
+    // Selected tile last, so the slight zoom stays in front of its neighbours.
+    if (selectedSlot >= 0)
+    {
+        mSystemGridTiles[selectedSlot]->render(gridTrans);
+        if (mSystemGridLabels[selectedSlot]->isVisible())
+            mSystemGridLabels[selectedSlot]->render(gridTrans);
+    }
+    Renderer::popClipRect();
+}
 
 // ES-X: modo textlist para SystemView.
 // Reutiliza mEntries, mCursor, listInput(), sonidos, colecciones y transiciones
@@ -1755,6 +2040,11 @@ void SystemView::renderTextList(const Transform4x4f& trans)
 
 void SystemView::renderCarousel(const Transform4x4f& trans)
 {
+	if(mCarousel.displayMode == "grid")
+	{
+		renderSystemGrid(trans);
+		return;
+	}
 	if(mCarousel.displayMode == "textlist")
 	{
 		renderTextList(trans);
@@ -2253,6 +2543,12 @@ void SystemView::getDefaultElements(void)
 
 	// ES-X: modo textlist para SystemView.
 	mCarousel.displayMode = "image";
+
+    mSystemGridColumns = 4;
+    mSystemGridRows = 3;
+    mSystemGridMargin = Vector2f::Zero();
+    mSystemGridPadding = Vector4f::Zero();
+    mSystemGridSelectedZoom = 1.05f;
 	mCarousel.textFont = Font::get(FONT_SIZE_MEDIUM);
 	mCarousel.textPrimaryColor = 0xFFFFFFFF;
 	mCarousel.textSecondaryColor = 0xFFFFFFFF;
