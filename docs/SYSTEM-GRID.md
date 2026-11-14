@@ -59,3 +59,25 @@ The grid uses each system's existing `<image name="logo">` image and `default` f
 - [ ] Adapt BatWiiCera's layout/assets and check its CC BY-NC-SA 4.0 credits.
 
 This branch has not been compiled or tested on an end-user device yet. Do not merge to main before validating the checklist.
+
+## BatWiiCera adapter notes
+
+BatWiiCera's upstream `theme.xml` lives at the theme root, but ES-X currently loads
+`<ThemeSet>/<system.theme>/theme.xml`. An adapted theme must provide a system
+folder for each active system (including collections), while shared assets can
+remain at the theme root and be referenced using `../_inc/...`.
+
+ES-X resolves each `${variable}` only once, so a nested path variable such as
+`${logoPath}` whose value itself contains `${system.theme}` should be inlined:
+
+```xml
+<image name="logo">
+    <path>../_inc/systems/logos/${system.theme}.svg</path>
+    <default>../_inc/systems/logos/${system.theme}.png</default>
+</image>
+```
+
+The uploaded BatWiiCera source is v0.1.6; the original art and licensing must
+be kept (CC BY-NC-SA 4.0). The prototype does not implement Batocera `subset`
+menus, pointer overlays or online channels; these are theme portability limits,
+not prerequisites for native system Grid.
