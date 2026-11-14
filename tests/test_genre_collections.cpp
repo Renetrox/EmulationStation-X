@@ -24,6 +24,11 @@ int main()
 
     // Metadata from multilingual scrapers and hierarchical subgenres.
     assert(matches("Acción / Aventura", "genre-action"));
+    assert(matches("Ação", "genre-action"));
+    assert(matches("AÇÃO", "genre-action"));
+    assert(matches("Simulação", "genre-simulation"));
+    assert(matches("SIMULAÇÃO", "genre-simulation"));
+    assert(GenreCollections::normalize("ã Ã õ Õ") == "a a o o");
     assert(matches("Acción / Aventura", "genre-adventure"));
     assert(matches("Action / Platform", "genre-platform"));
     assert(matches("Carreras, Conducción", "genre-racing"));
