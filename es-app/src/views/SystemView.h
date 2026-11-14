@@ -17,6 +17,7 @@ class AnimatedImageComponent;
 class SystemData;
 class TextCache;
 class VideoComponent;
+class GridTileComponent;
 
 enum CarouselType : unsigned int
 {
@@ -127,6 +128,10 @@ private:
 
 	void renderCarousel(const Transform4x4f& parentTrans);
 	void renderTextList(const Transform4x4f& parentTrans);
+	void renderSystemGrid(const Transform4x4f& parentTrans);
+	void rebuildSystemGrid();
+	void readSystemGridTheme(const ThemeData::ThemeElement* elem);
+	bool moveSystemGrid(int dx, int dy);
 	void renderExtras(const Transform4x4f& parentTrans, float lower, float upper);
 	void renderInfoBar(const Transform4x4f& trans);
 	void renderFade(const Transform4x4f& trans);
@@ -137,6 +142,22 @@ private:
 
 	SystemViewCarousel mCarousel;
 	TextComponent mSystemInfo;
+
+	// ES-X: optional system selection grid. Reuses the existing IList cursor,
+	// sounds, transitions, system extras and collections.
+	int mSystemGridColumns = 4;
+	int mSystemGridRows = 3;
+	int mSystemGridFirstRow = 0;
+	Vector2f mSystemGridMargin = Vector2f::Zero();
+	Vector4f mSystemGridPadding = Vector4f::Zero();
+	float mSystemGridSelectedZoom = 1.05f;
+	int mSystemGridHeldX = 0;
+	int mSystemGridHeldY = 0;
+	int mSystemGridRepeatElapsed = 0;
+	bool mSystemGridFirstRepeat = true;
+	std::vector<std::shared_ptr<GridTileComponent>> mSystemGridTiles;
+	std::vector<std::shared_ptr<TextComponent>> mSystemGridLabels;
+	std::vector<int> mSystemGridBoundIndices;
 
 	// ES-X: selector de imagen y numeración para SystemView textlist.
 	ImageComponent mTextListSelectorImage;
