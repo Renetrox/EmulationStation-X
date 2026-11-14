@@ -1771,6 +1771,59 @@ void SystemView::rebuildSystemGrid()
     mSystemGridFirstRow = std::max(0, row - rows + 1);
 }
 
+// Select a localized system logo when the theme ships one, without requiring
+// language-specific XML copies. Example: auto-favorites-es.svg takes
+// precedence over auto-favorites.svg for Spanish UI. PNG is also supported.
+// This affects only the opt-in system grid, not legacy carousels.
+static std::string resolveSystemGridLogo(const std::string& primary,
+                                         const std::string& fallback)
+{
+    auto exists = [](const std::string& candidate) -> bool
+    {
+        return !candidate.empty() &&
+            ResourceManager::getInstance()->fileExists(candidate);
+    };
+    auto localized = [](const std::string& original,
+                        const std::string& language) -> std::string
+    {
+        if (original.empty() || language.empty())
+            return "";
+        const size_t dot = original.find_last_of('.');
+        const size_t slash = original.find_last_of("/\\");
+        if (dot == std::string::npos ||
+            (slash != std::string::npos && dot <= slash))
+            return "";
+        return original.substr(0, dot) + "-" + language + original.substr(dot);
+    };
+
+    std::string language = Settings::getInstance()->getString("Language");
+    std::replace(language.begin(), language.end(), '-', '_');
+    const size_t regionSeparator = language.find('_');
+    const std::string baseLanguage = language.substr(0, regionSeparator);
+
+    auto tryLanguage = [&](const std::string& code) -> std::string
+    {
+        if (code.empty())
+            return "";
+        const std::string primaryLocalized = localized(primary, code);
+        if (exists(primaryLocalized))
+            return primaryLocalized;
+        const std::string fallbackLocalized = localized(fallback, code);
+        if (exists(fallbackLocalized))
+            return fallbackLocalized;
+        return "";
+    };
+
+    std::string imagePath = tryLanguage(language);
+    if (imagePath.empty() && baseLanguage != language)
+        imagePath = tryLanguage(baseLanguage);
+    if (imagePath.empty() && exists(primary))
+        imagePath = primary;
+    if (imagePath.empty() && exists(fallback))
+        imagePath = fallback;
+    return imagePath;
+}
+
 void SystemView::renderSystemGrid(const Transform4x4f& trans)
 {
     if (mEntries.empty() || mSystemGridTiles.empty())
@@ -1821,13 +1874,18 @@ void SystemView::renderSystemGrid(const Transform4x4f& trans)
                     fallback = logo->get<std::string>("default");
             }
 
-            const bool hasLogo = !path.empty() &&
-                ResourceManager::getInstance()->fileExists(path);
-            const bool hasFallback = !fallback.empty() &&
-                ResourceManager::getInstance()->fileExists(fallback);
-            tile->setImage(hasLogo ? path : (hasFallback ? fallback : ""));
+            const std::string resolvedLogo = resolveSystemGridLogo(path, fallback);
+            tile->setImage(resolvedLogo);
             label->setText(system->getFullName());
-            label->setVisible(!hasLogo && !hasFallback);
+
+            // Respect <text name="gridtile"><visible>false</visible></text>.
+            // BatWiiCera asks for logo-only channel tiles, but the grid was
+            // previously creating its own fallback label above their artwork.
+            const auto* gridLabel = theme->getElement("system", "gridtile", "text");
+            const bool themeAllowsFallbackText =
+                !gridLabel || !gridLabel->has("visible") ||
+                gridLabel->get<bool>("visible");
+            label->setVisible(resolvedLogo.empty() && themeAllowsFallbackText);
             mSystemGridBoundIndices[slot] = idx;
         }
 
