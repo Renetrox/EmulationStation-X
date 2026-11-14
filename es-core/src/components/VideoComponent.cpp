@@ -208,9 +208,19 @@ void VideoComponent::applyTheme(const std::shared_ptr<ThemeData>& theme, const s
 	mVideoCornerRadius = 0.0f;
 	mStaticImage.setCornerRadius(0.0f);
 
+	// Clear the previous theme's snapshot fallback before applying this one.
+	// The image remains managed by VideoComponent: it is NOT a static extra.
+	mStaticImage.setDefaultImage("");
+
 	const ThemeData::ThemeElement* elem = theme->getElement(view, element, "video");
 	if(!elem)
 		return;
+
+	if (elem->has("defaultSnapshot"))
+		mStaticImage.setDefaultImage(elem->get<std::string>("defaultSnapshot"));
+	// Rebind even if the path is unchanged: an empty thumbnail must now
+	// resolve the new fallback (or clear the old theme's fallback).
+	mStaticImage.setImage(mStaticImagePath);
 
 	// As with imageCornerRadius in ES-X, radii use a fraction of screen
 	// width. A snapshot can have a different radius than the active video.

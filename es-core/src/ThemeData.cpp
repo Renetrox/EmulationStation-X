@@ -308,6 +308,7 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "rotation", FLOAT },
 		{ "rotationOrigin", NORMALIZED_PAIR },
 		{ "default", PATH },
+		{ "defaultSnapshot", PATH }, // fallback image for video thumbnail (opt-in)
 		{ "delay", FLOAT },
 		{ "visible", BOOLEAN },
 		{ "zIndex", FLOAT },
