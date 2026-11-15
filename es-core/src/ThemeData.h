@@ -227,6 +227,8 @@ private:
 
 	std::string resolvePlaceholders(const char* in);
 	std::map<std::string, std::string> mVariables;
+	// Explicit theme.ini selections override defaults in nested XML includes.
+	std::map<std::string, std::string> mIniOverrides;
 };
 
 #endif // ES_CORE_THEME_DATA_H
