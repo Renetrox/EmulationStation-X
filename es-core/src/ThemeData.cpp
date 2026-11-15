@@ -816,6 +816,7 @@ void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const st
 	mResolution = { 1, 1 };
 	mViews.clear();
 	mVariables.clear();
+	mIniOverrides.clear();
 
 	// 1) variables del sistema (sysDataMap)
 	mVariables.insert(sysDataMap.cbegin(), sysDataMap.cend());
@@ -857,7 +858,9 @@ void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const st
 	parseVariables(root);
 
 	// 3) theme.ini antes de includes (clave para Ruckage/ArtBook)
-	loadExternalThemeVariables(path, mVariables);
+	loadExternalThemeVariables(path, mIniOverrides);
+	for (const auto& overrideEntry : mIniOverrides)
+		mVariables[overrideEntry.first] = overrideEntry.second;
 
 	// 4) language vars del XML principal
 	parseLanguageVariables(root);
@@ -923,7 +926,13 @@ void ThemeData::parseVariables(const pugi::xml_node& root)
 		std::string val = resolvePlaceholders(it->text().as_string());
 
 		if (!key.empty() && !val.empty())
-			mVariables[key] = val; // pisa siempre
+		{
+			// Keep theme.ini selections when a per-system theme includes the
+			// root theme.xml, which otherwise restores the root defaults.
+			if (mPaths.size() > 1 && mIniOverrides.find(key) != mIniOverrides.end())
+				continue;
+			mVariables[key] = val;
+		}
 	}
 }
 
