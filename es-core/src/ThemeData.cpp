@@ -859,7 +859,8 @@ void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const st
 
 	// 3) theme.ini antes de includes (clave para Ruckage/ArtBook)
 	loadExternalThemeVariables(path, mIniOverrides);
-	mVariables.insert(mIniOverrides.begin(), mIniOverrides.end());
+	for (const auto& overrideEntry : mIniOverrides)
+		mVariables[overrideEntry.first] = overrideEntry.second;
 
 	// 4) language vars del XML principal
 	parseLanguageVariables(root);
