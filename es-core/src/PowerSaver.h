@@ -27,8 +27,10 @@ public:
 
 	// Paired calls when you want to pause PS briefly till you finish animating
 	// or processing over cycles
-	static void pause() { setState(false); }
-	static void resume() { setState(true); }
+	static void pause();
+	static void resume();
+	// Temporarily allow sleeping only while navigation is idle.
+	static void lock(bool idle);
 
 	// This is used by ScreenSaver to let PS know when to switch to SS timeouts
 	static void runningScreenSaver(bool state);
@@ -36,6 +38,7 @@ public:
 
 private:
 	static bool mState;
+	static int mPauseCounter;
 	static bool mRunningScreenSaver;
 
 	static mode mMode;
