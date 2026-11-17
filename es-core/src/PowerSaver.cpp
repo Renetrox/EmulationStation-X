@@ -4,6 +4,7 @@
 #include "Settings.h"
 
 bool PowerSaver::mState = false;
+int PowerSaver::mPauseCounter = 0;
 bool PowerSaver::mRunningScreenSaver = false;
 
 int PowerSaver::mWakeupTimeout = -1;
@@ -73,7 +74,7 @@ bool PowerSaver::getState()
 void PowerSaver::setState(bool state)
 {
 	bool ps_enabled = Settings::getInstance()->getString("PowerSaverMode") != "disabled";
-	mState = ps_enabled && state;
+	mState = ps_enabled && state && mPauseCounter == 0;
 }
 
 void PowerSaver::runningScreenSaver(bool state)
@@ -89,4 +90,23 @@ void PowerSaver::runningScreenSaver(bool state)
 bool PowerSaver::isScreenSaverActive()
 {
 	return mRunningScreenSaver;
+}
+
+void PowerSaver::pause()
+{
+	++mPauseCounter;
+	setState(false);
+}
+
+void PowerSaver::resume()
+{
+	if (mPauseCounter > 0)
+		--mPauseCounter;
+	if (mPauseCounter == 0)
+		setState(true);
+}
+
+void PowerSaver::lock(bool idle)
+{
+	setState(idle);
 }
