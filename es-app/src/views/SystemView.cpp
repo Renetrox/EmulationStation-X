@@ -14,6 +14,7 @@
 #include "LocaleES.h"
 #include "Sound.h"
 #include "NavigationSounds.h"
+#include "PowerSaver.h"
 
 #include "components/ImageComponent.h"
 #include "components/GridTileComponent.h"
@@ -876,6 +877,8 @@ void SystemView::onShow()
 void SystemView::onHide()
 {
 	mShowing = false;
+	if (mSystemGridHeldX != 0 || mSystemGridHeldY != 0)
+		PowerSaver::setState(true);
 	mSystemGridHeldX = mSystemGridHeldY = 0;
 
 	if (mMostPlayedVideo)
@@ -1061,6 +1064,8 @@ bool SystemView::input(InputConfig* config, Input input)
         {
             if (selectedHasInfo() && config->isMappedTo("y", input))
             {
+                if (mSystemGridHeldX != 0 || mSystemGridHeldY != 0)
+                    PowerSaver::setState(true);
                 mSystemGridHeldX = mSystemGridHeldY = 0;
                 setInfoFocus(true);
                 return true;
@@ -1080,6 +1085,7 @@ bool SystemView::input(InputConfig* config, Input input)
                 }
                 mSystemGridHeldX = dx;
                 mSystemGridHeldY = dy;
+                PowerSaver::setState(false);
                 return true;
             }
         }
@@ -1187,6 +1193,7 @@ bool SystemView::input(InputConfig* config, Input input)
             {
                 mSystemGridHeldX = mSystemGridHeldY = 0;
                 mSystemGridRepeatElapsed = 0;
+                PowerSaver::setState(true);
             }
         }
 		else if(config->isMappedLike("left", input) ||
