@@ -108,6 +108,10 @@ void GuiGamelistFilter::applyFilters()
 		mFilterIndex->setFilter(it->first, &filters);
 	}
 
+	// Random game/video caches are built from the currently filtered gamelist.
+	// Rebuild them after changing filters so system previews cannot use stale videos.
+	mSystem->setShuffledCacheDirty();
+
 	delete this;
 }
 
