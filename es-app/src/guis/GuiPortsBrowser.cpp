@@ -3,6 +3,7 @@
 #include "guis/CompactBrowserStyle.h"
 #include "TaskGlyphs.h"
 #include "ESXDecorationCatalog.h"
+#include "components/ImageComponent.h"
 
 #include "Log.h"
 #include "Window.h"
@@ -124,7 +125,7 @@ GuiPortsBrowser::GuiPortsBrowser(Window* window)
     , mList(window)
     , mTabs(window, trPorts("FREE GAMES"), trPorts("PORTS"), trPorts("DECORATION SET"))
     , mHeader(window, trPorts("X-TRAS"), Font::get(FONT_SIZE_MEDIUM), 0xF3F3F3FF, ALIGN_CENTER)
-    , mSubHeader(window, trPorts("PORTS AND FREE GAMES"),
+    , mSubHeader(window, trPorts("PORTS, FREE GAMES AND DECORATIONS"),
                  CompactBrowserStyle::titleFont(), 0xAAB0B8FF, ALIGN_CENTER)
     , mFooter(window, "", CompactBrowserStyle::detailFont(), 0xB3B6BAFF, ALIGN_CENTER)
     , mLastSelectedIndex(0)
@@ -481,6 +482,8 @@ bool GuiPortsBrowser::loadPorts()
         entry.id = item.first;
         entry.description = item.first;
         std::replace(entry.description.begin(), entry.description.end(), '_', ' ');
+        bool upper = true;
+        for (char& c : entry.description) { if (upper) c=static_cast<char>(std::toupper(static_cast<unsigned char>(c))); upper=c==' '; }
         entry.isDecoration = true;
         entry.section = "decorations";
         entry.installed = RetroPieDecorations::compatible(entry.id, "");
@@ -844,6 +847,64 @@ void GuiPortsBrowser::selectTab(int tab)
     rebuildList();
 }
 
+static std::string decorationCache(const std::string& name)
+{
+    return Utils::FileSystem::getHomePath() + "/.emulationstation/esx/decoration-previews/c230214-" + name + ".png";
+}
+
+static std::string decorationPreview(const std::string& name)
+{
+    const auto folder = RetroPieDecorations::root() + "/" + name;
+    for (const auto& stem : {folder + "/default", folder + "/systems/gba"})
+        if (RetroPieDecorations::pair(stem)) return stem + ".png";
+    const auto cache = decorationCache(name);
+    return Utils::FileSystem::isRegularFile(cache) ? cache : "";
+}
+
+void GuiPortsBrowser::updateDecorationPreviews()
+{
+    if (mActiveTab != 2 || mInBackground || mJobRunning) {
+        mDecorationPreviewRequest.reset();
+        return;
+    }
+    if (mDecorationPreviewRequest) {
+        const auto status = mDecorationPreviewRequest->status();
+        if (status == HttpReq::REQ_IN_PROGRESS) return;
+        bool ok = false;
+        if (status == HttpReq::REQ_SUCCESS) {
+            const auto data = mDecorationPreviewRequest->getContent();
+            const auto path = decorationCache(mDecorationPreviewId);
+            if (data.size() >= 8 && data.size() <= 16*1024*1024 &&
+                data.compare(0,8,"\x89PNG\r\n\x1a\n",8) == 0) {
+                Utils::FileSystem::createDirectory(Utils::FileSystem::getParent(path));
+                std::ofstream out(path+".tmp",std::ios::binary|std::ios::trunc);
+                out.write(data.data(),data.size());
+                out.close();
+                if (out) ok = std::rename((path+".tmp").c_str(),path.c_str()) == 0;
+                if (!ok) std::remove((path+".tmp").c_str());
+            }
+        }
+        if (!ok) mDecorationPreviewFailed.insert(mDecorationPreviewId);
+        mDecorationPreviewRequest.reset();
+        if (ok) rebuildList();
+    }
+    auto selected = std::find(mVisiblePortIndices.begin(),mVisiblePortIndices.end(),mLastSelectedIndex);
+    if (selected == mVisiblePortIndices.end()) return;
+    const int center = std::distance(mVisiblePortIndices.begin(),selected);
+    for (int offset=0;offset<=5;++offset) {
+        for (int sign : {1,-1}) {
+            const int i=center+sign*offset;
+            if (i<0 || i>=static_cast<int>(mVisiblePortIndices.size())) continue;
+            const auto& name=mPorts[mVisiblePortIndices[i]].id;
+            if (!decorationPreview(name).empty() || mDecorationPreviewFailed.count(name)) continue;
+            mDecorationPreviewId=name;
+            const std::string file=(name=="default" || name=="default_glazed") ? "systems/gba.png" : "default.png";
+            mDecorationPreviewRequest.reset(new HttpReq("https://raw.githubusercontent.com/kaylh/RetroArch-Bezels/c230214c8d93f2b907c8f2eb808e8cfe60f35df0/"+name+"/"+file));
+            return;
+        }
+    }
+}
+
 void GuiPortsBrowser::rebuildList()
 {
     mList.clear();
@@ -904,7 +965,7 @@ void GuiPortsBrowser::rebuildList()
         const PortEntry& port = mPorts[i];
         if (port.tab() != mActiveTab)
             continue;
-        const std::string section = sectionName(port.section);
+        const std::string section = port.isDecoration ? trPorts("DECORATION SET") : sectionName(port.section);
 
         if (section != previousSection)
         {
@@ -956,6 +1017,14 @@ void GuiPortsBrowser::rebuildList()
         ComponentListRow row;
         auto item = CompactBrowserStyle::makeRow(
             mWindow, title, meta, port.installed, false, port.available == 0);
+        if (port.isDecoration) {
+            const float height = item->getSize().y();
+            const auto preview = decorationPreview(port.id);
+            auto image = std::make_shared<ImageComponent>(mWindow);
+            image->setResize(height*1.78f,height);
+            if (!preview.empty()) image->setImage(preview);
+            row.addElement(image,false,false);
+        }
         row.addElement(item, true);
 
         row.makeAcceptInputHandler([this, i]()
@@ -1632,6 +1701,7 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
 void GuiPortsBrowser::update(int deltaTime)
 {
     finishCompatibilityCheck();
+    updateDecorationPreviews();
     if (!mInBackground)
         refreshLanguage();
 
