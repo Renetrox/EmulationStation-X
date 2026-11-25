@@ -28,6 +28,7 @@ private:
 	struct OptionListData
 	{
 		std::string name;
+		std::string preview;
 		T object;
 		bool selected;
 	};
@@ -53,6 +54,14 @@ private:
 			for(auto it = mParent->mEntries.begin(); it != mParent->mEntries.end(); it++)
 			{
 				row.elements.clear();
+				if (!it->preview.empty())
+				{
+					auto preview = std::make_shared<ImageComponent>(mWindow);
+					const float height = font->getHeight() * 1.8f;
+					preview->setMaxSize(height * 1.78f, height);
+					preview->setImage(it->preview);
+					row.addElement(preview, false, false);
+				}
 				row.addElement(std::make_shared<TextComponent>(mWindow, Utils::String::toUpper(it->name), font, 0x777777FF), true);
 
 				OptionListData& e = *it;
@@ -307,10 +316,11 @@ public:
 		return selected.at(0);
 	}
 
-	void add(const std::string& name, const T& obj, bool selected)
+	void add(const std::string& name, const T& obj, bool selected, const std::string& preview = "")
 	{
 		OptionListData e;
 		e.name = name;
+		e.preview = preview;
 		e.object = obj;
 		e.selected = selected;
 
