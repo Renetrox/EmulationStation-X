@@ -718,8 +718,8 @@ void FileData::launchGame(Window* window)
 	{
 		const auto pack = RetroPieDecorations::selected(system, source->getPath());
 		if (!pack.empty())
-			command = "env TARAVE_DECORATION=" + RetroPieDecorations::shellQuote(pack) +
-				" TARAVE_DECORATION_ROOT=" + RetroPieDecorations::shellQuote(RetroPieDecorations::root()) +
+			command = "env ESX_DECORATION=" + RetroPieDecorations::shellQuote(pack) +
+				" ESX_DECORATION_ROOT=" + RetroPieDecorations::shellQuote(RetroPieDecorations::root()) +
 				" " + command;
 	}
 	Scripting::fireEvent("game-start", rom, basename, name);
