@@ -8,6 +8,8 @@
 #include "guis/CompactBrowserTabs.h"
 #include "HttpReq.h"
 #include <set>
+#include <map>
+#include "components/ImageComponent.h"
 
 #include <string>
 #include <vector>
@@ -65,6 +67,9 @@ private:
     std::unique_ptr<HttpReq> mDecorationPreviewRequest;
     std::string mDecorationPreviewId;
     std::set<std::string> mDecorationPreviewFailed;
+    std::map<std::string, std::shared_ptr<ImageComponent>> mDecorationImages;
+    std::set<std::string> mDecorationImagesLoaded;
+    std::map<int,int> mCatalogRows;
     void refreshLanguage(); // handles the GUI restored after an ES-X language change
 
     bool findRetroPieSetup();
