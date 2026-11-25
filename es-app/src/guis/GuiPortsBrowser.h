@@ -44,6 +44,8 @@ private:
 
         // X-TRAS: free games share the browser with RetroPie ports.
         bool isGame = false;
+        bool isDecoration = false;
+        int tab() const { return isDecoration ? 2 : isGame ? 0 : 1; }
         std::string system;
         std::string url;
         std::string filename;
@@ -115,6 +117,7 @@ private:
     int mActiveTab;  // 0 = free games; 1 = ports
     bool mHasGames;
     bool mHasPorts;
+    bool mHasDecorations = false;
 
     float mInnerX;
     float mInnerY;
