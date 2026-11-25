@@ -4,6 +4,7 @@
 #include "guis/GuiSettings.h"
 #include "guis/GuiMsgBox.h"
 #include "RetroPieRuncommand.h"
+#include "RetroPieDecorations.h"
 #include "scrapers/Scraper.h"
 #include "views/gamelist/IGameListView.h"
 #include "views/UIModeController.h"
@@ -411,6 +412,7 @@ void GuiGamelistOptions::openGameEmulatorSettings()
 
 	GuiSettings* settings = new GuiSettings(mWindow, es_translate("GAME EMULATOR").c_str());
 	settings->addWithLabel(es_translate("EMULATOR"), choice);
+	RetroPieDecorations::addSelector(mWindow, settings, RetroPieDecorations::gameKey(systemName, romPath), systemName);
 	Window* window = mWindow;
 	settings->addSaveFunc([window, systemName, romPath, original, choice]
 	{
