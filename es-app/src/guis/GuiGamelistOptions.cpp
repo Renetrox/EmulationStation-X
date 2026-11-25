@@ -4,7 +4,7 @@
 #include "guis/GuiSettings.h"
 #include "guis/GuiMsgBox.h"
 #include "RetroPieRuncommand.h"
-#include "RetroPieDecorations.h"
+#include "RetroPieDecorationSelector.h"
 #include "scrapers/Scraper.h"
 #include "views/gamelist/IGameListView.h"
 #include "views/UIModeController.h"
