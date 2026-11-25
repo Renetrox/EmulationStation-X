@@ -62,6 +62,7 @@ public:
 
 	bool moveCursor(int amt);
 	inline int getCursorId() const { return mCursor; }
+	void setCursorIndex(int index) { if (index >= 0 && index < size() && index != mCursor) { mCursor = index; onCursorChanged(CURSOR_STOPPED); } }
 
 	float getTotalRowHeight() const;
 	inline float getRowHeight(int row) const { return getRowHeight(mEntries.at(row).data); }
