@@ -2,6 +2,7 @@
 #include "guis/GuiPortsBrowser.h"
 #include "guis/CompactBrowserStyle.h"
 #include "TaskGlyphs.h"
+#include "ESXDecorationCatalog.h"
 
 #include "Log.h"
 #include "Window.h"
@@ -121,7 +122,7 @@ GuiPortsBrowser::GuiPortsBrowser(Window* window)
     : GuiComponent(window)
     , mFrame(window)
     , mList(window)
-    , mTabs(window, trPorts("FREE GAMES"), trPorts("PORTS"))
+    , mTabs(window, trPorts("FREE GAMES"), trPorts("PORTS"), trPorts("DECORATION SET"))
     , mHeader(window, trPorts("X-TRAS"), Font::get(FONT_SIZE_MEDIUM), 0xF3F3F3FF, ALIGN_CENTER)
     , mSubHeader(window, trPorts("PORTS AND FREE GAMES"),
                  CompactBrowserStyle::titleFont(), 0xAAB0B8FF, ALIGN_CENTER)
@@ -475,6 +476,17 @@ bool GuiPortsBrowser::loadPorts()
 
     // X-TRAS: append the lightweight free-games catalog.
     loadFreeGames();
+    for (const auto& item : ESXDecorationCatalog::catalog()) {
+        PortEntry entry;
+        entry.id = item.first;
+        entry.description = item.first;
+        std::replace(entry.description.begin(), entry.description.end(), '_', ' ');
+        entry.isDecoration = true;
+        entry.section = "decorations";
+        entry.installed = RetroPieDecorations::compatible(entry.id, "");
+        entry.available = 1;
+        mPorts.push_back(entry);
+    }
 
     std::sort(mPorts.begin(), mPorts.end(),
         [this](const PortEntry& a, const PortEntry& b)
@@ -609,7 +621,7 @@ void GuiPortsBrowser::finishCompatibilityCheck()
     mCompatibilityDone = false;
     for (auto& port : mPorts)
     {
-        if (port.isGame) continue;
+        if (port.isGame || port.isDecoration) continue;
         for (const auto& result : mCompatibilityResults)
             if (port.id == result.first) { port.available = result.second; break; }
     }
@@ -822,7 +834,7 @@ bool GuiPortsBrowser::removeGame(const PortEntry& game)
 void GuiPortsBrowser::selectTab(int tab)
 {
     if (tab == mActiveTab || (tab == 0 && !mHasGames) ||
-        (tab == 1 && !mHasPorts))
+        (tab == 1 && !mHasPorts) || (tab == 2 && !mHasDecorations) || tab < 0 || tab > 2)
         return;
 
     mActiveTab = tab;
@@ -839,21 +851,23 @@ void GuiPortsBrowser::rebuildList()
 
     mHasGames = false;
     mHasPorts = false;
+    mHasDecorations = false;
     for (const auto& entry : mPorts)
     {
-        if (entry.isGame) mHasGames = true;
+        if (entry.isDecoration) mHasDecorations = true;
+        else if (entry.isGame) mHasGames = true;
         else mHasPorts = true;
     }
 
     // Do not display an empty tab when only one catalog is available.
-    if (mActiveTab == 0 && !mHasGames) mActiveTab = 1;
-    if (mActiveTab == 1 && !mHasPorts) mActiveTab = 0;
-    mTabs.setAvailable(mHasGames, mHasPorts);
+    if ((mActiveTab == 0 && !mHasGames) || (mActiveTab == 1 && !mHasPorts) || (mActiveTab == 2 && !mHasDecorations))
+        mActiveTab = mHasGames ? 0 : mHasPorts ? 1 : 2;
+    mTabs.setAvailable(mHasGames, mHasPorts, mHasDecorations);
     mTabs.setActive(mActiveTab);
 
     for (int i = 0; i < (int)mPorts.size(); ++i)
     {
-        if (mPorts[i].isGame == (mActiveTab == 0))
+        if (mPorts[i].tab() == mActiveTab)
             mVisiblePortIndices.push_back(i);
     }
 
@@ -888,7 +902,7 @@ void GuiPortsBrowser::rebuildList()
     for (int i = 0; i < (int)mPorts.size(); ++i)
     {
         const PortEntry& port = mPorts[i];
-        if (port.isGame != (mActiveTab == 0))
+        if (port.tab() != mActiveTab)
             continue;
         const std::string section = sectionName(port.section);
 
@@ -916,7 +930,8 @@ void GuiPortsBrowser::rebuildList()
         title = ellipsizePorts(title, 78);
 
         std::string meta;
-        if (port.isGame)
+        if (port.isDecoration) meta = "kaylh / RetroArch-Bezels";
+        else if (port.isGame)
         {
             if (!port.author.empty())
                 meta = std::string(u8"\uf007  ") + port.author;
@@ -934,7 +949,7 @@ void GuiPortsBrowser::rebuildList()
                 meta += std::string(u8"    \uf07b  ") + section;
         }
 
-        if (!port.isGame && port.available != 1)
+        if (!port.isGame && !port.isDecoration && port.available != 1)
             meta += " · " + trPorts(port.available == 0 ?
                 "UNAVAILABLE FOR THIS SYSTEM" : "COMPATIBILITY UNVERIFIED");
 
@@ -967,7 +982,7 @@ void GuiPortsBrowser::refreshLanguage()
         return;
 
     mLoadedLanguage = language;
-    mTabs.setLabels(trPorts("FREE GAMES"), trPorts("PORTS"));
+    mTabs.setLabels(trPorts("FREE GAMES"), trPorts("PORTS"), trPorts("DECORATION SET"));
     mHeader.setText(trPorts("X-TRAS"));
     mSubHeader.setText(trPorts("PORTS AND FREE GAMES"));
     // Section headings, buttons and status strings also use the current
@@ -1429,12 +1444,12 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
     // install, update, delete, and asynchronous jobs.
     if (config->isMappedLike("left", input))
     {
-        selectTab(0);
+        for (int i=1;i<=3;++i) { int tab=(mActiveTab+3-i)%3; if ((tab==0&&mHasGames)||(tab==1&&mHasPorts)||(tab==2&&mHasDecorations)) { selectTab(tab); break; } }
         return true;
     }
     if (config->isMappedLike("right", input))
     {
-        selectTab(1);
+        for (int i=1;i<=3;++i) { int tab=(mActiveTab+i)%3; if ((tab==0&&mHasGames)||(tab==1&&mHasPorts)||(tab==2&&mHasDecorations)) { selectTab(tab); break; } }
         return true;
     }
 
@@ -1469,6 +1484,20 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
     {
         const PortEntry current = mPorts[mLastSelectedIndex];
 
+        if (current.isDecoration) {
+            if (current.installed) {
+                showPopup(trPorts("INSTALLED"),2200);
+                return true;
+            }
+            mWindow->pushGui(new GuiMsgBox(mWindow,
+                current.description + "\n" + trPorts("DECORATION LICENSE WARNING"),
+                "YES", [this,current] {
+                    startJob(trPorts("INSTALL")+" "+current.description,
+                        [current]{return ESXDecorationCatalog::change(current.id,false);},
+                        trPorts("INSTALLED"),trPorts("GAME DOWNLOAD FAILED."),true,true,current.description,TaskGlyphs::DOWNLOAD);
+                }, "NO", nullptr));
+            return true;
+        }
         if (current.isGame)
         {
             startJob(
@@ -1522,6 +1551,19 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
     {
         const PortEntry current = mPorts[mLastSelectedIndex];
 
+        if (current.isDecoration) {
+            if (!current.installed || !ESXDecorationCatalog::managed(current.id)) {
+                showPopup(trPorts("DECORATION LOCAL PROTECTED"),3000);
+                return true;
+            }
+            mWindow->pushGui(new GuiMsgBox(mWindow,trPorts("REMOVE")+" "+current.description+"?",
+                "YES",[this,current] {
+                    startJob(trPorts("REMOVE")+" "+current.description,
+                        [current]{return ESXDecorationCatalog::change(current.id,true);},
+                        trPorts("GAME REMOVED."),trPorts("REMOVE FAILED."),true);
+                },"NO",nullptr));
+            return true;
+        }
         if (!current.installed)
         {
             showPopup(
@@ -1652,7 +1694,7 @@ std::vector<HelpPrompt> GuiPortsBrowser::getHelpPrompts()
     if (!mJobRunning)
     {
         prompts.push_back(HelpPrompt("up/down", trPorts("MOVE")));
-        if (mHasGames && mHasPorts)
+        if ((int)mHasGames + (int)mHasPorts + (int)mHasDecorations > 1)
             prompts.push_back(HelpPrompt("left/right", trPorts("CHANGE TAB")));
 
         if (!mPorts.empty())
