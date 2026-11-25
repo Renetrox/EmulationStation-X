@@ -9,7 +9,7 @@ import sys
 import tempfile
 
 def log(message):
-    print("Tarave decorations: " + message, file=sys.stderr)
+    print("ES-X decorations: " + message, file=sys.stderr)
 
 def setting(path, key):
     match = re.search(r'(?m)^\s*' + re.escape(key) + r'\s*=\s*"?([^"\r\n]*)', path.read_text())
@@ -55,8 +55,8 @@ def decoration_pair(folder, system):
     return generic if all(p.is_file() for p in generic) else None
 
 def apply(system, emulator, rom, command, path=Path("/dev/shm/retroarch.cfg")):
-    pack = os.environ.get("TARAVE_DECORATION", "")
-    root = os.environ.get("TARAVE_DECORATION_ROOT", "")
+    pack = os.environ.get("ESX_DECORATION", os.environ.get("TARAVE_DECORATION", ""))
+    root = os.environ.get("ESX_DECORATION_ROOT", os.environ.get("TARAVE_DECORATION_ROOT", ""))
     if not pack or pack in ("auto", "none") or not root or not emulator.startswith("lr-"):
         return
     if not re.fullmatch(r"[A-Za-z0-9_-]+", system) or not re.fullmatch(r"[A-Za-z0-9_. -]+", pack) or pack in (".", ".."):
