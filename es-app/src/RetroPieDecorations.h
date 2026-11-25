@@ -2,9 +2,6 @@
 #include "RetroPieRuncommand.h"
 #include "Settings.h"
 #include "utils/FileSystemUtil.h"
-#include "components/OptionListComponent.h"
-#include "guis/GuiSettings.h"
-#include "LocaleES.h"
 
 namespace RetroPieDecorations {
 inline std::string root() {
@@ -53,26 +50,5 @@ inline std::string shellQuote(const std::string& value) {
     std::string result = "'";
     for (char c : value) result += c == '\'' ? "'\\''" : std::string(1,c);
     return result + "'";
-}
-inline void addSelector(Window* window, GuiSettings* gui, const std::string& key, const std::string& system = "") {
-    const auto stored = Settings::getInstance()->getString(key);
-    auto options = std::make_shared<OptionListComponent<std::string>>(window, es_translate("DECORATION SET"), false);
-    options->add(es_translate("AUTO"), "", stored.empty() || stored == "auto");
-    options->add(es_translate("NONE"), "none", stored == "none");
-    bool found = stored.empty() || stored == "auto" || stored == "none";
-    for (const auto& path : Utils::FileSystem::getDirContent(root())) {
-        const auto name = Utils::FileSystem::getFileName(path);
-        if (!compatible(name,system)) continue;
-        options->add(name,name,stored == name);
-        if (stored == name) found = true;
-    }
-    if (!found) options->add(es_translate("UNAVAILABLE (CURRENT)") + ": " + stored,stored,true);
-    gui->addWithLabel(es_translate("DECORATION SET"),options);
-    gui->addSaveFunc([key,options,stored] {
-        if (options->getSelected() != stored) {
-            Settings::getInstance()->setString(key,options->getSelected());
-            Settings::getInstance()->saveFile();
-        }
-    });
 }
 }
