@@ -901,6 +901,7 @@ void GuiPortsBrowser::updateDecorationPreviews()
                 auto image = mDecorationImages.find(name);
                 if (image != mDecorationImages.end() && !mDecorationImagesLoaded.count(name)) {
                     image->second->setImage(path);
+                    if (image->second->getParent()) image->second->getParent()->onSizeChanged();
                     mDecorationImagesLoaded.insert(name);
                     return; // at most one new texture per frame
                 }
@@ -1033,9 +1034,14 @@ void GuiPortsBrowser::rebuildList()
         if (port.isDecoration) {
             const float height = item->getSize().y();
             auto image = std::make_shared<ImageComponent>(mWindow);
-            image->setResize(height*1.78f,height);
+            const float previewHeight = height - 8.0f;
+            const float previewWidth = previewHeight * 1.78f;
+            image->setResize(previewWidth,previewHeight);
+            // Set a stable size before the texture exists, so ComponentGrid
+            // centers the thumbnail using its final dimensions.
+            image->setSize(previewWidth,previewHeight);
             auto slot = std::make_shared<ComponentGrid>(mWindow, Vector2i(1,1));
-            slot->setSize(Vector2f(height*1.78f+8.0f,height));
+            slot->setSize(Vector2f(previewWidth+24.0f,height));
             slot->setEntry(image,Vector2i(0,0),false,false);
             mDecorationImages[port.id] = image;
             row.addElement(slot,false,false);
