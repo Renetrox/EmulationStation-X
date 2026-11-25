@@ -6,6 +6,8 @@
 #include "components/TextComponent.h"
 #include "components/NinePatchComponent.h"
 #include "guis/CompactBrowserTabs.h"
+#include "HttpReq.h"
+#include <set>
 
 #include <string>
 #include <vector>
@@ -59,6 +61,10 @@ private:
     void rebuildList();
     void selectTab(int tab);
     void updateFooter();
+    void updateDecorationPreviews();
+    std::unique_ptr<HttpReq> mDecorationPreviewRequest;
+    std::string mDecorationPreviewId;
+    std::set<std::string> mDecorationPreviewFailed;
     void refreshLanguage(); // handles the GUI restored after an ES-X language change
 
     bool findRetroPieSetup();
