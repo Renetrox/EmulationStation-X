@@ -1584,12 +1584,13 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
                 return true;
             }
             mWindow->pushGui(new GuiMsgBox(mWindow,
-                current.description + "\n" + trPorts("DECORATION LICENSE WARNING"),
-                "YES", [this,current] {
+                current.description + "\n\n" + trPorts("DECORATION INSTALL QUESTION") + "\n\n" +
+                    trPorts("DECORATION SOURCE") + "\n" + trPorts("DECORATION LICENSE WARNING"),
+                trPorts("INSTALL"), [this,current] {
                     startJob(trPorts("INSTALL")+" "+current.description,
                         [current]{return ESXDecorationCatalog::change(current.id,false);},
                         trPorts("DECORATION INSTALLED"),trPorts("DECORATION DOWNLOAD FAILED"),true,true,current.description,TaskGlyphs::DOWNLOAD);
-                }, "NO", nullptr));
+                }, trPorts("CANCEL"), nullptr));
             return true;
         }
         if (current.isGame)
