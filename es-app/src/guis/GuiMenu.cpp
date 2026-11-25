@@ -21,7 +21,7 @@
 #include "Scripting.h"
 #include "SystemData.h"
 #include "RetroPieRuncommand.h"
-#include "RetroPieDecorations.h"
+#include "RetroPieDecorationSelector.h"
 #include "VolumeControl.h"
 #include <SDL_events.h>
 #include <algorithm>
