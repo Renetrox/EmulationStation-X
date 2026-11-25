@@ -1092,10 +1092,10 @@ void GuiPortsBrowser::updateFooter()
     const PortEntry& port = mPorts[mLastSelectedIndex];
 
     std::string footer = "A ";
-    footer += port.available == 0 ? trPorts("DETAILS") :
+    footer += (port.isDecoration && port.installed) ? trPorts("DETAILS") : port.available == 0 ? trPorts("DETAILS") :
         (port.installed ? trPorts("UPDATE") : trPorts("INSTALL"));
 
-    if (port.installed)
+    if (port.installed && (!port.isDecoration || ESXDecorationCatalog::managed(port.id)))
         footer += "    X " + trPorts("REMOVE");
 
     if (!mJobRunning)
@@ -1580,7 +1580,7 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
 
         if (current.isDecoration) {
             if (current.installed) {
-                showPopup(trPorts("INSTALLED"),2200);
+                showPopup(trPorts("DECORATION INSTALLED"),2200);
                 return true;
             }
             mWindow->pushGui(new GuiMsgBox(mWindow,
@@ -1588,7 +1588,7 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
                 "YES", [this,current] {
                     startJob(trPorts("INSTALL")+" "+current.description,
                         [current]{return ESXDecorationCatalog::change(current.id,false);},
-                        trPorts("INSTALLED"),trPorts("GAME DOWNLOAD FAILED."),true,true,current.description,TaskGlyphs::DOWNLOAD);
+                        trPorts("DECORATION INSTALLED"),trPorts("DECORATION DOWNLOAD FAILED"),true,true,current.description,TaskGlyphs::DOWNLOAD);
                 }, "NO", nullptr));
             return true;
         }
@@ -1654,7 +1654,7 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
                 "YES",[this,current] {
                     startJob(trPorts("REMOVE")+" "+current.description,
                         [current]{return ESXDecorationCatalog::change(current.id,true);},
-                        trPorts("GAME REMOVED."),trPorts("REMOVE FAILED."),true);
+                        trPorts("DECORATION REMOVED"),trPorts("REMOVE FAILED."),true);
                 },"NO",nullptr));
             return true;
         }
@@ -1798,7 +1798,7 @@ std::vector<HelpPrompt> GuiPortsBrowser::getHelpPrompts()
             prompts.push_back(
                 HelpPrompt("a", mPorts[mLastSelectedIndex].available == 0 ? trPorts("DETAILS") :
                     (installed ? trPorts("UPDATE") : trPorts("INSTALL"))));
-            if (installed)
+            if (installed && (!mPorts[mLastSelectedIndex].isDecoration || ESXDecorationCatalog::managed(mPorts[mLastSelectedIndex].id)))
                 prompts.push_back(HelpPrompt("x", trPorts("REMOVE")));
             prompts.push_back(HelpPrompt("y", trPorts("REFRESH")));
         }
