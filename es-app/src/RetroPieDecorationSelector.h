@@ -11,6 +11,17 @@
 #include "LocaleES.h"
 
 namespace RetroPieDecorations {
+inline std::string previewFor(const std::string& name, const std::string& system) {
+    const auto folder = root() + "/" + name;
+    if (!system.empty() && pair(folder + "/systems/" + system))
+        return folder + "/systems/" + system + ".png";
+    if (pair(folder + "/default")) return folder + "/default.png";
+    if (pair(folder + "/systems/gba")) return folder + "/systems/gba.png";
+    for (const auto& file : Utils::FileSystem::getDirContent(folder + "/systems"))
+        if (file.size() > 4 && file.substr(file.size()-4) == ".png" &&
+            pair(file.substr(0,file.size()-4))) return file;
+    return "";
+}
 inline void addSelector(Window* window, GuiSettings* gui, const std::string& key, const std::string& system = "") {
     const auto stored = Settings::getInstance()->getString(key);
     auto options = std::make_shared<OptionListComponent<std::string>>(window, es_translate("DECORATION SET"), false);
@@ -20,7 +31,9 @@ inline void addSelector(Window* window, GuiSettings* gui, const std::string& key
     for (const auto& path : Utils::FileSystem::getDirContent(root())) {
         const auto name = Utils::FileSystem::getFileName(path);
         if (!compatible(name,system)) continue;
-        options->add(name,name,stored == name);
+        auto label = name;
+        std::replace(label.begin(), label.end(), '_', ' ');
+        options->add(label,name,stored == name,previewFor(name,system));
         if (stored == name) found = true;
     }
     if (!found) options->add(es_translate("UNAVAILABLE (CURRENT)") + ": " + stored,stored,true);
