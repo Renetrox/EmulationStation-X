@@ -886,7 +886,7 @@ void GuiPortsBrowser::updateDecorationPreviews()
         }
         if (!ok) mDecorationPreviewFailed.insert(mDecorationPreviewId);
         mDecorationPreviewRequest.reset();
-        if (ok) rebuildList();
+        // The next update binds the cached image to its existing row.
     }
     auto selected = std::find(mVisiblePortIndices.begin(),mVisiblePortIndices.end(),mLastSelectedIndex);
     if (selected == mVisiblePortIndices.end()) return;
@@ -896,7 +896,17 @@ void GuiPortsBrowser::updateDecorationPreviews()
             const int i=center+sign*offset;
             if (i<0 || i>=static_cast<int>(mVisiblePortIndices.size())) continue;
             const auto& name=mPorts[mVisiblePortIndices[i]].id;
-            if (!decorationPreview(name).empty() || mDecorationPreviewFailed.count(name)) continue;
+            const auto path = decorationPreview(name);
+            if (!path.empty()) {
+                auto image = mDecorationImages.find(name);
+                if (image != mDecorationImages.end() && !mDecorationImagesLoaded.count(name)) {
+                    image->second->setImage(path);
+                    mDecorationImagesLoaded.insert(name);
+                    return; // at most one new texture per frame
+                }
+                continue;
+            }
+            if (mDecorationPreviewFailed.count(name)) continue;
             mDecorationPreviewId=name;
             const std::string file=(name=="default" || name=="default_glazed") ? "systems/gba.png" : "default.png";
             mDecorationPreviewRequest.reset(new HttpReq("https://raw.githubusercontent.com/kaylh/RetroArch-Bezels/c230214c8d93f2b907c8f2eb808e8cfe60f35df0/"+name+"/"+file));
@@ -908,6 +918,9 @@ void GuiPortsBrowser::updateDecorationPreviews()
 void GuiPortsBrowser::rebuildList()
 {
     mList.clear();
+    mDecorationImages.clear();
+    mDecorationImagesLoaded.clear();
+    mCatalogRows.clear();
     mVisiblePortIndices.clear();
 
     mHasGames = false;
@@ -1019,11 +1032,13 @@ void GuiPortsBrowser::rebuildList()
             mWindow, title, meta, port.installed, false, port.available == 0);
         if (port.isDecoration) {
             const float height = item->getSize().y();
-            const auto preview = decorationPreview(port.id);
             auto image = std::make_shared<ImageComponent>(mWindow);
             image->setResize(height*1.78f,height);
-            if (!preview.empty()) image->setImage(preview);
-            row.addElement(image,false,false);
+            auto slot = std::make_shared<ComponentGrid>(mWindow, Vector2i(1,1));
+            slot->setSize(Vector2f(height*1.78f+8.0f,height));
+            slot->setEntry(image,Vector2i(0,0),false,false);
+            mDecorationImages[port.id] = image;
+            row.addElement(slot,false,false);
         }
         row.addElement(item, true);
 
@@ -1034,6 +1049,7 @@ void GuiPortsBrowser::rebuildList()
             updateHelpPrompts();
         });
 
+        mCatalogRows[i] = mList.size();
         mList.addRow(row, (i == mLastSelectedIndex));
     }
 
@@ -1536,7 +1552,10 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
         const int step = config->isMappedLike("up", input) ? -1 : 1;
         position = (position + step + count) % count;
         mLastSelectedIndex = mVisiblePortIndices[position];
-        rebuildList();
+        const auto row = mCatalogRows.find(mLastSelectedIndex);
+        if (row != mCatalogRows.end()) mList.setCursorIndex(row->second);
+        updateFooter();
+        updateHelpPrompts();
         return true;
     }
 
