@@ -1,4 +1,5 @@
 #include "FileData.h"
+#include "RetroPieDecorations.h"
 
 #include "utils/FileSystemUtil.h"
 #include "utils/StringUtil.h"
@@ -708,6 +709,19 @@ void FileData::launchGame(Window* window)
 	command = Utils::String::replace(command, "%BASENAME%", basename);
 	command = Utils::String::replace(command, "%ROM_RAW%", rom_raw);
 
+	// Preserve the configured launcher; only ordinary RetroPie games opt in.
+	FileData* source = getSourceFileData();
+	const auto system = source->getSystem()->getName();
+	if (RetroPieRuncommand::handlesSystem(system) &&
+		command.find("runcommand.sh") != std::string::npos &&
+		command.find("_SYS_") != std::string::npos)
+	{
+		const auto pack = RetroPieDecorations::selected(system, source->getPath());
+		if (!pack.empty())
+			command = "env ESX_DECORATION=" + RetroPieDecorations::shellQuote(pack) +
+				" ESX_DECORATION_ROOT=" + RetroPieDecorations::shellQuote(RetroPieDecorations::root()) +
+				" " + command;
+	}
 	Scripting::fireEvent("game-start", rom, basename, name);
 
 	LOG(LogInfo) << "\t" << command;

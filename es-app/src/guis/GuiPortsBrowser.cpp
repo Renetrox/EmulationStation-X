@@ -2,6 +2,8 @@
 #include "guis/GuiPortsBrowser.h"
 #include "guis/CompactBrowserStyle.h"
 #include "TaskGlyphs.h"
+#include "ESXDecorationCatalog.h"
+#include "components/ImageComponent.h"
 
 #include "Log.h"
 #include "Window.h"
@@ -121,9 +123,9 @@ GuiPortsBrowser::GuiPortsBrowser(Window* window)
     : GuiComponent(window)
     , mFrame(window)
     , mList(window)
-    , mTabs(window, trPorts("FREE GAMES"), trPorts("PORTS"))
+    , mTabs(window, trPorts("FREE GAMES"), trPorts("PORTS"), trPorts("DECORATION SET"))
     , mHeader(window, trPorts("X-TRAS"), Font::get(FONT_SIZE_MEDIUM), 0xF3F3F3FF, ALIGN_CENTER)
-    , mSubHeader(window, trPorts("PORTS AND FREE GAMES"),
+    , mSubHeader(window, trPorts("PORTS, FREE GAMES AND DECORATIONS"),
                  CompactBrowserStyle::titleFont(), 0xAAB0B8FF, ALIGN_CENTER)
     , mFooter(window, "", CompactBrowserStyle::detailFont(), 0xB3B6BAFF, ALIGN_CENTER)
     , mLastSelectedIndex(0)
@@ -475,6 +477,19 @@ bool GuiPortsBrowser::loadPorts()
 
     // X-TRAS: append the lightweight free-games catalog.
     loadFreeGames();
+    for (const auto& item : ESXDecorationCatalog::catalog()) {
+        PortEntry entry;
+        entry.id = item.first;
+        entry.description = item.first;
+        std::replace(entry.description.begin(), entry.description.end(), '_', ' ');
+        bool upper = true;
+        for (char& c : entry.description) { if (upper) c=static_cast<char>(std::toupper(static_cast<unsigned char>(c))); upper=c==' '; }
+        entry.isDecoration = true;
+        entry.section = "decorations";
+        entry.installed = RetroPieDecorations::compatible(entry.id, "");
+        entry.available = 1;
+        mPorts.push_back(entry);
+    }
 
     std::sort(mPorts.begin(), mPorts.end(),
         [this](const PortEntry& a, const PortEntry& b)
@@ -609,7 +624,7 @@ void GuiPortsBrowser::finishCompatibilityCheck()
     mCompatibilityDone = false;
     for (auto& port : mPorts)
     {
-        if (port.isGame) continue;
+        if (port.isGame || port.isDecoration) continue;
         for (const auto& result : mCompatibilityResults)
             if (port.id == result.first) { port.available = result.second; break; }
     }
@@ -822,7 +837,7 @@ bool GuiPortsBrowser::removeGame(const PortEntry& game)
 void GuiPortsBrowser::selectTab(int tab)
 {
     if (tab == mActiveTab || (tab == 0 && !mHasGames) ||
-        (tab == 1 && !mHasPorts))
+        (tab == 1 && !mHasPorts) || (tab == 2 && !mHasDecorations) || tab < 0 || tab > 2)
         return;
 
     mActiveTab = tab;
@@ -832,28 +847,102 @@ void GuiPortsBrowser::selectTab(int tab)
     rebuildList();
 }
 
+static std::string decorationCache(const std::string& name)
+{
+    return Utils::FileSystem::getHomePath() + "/.emulationstation/esx/decoration-previews/c230214-" + name + ".png";
+}
+
+static std::string decorationPreview(const std::string& name)
+{
+    const auto folder = RetroPieDecorations::root() + "/" + name;
+    for (const auto& stem : {folder + "/default", folder + "/systems/gba"})
+        if (RetroPieDecorations::pair(stem)) return stem + ".png";
+    const auto cache = decorationCache(name);
+    return Utils::FileSystem::isRegularFile(cache) ? cache : "";
+}
+
+void GuiPortsBrowser::updateDecorationPreviews()
+{
+    if (mActiveTab != 2 || mInBackground || mJobRunning) {
+        mDecorationPreviewRequest.reset();
+        return;
+    }
+    if (mDecorationPreviewRequest) {
+        const auto status = mDecorationPreviewRequest->status();
+        if (status == HttpReq::REQ_IN_PROGRESS) return;
+        bool ok = false;
+        if (status == HttpReq::REQ_SUCCESS) {
+            const auto data = mDecorationPreviewRequest->getContent();
+            const auto path = decorationCache(mDecorationPreviewId);
+            if (data.size() >= 8 && data.size() <= 16*1024*1024 &&
+                data.compare(0,8,"\x89PNG\r\n\x1a\n",8) == 0) {
+                Utils::FileSystem::createDirectory(Utils::FileSystem::getParent(path));
+                std::ofstream out(path+".tmp",std::ios::binary|std::ios::trunc);
+                out.write(data.data(),data.size());
+                out.close();
+                if (out) ok = std::rename((path+".tmp").c_str(),path.c_str()) == 0;
+                if (!ok) std::remove((path+".tmp").c_str());
+            }
+        }
+        if (!ok) mDecorationPreviewFailed.insert(mDecorationPreviewId);
+        mDecorationPreviewRequest.reset();
+        // The next update binds the cached image to its existing row.
+    }
+    auto selected = std::find(mVisiblePortIndices.begin(),mVisiblePortIndices.end(),mLastSelectedIndex);
+    if (selected == mVisiblePortIndices.end()) return;
+    const int center = std::distance(mVisiblePortIndices.begin(),selected);
+    for (int offset=0;offset<=5;++offset) {
+        for (int sign : {1,-1}) {
+            const int i=center+sign*offset;
+            if (i<0 || i>=static_cast<int>(mVisiblePortIndices.size())) continue;
+            const auto& name=mPorts[mVisiblePortIndices[i]].id;
+            const auto path = decorationPreview(name);
+            if (!path.empty()) {
+                auto image = mDecorationImages.find(name);
+                if (image != mDecorationImages.end() && !mDecorationImagesLoaded.count(name)) {
+                    image->second->setImage(path);
+                    if (image->second->getParent()) image->second->getParent()->onSizeChanged();
+                    mDecorationImagesLoaded.insert(name);
+                    return; // at most one new texture per frame
+                }
+                continue;
+            }
+            if (mDecorationPreviewFailed.count(name)) continue;
+            mDecorationPreviewId=name;
+            const std::string file=(name=="default" || name=="default_glazed") ? "systems/gba.png" : "default.png";
+            mDecorationPreviewRequest.reset(new HttpReq("https://raw.githubusercontent.com/kaylh/RetroArch-Bezels/c230214c8d93f2b907c8f2eb808e8cfe60f35df0/"+name+"/"+file));
+            return;
+        }
+    }
+}
+
 void GuiPortsBrowser::rebuildList()
 {
     mList.clear();
+    mDecorationImages.clear();
+    mDecorationImagesLoaded.clear();
+    mCatalogRows.clear();
     mVisiblePortIndices.clear();
 
     mHasGames = false;
     mHasPorts = false;
+    mHasDecorations = false;
     for (const auto& entry : mPorts)
     {
-        if (entry.isGame) mHasGames = true;
+        if (entry.isDecoration) mHasDecorations = true;
+        else if (entry.isGame) mHasGames = true;
         else mHasPorts = true;
     }
 
     // Do not display an empty tab when only one catalog is available.
-    if (mActiveTab == 0 && !mHasGames) mActiveTab = 1;
-    if (mActiveTab == 1 && !mHasPorts) mActiveTab = 0;
-    mTabs.setAvailable(mHasGames, mHasPorts);
+    if ((mActiveTab == 0 && !mHasGames) || (mActiveTab == 1 && !mHasPorts) || (mActiveTab == 2 && !mHasDecorations))
+        mActiveTab = mHasGames ? 0 : mHasPorts ? 1 : 2;
+    mTabs.setAvailable(mHasGames, mHasPorts, mHasDecorations);
     mTabs.setActive(mActiveTab);
 
     for (int i = 0; i < (int)mPorts.size(); ++i)
     {
-        if (mPorts[i].isGame == (mActiveTab == 0))
+        if (mPorts[i].tab() == mActiveTab)
             mVisiblePortIndices.push_back(i);
     }
 
@@ -888,9 +977,9 @@ void GuiPortsBrowser::rebuildList()
     for (int i = 0; i < (int)mPorts.size(); ++i)
     {
         const PortEntry& port = mPorts[i];
-        if (port.isGame != (mActiveTab == 0))
+        if (port.tab() != mActiveTab)
             continue;
-        const std::string section = sectionName(port.section);
+        const std::string section = port.isDecoration ? trPorts("DECORATION SET") : sectionName(port.section);
 
         if (section != previousSection)
         {
@@ -916,7 +1005,8 @@ void GuiPortsBrowser::rebuildList()
         title = ellipsizePorts(title, 78);
 
         std::string meta;
-        if (port.isGame)
+        if (port.isDecoration) meta = "kaylh / RetroArch-Bezels";
+        else if (port.isGame)
         {
             if (!port.author.empty())
                 meta = std::string(u8"\uf007  ") + port.author;
@@ -934,13 +1024,28 @@ void GuiPortsBrowser::rebuildList()
                 meta += std::string(u8"    \uf07b  ") + section;
         }
 
-        if (!port.isGame && port.available != 1)
+        if (!port.isGame && !port.isDecoration && port.available != 1)
             meta += " · " + trPorts(port.available == 0 ?
                 "UNAVAILABLE FOR THIS SYSTEM" : "COMPATIBILITY UNVERIFIED");
 
         ComponentListRow row;
         auto item = CompactBrowserStyle::makeRow(
             mWindow, title, meta, port.installed, false, port.available == 0);
+        if (port.isDecoration) {
+            const float height = item->getSize().y();
+            auto image = std::make_shared<ImageComponent>(mWindow);
+            const float previewHeight = height - 8.0f;
+            const float previewWidth = previewHeight * 1.78f;
+            image->setResize(previewWidth,previewHeight);
+            // Set a stable size before the texture exists, so ComponentGrid
+            // centers the thumbnail using its final dimensions.
+            image->setSize(previewWidth,previewHeight);
+            auto slot = std::make_shared<ComponentGrid>(mWindow, Vector2i(1,1));
+            slot->setSize(Vector2f(previewWidth+24.0f,height));
+            slot->setEntry(image,Vector2i(0,0),false,false);
+            mDecorationImages[port.id] = image;
+            row.addElement(slot,false,false);
+        }
         row.addElement(item, true);
 
         row.makeAcceptInputHandler([this, i]()
@@ -950,6 +1055,7 @@ void GuiPortsBrowser::rebuildList()
             updateHelpPrompts();
         });
 
+        mCatalogRows[i] = mList.size();
         mList.addRow(row, (i == mLastSelectedIndex));
     }
 
@@ -967,7 +1073,7 @@ void GuiPortsBrowser::refreshLanguage()
         return;
 
     mLoadedLanguage = language;
-    mTabs.setLabels(trPorts("FREE GAMES"), trPorts("PORTS"));
+    mTabs.setLabels(trPorts("FREE GAMES"), trPorts("PORTS"), trPorts("DECORATION SET"));
     mHeader.setText(trPorts("X-TRAS"));
     mSubHeader.setText(trPorts("PORTS AND FREE GAMES"));
     // Section headings, buttons and status strings also use the current
@@ -986,10 +1092,10 @@ void GuiPortsBrowser::updateFooter()
     const PortEntry& port = mPorts[mLastSelectedIndex];
 
     std::string footer = "A ";
-    footer += port.available == 0 ? trPorts("DETAILS") :
+    footer += (port.isDecoration && port.installed) ? trPorts("DETAILS") : port.available == 0 ? trPorts("DETAILS") :
         (port.installed ? trPorts("UPDATE") : trPorts("INSTALL"));
 
-    if (port.installed)
+    if (port.installed && (!port.isDecoration || ESXDecorationCatalog::managed(port.id)))
         footer += "    X " + trPorts("REMOVE");
 
     if (!mJobRunning)
@@ -1429,12 +1535,12 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
     // install, update, delete, and asynchronous jobs.
     if (config->isMappedLike("left", input))
     {
-        selectTab(0);
+        for (int i=1;i<=3;++i) { int tab=(mActiveTab+3-i)%3; if ((tab==0&&mHasGames)||(tab==1&&mHasPorts)||(tab==2&&mHasDecorations)) { selectTab(tab); break; } }
         return true;
     }
     if (config->isMappedLike("right", input))
     {
-        selectTab(1);
+        for (int i=1;i<=3;++i) { int tab=(mActiveTab+i)%3; if ((tab==0&&mHasGames)||(tab==1&&mHasPorts)||(tab==2&&mHasDecorations)) { selectTab(tab); break; } }
         return true;
     }
 
@@ -1452,7 +1558,10 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
         const int step = config->isMappedLike("up", input) ? -1 : 1;
         position = (position + step + count) % count;
         mLastSelectedIndex = mVisiblePortIndices[position];
-        rebuildList();
+        const auto row = mCatalogRows.find(mLastSelectedIndex);
+        if (row != mCatalogRows.end()) mList.setCursorIndex(row->second);
+        updateFooter();
+        updateHelpPrompts();
         return true;
     }
 
@@ -1469,6 +1578,21 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
     {
         const PortEntry current = mPorts[mLastSelectedIndex];
 
+        if (current.isDecoration) {
+            if (current.installed) {
+                showPopup(trPorts("DECORATION INSTALLED"),2200);
+                return true;
+            }
+            mWindow->pushGui(new GuiMsgBox(mWindow,
+                current.description + "\n\n" + trPorts("DECORATION INSTALL QUESTION") + "\n\n" +
+                    trPorts("DECORATION SOURCE") + "\n" + trPorts("DECORATION LICENSE WARNING"),
+                trPorts("INSTALL"), [this,current] {
+                    startJob(trPorts("INSTALL")+" "+current.description,
+                        [current]{return ESXDecorationCatalog::change(current.id,false);},
+                        trPorts("DECORATION INSTALLED"),trPorts("DECORATION DOWNLOAD FAILED"),true,true,current.description,TaskGlyphs::DOWNLOAD);
+                }, trPorts("CANCEL"), nullptr));
+            return true;
+        }
         if (current.isGame)
         {
             startJob(
@@ -1522,6 +1646,19 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
     {
         const PortEntry current = mPorts[mLastSelectedIndex];
 
+        if (current.isDecoration) {
+            if (!current.installed || !ESXDecorationCatalog::managed(current.id)) {
+                showPopup(trPorts("DECORATION LOCAL PROTECTED"),3000);
+                return true;
+            }
+            mWindow->pushGui(new GuiMsgBox(mWindow,trPorts("REMOVE")+" "+current.description+"?",
+                "YES",[this,current] {
+                    startJob(trPorts("REMOVE")+" "+current.description,
+                        [current]{return ESXDecorationCatalog::change(current.id,true);},
+                        trPorts("DECORATION REMOVED"),trPorts("REMOVE FAILED."),true);
+                },"NO",nullptr));
+            return true;
+        }
         if (!current.installed)
         {
             showPopup(
@@ -1590,6 +1727,7 @@ bool GuiPortsBrowser::input(InputConfig* config, Input input)
 void GuiPortsBrowser::update(int deltaTime)
 {
     finishCompatibilityCheck();
+    updateDecorationPreviews();
     if (!mInBackground)
         refreshLanguage();
 
@@ -1652,7 +1790,7 @@ std::vector<HelpPrompt> GuiPortsBrowser::getHelpPrompts()
     if (!mJobRunning)
     {
         prompts.push_back(HelpPrompt("up/down", trPorts("MOVE")));
-        if (mHasGames && mHasPorts)
+        if ((int)mHasGames + (int)mHasPorts + (int)mHasDecorations > 1)
             prompts.push_back(HelpPrompt("left/right", trPorts("CHANGE TAB")));
 
         if (!mPorts.empty())
@@ -1661,7 +1799,7 @@ std::vector<HelpPrompt> GuiPortsBrowser::getHelpPrompts()
             prompts.push_back(
                 HelpPrompt("a", mPorts[mLastSelectedIndex].available == 0 ? trPorts("DETAILS") :
                     (installed ? trPorts("UPDATE") : trPorts("INSTALL"))));
-            if (installed)
+            if (installed && (!mPorts[mLastSelectedIndex].isDecoration || ESXDecorationCatalog::managed(mPorts[mLastSelectedIndex].id)))
                 prompts.push_back(HelpPrompt("x", trPorts("REMOVE")));
             prompts.push_back(HelpPrompt("y", trPorts("REFRESH")));
         }

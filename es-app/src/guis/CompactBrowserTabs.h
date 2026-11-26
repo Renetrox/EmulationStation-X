@@ -14,10 +14,11 @@ class CompactBrowserTabs : public GuiComponent
 public:
     CompactBrowserTabs(Window* window,
                        const std::string& gamesLabel,
-                       const std::string& portsLabel)
+                       const std::string& portsLabel, const std::string& decorationsLabel)
         : GuiComponent(window)
         , mGames(window, gamesLabel, Font::get(FONT_SIZE_SMALL), 0xD2D6DDFF, ALIGN_CENTER)
         , mPorts(window, portsLabel, Font::get(FONT_SIZE_SMALL), 0xD2D6DDFF, ALIGN_CENTER)
+        , mDecorations(window, decorationsLabel, Font::get(FONT_SIZE_SMALL), 0xD2D6DDFF, ALIGN_CENTER)
         , mGamesAvailable(false)
         , mPortsAvailable(false)
         , mActiveTab(0)
@@ -30,26 +31,29 @@ public:
     // download is parked in the background. Update the visible tab labels
     // without rebuilding the entire tab component or changing selection.
     void setLabels(const std::string& gamesLabel,
-                   const std::string& portsLabel)
+                   const std::string& portsLabel, const std::string& decorationsLabel)
     {
+        mDecorations.setText(decorationsLabel);
         if (mGames.getValue() != gamesLabel)
             mGames.setText(gamesLabel);
         if (mPorts.getValue() != portsLabel)
             mPorts.setText(portsLabel);
     }
 
-    void setAvailable(bool games, bool ports)
+    void setAvailable(bool games, bool ports, bool decorations)
     {
-        if (games == mGamesAvailable && ports == mPortsAvailable)
+        if (games == mGamesAvailable && ports == mPortsAvailable && decorations == mDecorationsAvailable)
             return;
         mGamesAvailable = games;
         mPortsAvailable = ports;
+        mDecorationsAvailable = decorations;
         onSizeChanged();
     }
 
     void setActive(int tab)
     {
         mActiveTab = tab;
+        mDecorations.setColor(!mDecorationsAvailable ? 0x65707BFF : (tab == 2 ? 0xFFFFFFFF : 0x89939FFF));
         // Display missing categories as disabled tabs rather than hiding
         // the entire tab bar when the optional free-games catalog is absent.
         mGames.setColor(!mGamesAvailable ? 0x65707BFF :
@@ -62,19 +66,21 @@ public:
     {
         // Always reserve both tab labels; missing categories appear dimmed.
         // This keeps the layout stable after refreshing the free-games catalog.
-        mTabWidth = std::min(mSize.x() / 2.0f,
+        mTabWidth = std::min(mSize.x() / 3.0f,
                              std::max(135.0f, Renderer::getScreenHeight() * 0.32f));
-        mStartX = (mSize.x() - mTabWidth * 2.0f) * 0.5f;
+        mStartX = (mSize.x() - mTabWidth * 3.0f) * 0.5f;
 
         mGames.setPosition(mStartX, 0.0f);
         mGames.setSize(mTabWidth, mSize.y() - 6.0f);
         mPorts.setPosition(mStartX + mTabWidth, 0.0f);
         mPorts.setSize(mTabWidth, mSize.y() - 6.0f);
+        mDecorations.setPosition(mStartX + 2*mTabWidth, 0);
+        mDecorations.setSize(mTabWidth, mSize.y()-6);
     }
 
     void render(const Transform4x4f& parentTrans) override
     {
-        if (!mGamesAvailable && !mPortsAvailable)
+        if (!mGamesAvailable && !mPortsAvailable && !mDecorationsAvailable)
             return;
 
         Transform4x4f trans = parentTrans * getTransform();
@@ -84,18 +90,21 @@ public:
         Renderer::drawRect(0.0f, mSize.y() - 2.0f, mSize.x(), 1.0f,
                            0x56616F88, 0x56616F88);
 
-        const float activeX = mStartX + (mActiveTab == 1 ? mTabWidth : 0.0f);
+        const float activeX = mStartX + mActiveTab * mTabWidth;
         Renderer::drawRect(activeX + 8.0f, mSize.y() - 4.0f,
                            std::max(0.0f, mTabWidth - 16.0f), 3.0f,
                            0x429BDFFF, 0x429BDFFF);
 
         mGames.render(trans);
         mPorts.render(trans);
+        mDecorations.render(trans);
     }
 
 private:
     TextComponent mGames;
     TextComponent mPorts;
+    TextComponent mDecorations;
+    bool mDecorationsAvailable = false;
     bool mGamesAvailable;
     bool mPortsAvailable;
     int mActiveTab;

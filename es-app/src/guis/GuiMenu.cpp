@@ -21,6 +21,7 @@
 #include "Scripting.h"
 #include "SystemData.h"
 #include "RetroPieRuncommand.h"
+#include "RetroPieDecorationSelector.h"
 #include "VolumeControl.h"
 #include <SDL_events.h>
 #include <algorithm>
@@ -1293,6 +1294,7 @@ void GuiMenu::openScreensaverOptions()
 void GuiMenu::openEmulatorSettings()
 {
 	GuiSettings* systemsMenu = new GuiSettings(mWindow, _("EMULATOR SETTINGS").c_str());
+	RetroPieDecorations::addSelector(mWindow, systemsMenu, "Decoration.Global");
 	bool found = false;
 	for (auto* system : SystemData::sSystemVector)
 	{
@@ -1342,6 +1344,7 @@ void GuiMenu::openSystemEmulatorSettings(SystemData* system)
 
 	GuiSettings* settings = new GuiSettings(mWindow, system->getFullName().c_str());
 	settings->addWithLabel(_("DEFAULT EMULATOR"), emulator);
+	RetroPieDecorations::addSelector(mWindow, settings, RetroPieDecorations::systemKey(systemName), systemName);
 
 	Window* window = mWindow;
 	settings->addSaveFunc([window, systemName, current, emulator]

@@ -6,6 +6,10 @@
 #include "components/TextComponent.h"
 #include "components/NinePatchComponent.h"
 #include "guis/CompactBrowserTabs.h"
+#include "HttpReq.h"
+#include <set>
+#include <map>
+#include "components/ImageComponent.h"
 
 #include <string>
 #include <vector>
@@ -44,6 +48,8 @@ private:
 
         // X-TRAS: free games share the browser with RetroPie ports.
         bool isGame = false;
+        bool isDecoration = false;
+        int tab() const { return isDecoration ? 2 : isGame ? 0 : 1; }
         std::string system;
         std::string url;
         std::string filename;
@@ -57,6 +63,13 @@ private:
     void rebuildList();
     void selectTab(int tab);
     void updateFooter();
+    void updateDecorationPreviews();
+    std::unique_ptr<HttpReq> mDecorationPreviewRequest;
+    std::string mDecorationPreviewId;
+    std::set<std::string> mDecorationPreviewFailed;
+    std::map<std::string, std::shared_ptr<ImageComponent>> mDecorationImages;
+    std::set<std::string> mDecorationImagesLoaded;
+    std::map<int,int> mCatalogRows;
     void refreshLanguage(); // handles the GUI restored after an ES-X language change
 
     bool findRetroPieSetup();
@@ -115,6 +128,7 @@ private:
     int mActiveTab;  // 0 = free games; 1 = ports
     bool mHasGames;
     bool mHasPorts;
+    bool mHasDecorations = false;
 
     float mInnerX;
     float mInnerY;
