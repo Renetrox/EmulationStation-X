@@ -511,6 +511,16 @@ const std::string FileData::getCarouselImagePath(const std::string& preferredTyp
 
 	std::vector<std::string> order = getFallbackOrderForSlot(ArtSlot::Carousel, preferred);
 
+	// Share the existing display-image preference with gamelist carousels.
+	// Auto preserves the theme's choice and its fallback order. Do not enable
+	// artwork when the theme explicitly requests a text-only carousel.
+	const std::string userSource = getNormalizedSourceSetting("GameImageSource", "auto");
+	if (preferred != "none" && userSource != "auto")
+	{
+		order.erase(std::remove(order.begin(), order.end(), userSource), order.end());
+		order.insert(order.begin(), userSource);
+	}
+
 	for (auto it = order.cbegin(); it != order.cend(); ++it)
 	{
 		if (*it == "auto")
